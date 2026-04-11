@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,15 +20,10 @@ interface ModifySheetProps {
 }
 
 export function ModifySheet({ open, shipment, onClose, onSave, saving }: ModifySheetProps) {
-  const [quantities, setQuantities] = useState<Record<string, number>>({})
-  const [notes, setNotes]           = useState("")
-
-  useEffect(() => {
-    const q: Record<string, number> = {}
-    for (const li of shipment.lineItems) q[li.id] = li.quantityOrdered
-    setQuantities(q)
-    setNotes(shipment.notes ?? "")
-  }, [shipment, open])
+  const [quantities, setQuantities] = useState<Record<string, number>>(() =>
+    Object.fromEntries(shipment.lineItems.map((li) => [li.id, li.quantityOrdered]))
+  )
+  const [notes, setNotes] = useState(shipment.notes ?? "")
 
   function lineTotal(liId: string, unitCost: number) {
     return Math.round((quantities[liId] ?? 0) * unitCost * 100) / 100

@@ -244,6 +244,7 @@ export function ShipmentCard({ shipment: initial, onUpdate }: ShipmentCardProps)
       </Card>
 
       <ModifySheet
+        key={modifyOpen ? shipment.id : undefined}
         open={modifyOpen}
         shipment={shipment}
         onClose={() => setModifyOpen(false)}
