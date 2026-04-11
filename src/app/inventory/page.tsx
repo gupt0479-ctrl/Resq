@@ -3,6 +3,7 @@ import { Package, AlertTriangle, Clock, TrendingUp, Wrench } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { InventoryTabs } from "@/components/inventory/inventory-tabs"
 import { AlertsPanel } from "@/components/inventory/alerts-panel"
+import { AiAdvisorPanel } from "@/components/inventory/ai-advisor-panel"
 import { inventoryItems } from "@/lib/data/inventory"
 import {
   getAlerts,
@@ -68,7 +69,7 @@ export default async function InventoryPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
         <p className="text-sm text-muted-foreground">
-          Stock levels, alerts, and reorder signals for Glow Studio
+          Stock levels, alerts, and reorder signals for Bistro Nova
         </p>
       </div>
 
@@ -155,7 +156,7 @@ export default async function InventoryPage({
           />
         </div>
 
-        {/* Alerts sidebar */}
+        {/* Alerts + AI sidebar */}
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
@@ -174,21 +175,7 @@ export default async function InventoryPage({
             </CardContent>
           </Card>
 
-          <Card className="border-dashed">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                How Reorder Alerts Work
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-xs text-muted-foreground space-y-1.5">
-              <p>An alert fires when quantity on hand drops to or below the reorder level set for each item.</p>
-              <p>Expiry alerts appear 30 days before the expiry date, escalating to critical within 7 days.</p>
-              <p>Equipment and quality issues are flagged manually or by the AI workflow when a problem is reported.</p>
-              <p className="pt-1 italic">
-                Demand forecasting and automatic reorder suggestions are planned for a future release.
-              </p>
-            </CardContent>
-          </Card>
+          <AiAdvisorPanel />
         </div>
       </div>
     </div>
