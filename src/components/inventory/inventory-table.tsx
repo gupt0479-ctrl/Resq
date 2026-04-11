@@ -110,8 +110,28 @@ export function InventoryTable({ items }: InventoryTableProps) {
                     <TableCell className="text-right font-mono text-muted-foreground">
                       {item.reorderLevel}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(item.unitCost)}
+                    <TableCell className="text-right">
+                      {item.previousUnitCost !== undefined ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="font-mono font-medium">
+                            {formatCurrency(item.unitCost)}
+                          </span>
+                          <span className="font-mono text-xs text-muted-foreground line-through">
+                            {formatCurrency(item.previousUnitCost)}
+                          </span>
+                          <span
+                            className={`text-xs font-medium ${
+                              item.priceTrendStatus === "spike"
+                                ? "text-purple-600"
+                                : "text-blue-600"
+                            }`}
+                          >
+                            +{Math.round(((item.unitCost - item.previousUnitCost) / item.previousUnitCost) * 100)}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="font-mono">{formatCurrency(item.unitCost)}</span>
+                      )}
                     </TableCell>
                     <TableCell
                       className={expiring ? "text-amber-600 font-medium" : "text-muted-foreground"}

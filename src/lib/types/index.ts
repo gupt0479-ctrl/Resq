@@ -11,6 +11,8 @@ export type InventoryItem = {
   quantityOnHand: number
   reorderLevel: number
   unitCost: number
+  /** Previous price before the current rise or spike — only present when priceTrendStatus is "rising" or "spike" */
+  previousUnitCost?: number
   expiresAt: string | null
   vendorName: string
   issueStatus: InventoryIssueStatus
@@ -84,6 +86,49 @@ export type FinanceTransaction = {
   taxRelevant: boolean
 }
 
+// ── Shipment types ───────────────────────────────────────────────────
+
+export type ShipmentStatus = "pending" | "confirmed" | "in_transit" | "delivered" | "cancelled"
+
+export type ShipmentLineItem = {
+  id: string
+  itemId: string
+  itemName: string
+  quantityOrdered: number
+  unitCost: number
+  totalCost: number
+}
+
+export type Shipment = {
+  id: string
+  vendorName: string
+  status: ShipmentStatus
+  expectedDeliveryDate: string   // YYYY-MM-DD
+  actualDeliveryDate: string | null // YYYY-MM-DD — null if not yet delivered
+  orderedAt: string              // ISO timestamp
+  trackingNumber: string | null
+  trackingUrl: string | null
+  lineItems: ShipmentLineItem[]
+  totalCost: number
+  notes: string | null
+}
+
+export type DeliveryPerformance = "early" | "on_time" | "late"
+
+export type VendorPerformanceStat = {
+  vendorName: string
+  totalDeliveries: number
+  onTimeCount: number
+  earlyCount: number
+  lateCount: number
+  onTimePct: number
+  avgDaysLate: number          // average days overdue for late deliveries only
+  maxDaysLate: number          // worst single delivery
+  totalSpend30d: number        // spend in last 30 days
+  hasPriceIncrease: boolean    // any items from this vendor with rising/spike status
+  negotiationPriority: "high" | "medium" | "low"
+}
+
 // ── Predictive inventory types ──────────────────────────────────────
 
 export type MenuItem = {
@@ -131,6 +176,8 @@ export type InventoryPrediction = {
   itemId: string
   itemName: string
   category: string
+  vendorName: string
+  expiresAt: string | null
   quantityOnHand: number
   reorderLevel: number
   predictedUsage7d: number
@@ -138,7 +185,11 @@ export type InventoryPrediction = {
   predictedDailyUsage: number
   safetyStock: number
   daysToStockout: number
+  /** YYYY-MM-DD — latest date to place the order before stockout */
+  orderByDate: string | null
   recommendedReorderQty: number
+  /** % change in daily usage rate: last 7d vs last 30d average */
+  demandTrendPct: number
   riskLevel: RiskLevel
   confidenceScore: number | null
   topDrivers: PredictionDriver[]
@@ -152,5 +203,13 @@ export type AiInventoryReport = {
   lowRiskCount: number
   predictions: InventoryPrediction[]
   summaryText: string
+  vendorInsights: VendorInsight[]
   generatedAt: string
+}
+
+export type VendorInsight = {
+  vendorName: string
+  performanceSummary: string   // e.g. "2 of 8 deliveries were late (avg 2.5 days)"
+  negotiationSuggestion: string | null  // AI-generated — null for reliable vendors
+  priority: "high" | "medium" | "low"
 }

@@ -1,91 +1,109 @@
 "use client"
 
 import { useState } from "react"
-import { Sparkles, RefreshCw, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react"
+import {
+  Sparkles,
+  RefreshCw,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ShoppingCart,
+  CalendarClock,
+  Handshake,
+} from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { PredictionRiskBadge } from "./prediction-risk-badge"
 import type { AiInventoryReport, InventoryPrediction } from "@/lib/types"
 
-function DriverLabel({ driver }: { driver: string }) {
-  const labels: Record<string, string> = {
-    upcoming_reservations: "Upcoming bookings",
-    recent_usage_trend: "Usage trend",
-    baseline_usage_rate: "Baseline rate",
-  }
-  return <span>{labels[driver] ?? driver}</span>
+// ── Trend indicator ───────────────────────────────────────────────────────────
+
+function TrendBadge({ pct }: { pct: number }) {
+  if (pct > 5)
+    return (
+      <span className="inline-flex items-center gap-0.5 text-xs font-medium text-red-600">
+        <TrendingUp className="h-3 w-3" />+{pct}%
+      </span>
+    )
+  if (pct < -5)
+    return (
+      <span className="inline-flex items-center gap-0.5 text-xs font-medium text-green-600">
+        <TrendingDown className="h-3 w-3" />{pct}%
+      </span>
+    )
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+      <Minus className="h-3 w-3" />flat
+    </span>
+  )
 }
 
-function PredictionRow({ item }: { item: InventoryPrediction }) {
-  const [expanded, setExpanded] = useState(false)
+// ── Per-item card ─────────────────────────────────────────────────────────────
+
+function PredictionCard({ item }: { item: InventoryPrediction }) {
+  // Split explanation from reorder action (separated by \n\n→ in orchestrator)
+  const [explanation, reorderAction] = item.explanationText
+    ? item.explanationText.split(/\n\n→\s*/)
+    : [null, null]
+
+  const borderColor =
+    item.riskLevel === "high"
+      ? "border-l-red-400"
+      : item.riskLevel === "medium"
+        ? "border-l-amber-400"
+        : "border-l-green-400"
 
   return (
-    <div className="border-b last:border-b-0 py-3">
+    <div className={`border-l-2 pl-3 py-2 ${borderColor}`}>
+      {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium truncate">{item.itemName}</span>
+            <span className="text-sm font-medium">{item.itemName}</span>
             <PredictionRiskBadge level={item.riskLevel} />
+            <TrendBadge pct={item.demandTrendPct} />
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {item.daysToStockout < 999
-              ? `~${item.daysToStockout}d to stockout · reorder ${item.recommendedReorderQty} units`
-              : "No predicted usage"}
+            {item.quantityOnHand} on hand · {item.predictedDailyUsage.toFixed(2)}/day burn rate
+            {item.daysToStockout < 999 && ` · ~${item.daysToStockout}d to stockout`}
           </p>
         </div>
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="text-muted-foreground hover:text-foreground shrink-0"
-          aria-label={expanded ? "Collapse" : "Expand"}
-        >
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
       </div>
 
-      {expanded && (
-        <div className="mt-2 space-y-1.5">
-          {item.explanationText && (
-            <p className="text-xs text-muted-foreground italic">{item.explanationText}</p>
-          )}
-          <div className="flex flex-wrap gap-1.5">
-            {item.topDrivers.map((d) => (
-              <span
-                key={d.driver}
-                className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs"
-              >
-                <DriverLabel driver={d.driver} />
-                <span className="text-muted-foreground">·</span>
-                <span
-                  className={
-                    d.impact === "high"
-                      ? "text-red-600"
-                      : d.impact === "medium"
-                        ? "text-amber-600"
-                        : "text-green-600"
-                  }
-                >
-                  {d.impact}
-                </span>
-              </span>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground pt-1">
-            <span>7d usage: {item.predictedUsage7d}</span>
-            <span>14d usage: {item.predictedUsage14d}</span>
-            <span>On hand: {item.quantityOnHand}</span>
-            <span>Safety stock: {item.safetyStock}</span>
-          </div>
+      {/* AI explanation — always visible */}
+      {explanation && (
+        <p className="mt-1.5 text-xs text-foreground/80 leading-relaxed">{explanation}</p>
+      )}
+
+      {/* Reorder action — prominent CTA */}
+      {reorderAction && (
+        <div className="mt-2 flex items-start gap-1.5 rounded-md bg-blue-50 border border-blue-100 px-2.5 py-1.5">
+          <ShoppingCart className="h-3.5 w-3.5 text-blue-600 mt-0.5 shrink-0" />
+          <span className="text-xs text-blue-800 font-medium">{reorderAction}</span>
+        </div>
+      )}
+
+      {/* Fallback when no AI explanation yet */}
+      {!explanation && (
+        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CalendarClock className="h-3 w-3 shrink-0" />
+          {item.orderByDate
+            ? `Order ${item.recommendedReorderQty} units from ${item.vendorName} by ${item.orderByDate}`
+            : `Reorder ${item.recommendedReorderQty} units from ${item.vendorName}`}
         </div>
       )}
     </div>
   )
 }
 
+// ── Main panel ────────────────────────────────────────────────────────────────
+
 export function AiAdvisorPanel() {
   const [report, setReport] = useState<AiInventoryReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showAll, setShowAll] = useState(false)
+  const [showLow, setShowLow] = useState(false)
 
   async function refresh() {
     setLoading(true)
@@ -106,10 +124,9 @@ export function AiAdvisorPanel() {
     }
   }
 
-  const riskItems = report?.predictions.filter(
-    (p) => p.riskLevel === "high" || p.riskLevel === "medium"
-  ) ?? []
-  const displayItems = showAll ? riskItems : riskItems.slice(0, 5)
+  const highItems   = report?.predictions.filter((p) => p.riskLevel === "high")   ?? []
+  const medItems    = report?.predictions.filter((p) => p.riskLevel === "medium") ?? []
+  const lowItems    = report?.predictions.filter((p) => p.riskLevel === "low")    ?? []
 
   return (
     <Card>
@@ -132,7 +149,8 @@ export function AiAdvisorPanel() {
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
+        {/* Error */}
         {error && (
           <div className="flex items-center gap-1.5 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -140,48 +158,124 @@ export function AiAdvisorPanel() {
           </div>
         )}
 
+        {/* Idle state */}
         {!report && !loading && !error && (
           <p className="text-xs text-muted-foreground">
-            Click <span className="font-medium">Run analysis</span> to generate AI-powered reorder
-            recommendations based on upcoming reservations and usage trends.
+            Click <span className="font-medium">Run analysis</span> for AI-powered reorder
+            recommendations — based on 30-day usage trends, upcoming reservation volume, and
+            per-item burn rates.
           </p>
         )}
 
         {report && (
           <>
-            {/* Summary */}
-            <div className="rounded-md bg-violet-50 border border-violet-100 px-3 py-2">
-              <p className="text-xs text-violet-800">{report.summaryText}</p>
+            {/* AI summary */}
+            <div className="rounded-md bg-violet-50 border border-violet-100 px-3 py-2.5">
+              <p className="text-xs text-violet-900 leading-relaxed">{report.summaryText}</p>
             </div>
 
-            {/* Risk counts */}
-            <div className="flex gap-3 text-xs">
-              <span className="text-red-600 font-medium">{report.highRiskCount} high</span>
-              <span className="text-amber-600 font-medium">{report.mediumRiskCount} medium</span>
-              <span className="text-green-600 font-medium">{report.lowRiskCount} low</span>
+            {/* Risk tally */}
+            <div className="flex gap-4 text-xs font-medium">
+              <span className="text-red-600">{report.highRiskCount} urgent</span>
+              <span className="text-amber-600">{report.mediumRiskCount} soon</span>
+              <span className="text-muted-foreground">{report.lowRiskCount} ok</span>
             </div>
 
-            {/* Item list */}
-            {riskItems.length === 0 ? (
-              <p className="text-xs text-muted-foreground">All items are healthy.</p>
-            ) : (
-              <div>
-                {displayItems.map((item) => (
-                  <PredictionRow key={item.itemId} item={item} />
+            {/* High risk */}
+            {highItems.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">
+                  Urgent — order now
+                </p>
+                {highItems.map((item) => (
+                  <PredictionCard key={item.itemId} item={item} />
                 ))}
-                {riskItems.length > 5 && (
-                  <button
-                    onClick={() => setShowAll((v) => !v)}
-                    className="mt-1 text-xs text-muted-foreground hover:text-foreground underline"
-                  >
-                    {showAll ? "Show less" : `Show ${riskItems.length - 5} more`}
-                  </button>
+              </div>
+            )}
+
+            {/* Medium risk */}
+            {medItems.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">
+                  Order this week
+                </p>
+                {medItems.map((item) => (
+                  <PredictionCard key={item.itemId} item={item} />
+                ))}
+              </div>
+            )}
+
+            {/* Low risk — collapsed by default */}
+            {lowItems.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowLow((v) => !v)}
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  {showLow
+                    ? "Hide healthy items"
+                    : `Show ${lowItems.length} healthy items`}
+                </button>
+                {showLow && (
+                  <div className="mt-3 space-y-3">
+                    {lowItems.map((item) => (
+                      <PredictionCard key={item.itemId} item={item} />
+                    ))}
+                  </div>
                 )}
               </div>
             )}
 
+            {/* Vendor insights */}
+            {report.vendorInsights && report.vendorInsights.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Handshake className="h-3.5 w-3.5 text-muted-foreground" />
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Vendor Performance
+                  </p>
+                </div>
+                {report.vendorInsights.map((v) => (
+                  <div
+                    key={v.vendorName}
+                    className={`rounded-md border px-3 py-2 text-xs space-y-1 ${
+                      v.priority === "high"
+                        ? "border-red-200 bg-red-50"
+                        : v.priority === "medium"
+                          ? "border-amber-200 bg-amber-50"
+                          : "border-border bg-muted/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{v.vendorName}</span>
+                      <span
+                        className={`text-[10px] font-semibold uppercase ${
+                          v.priority === "high"
+                            ? "text-red-600"
+                            : v.priority === "medium"
+                              ? "text-amber-600"
+                              : "text-muted-foreground"
+                        }`}
+                      >
+                        {v.priority}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground">{v.performanceSummary}</p>
+                    {v.negotiationSuggestion && (
+                      <p className={`font-medium ${
+                        v.priority === "high" ? "text-red-800" : "text-amber-800"
+                      }`}>
+                        {v.negotiationSuggestion}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <p className="text-xs text-muted-foreground">
-              Generated {new Date(report.generatedAt).toLocaleTimeString()}
+              Based on 30-day usage trends + upcoming reservations ·{" "}
+              {new Date(report.generatedAt).toLocaleTimeString()}
             </p>
           </>
         )}
