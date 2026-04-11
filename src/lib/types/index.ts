@@ -1,3 +1,31 @@
+export type InventoryIssueStatus = "none" | "equipment_issue" | "quality_concern" | "discontinued"
+
+export type PriceTrendStatus = "stable" | "rising" | "spike"
+
+export type InventoryAlertType = "low_stock" | "expiry_soon" | "price_increase" | "equipment_issue"
+
+export type InventoryItem = {
+  id: string
+  itemName: string
+  category: string
+  quantityOnHand: number
+  reorderLevel: number
+  unitCost: number
+  expiresAt: string | null
+  vendorName: string
+  issueStatus: InventoryIssueStatus
+  priceTrendStatus: PriceTrendStatus
+}
+
+export type InventoryAlert = {
+  id: string
+  itemId: string
+  itemName: string
+  alertType: InventoryAlertType
+  message: string
+  severity: "warning" | "critical"
+}
+
 export type AppointmentStatus =
   | "scheduled"
   | "confirmed"
