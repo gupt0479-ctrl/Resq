@@ -3,6 +3,7 @@ import { generatePredictions } from "@/lib/inventory/generate-predictions"
 import { inventoryItems } from "@/lib/data/inventory"
 import { menuInventoryUsage } from "@/lib/data/menu-inventory-usage"
 import { reservations } from "@/lib/data/reservations"
+import { shipments } from "@/lib/data/shipments"
 
 const AS_OF_DATE = "2026-04-11"
 
@@ -11,6 +12,7 @@ export async function GET() {
     items: inventoryItems,
     usages: menuInventoryUsage,
     reservations,
+    shipments,
     asOfDate: AS_OF_DATE,
   })
 

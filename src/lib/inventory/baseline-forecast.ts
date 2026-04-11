@@ -18,7 +18,7 @@ export type ForecastResult = {
  * trained model. The AI explanation layer communicates uncertainty.
  */
 export function baselineForecast(features: DemandFeatures): ForecastResult {
-  const { rollingAvg7, rollingAvg14, rollingAvg30, usageLag7, upcomingOrders7d } = features
+  const { rollingAvg7, rollingAvg14, rollingAvg30, usageLag7 } = features
 
   // Blend historical signal — heavier weight on shorter-term
   const baseDaily =

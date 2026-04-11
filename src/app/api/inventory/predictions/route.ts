@@ -3,6 +3,7 @@ import { generatePredictions } from "@/lib/inventory/generate-predictions"
 import { inventoryItems } from "@/lib/data/inventory"
 import { menuInventoryUsage } from "@/lib/data/menu-inventory-usage"
 import { reservations } from "@/lib/data/reservations"
+import { shipments } from "@/lib/data/shipments"
 import { z } from "zod"
 
 const querySchema = z.object({
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
     items: inventoryItems,
     usages: menuInventoryUsage,
     reservations,
+    shipments,
     asOfDate,
   })
 
