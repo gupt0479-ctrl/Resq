@@ -11,11 +11,14 @@ import {
   ShoppingCart,
   CalendarClock,
   Handshake,
+  PackageSearch,
+  TriangleAlert,
+  BadgeDollarSign,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { PredictionRiskBadge } from "./prediction-risk-badge"
-import type { AiInventoryReport, InventoryPrediction } from "@/lib/types"
+import type { AiInventoryReport, InventoryPrediction, AgentReport } from "@/lib/types"
 
 // ── Trend indicator ───────────────────────────────────────────────────────────
 
@@ -39,10 +42,9 @@ function TrendBadge({ pct }: { pct: number }) {
   )
 }
 
-// ── Per-item card ─────────────────────────────────────────────────────────────
+// ── Per-item prediction card ──────────────────────────────────────────────────
 
 function PredictionCard({ item }: { item: InventoryPrediction }) {
-  // Split explanation from reorder action (separated by \n\n→ in orchestrator)
   const [explanation, reorderAction] = item.explanationText
     ? item.explanationText.split(/\n\n→\s*/)
     : [null, null]
@@ -56,7 +58,6 @@ function PredictionCard({ item }: { item: InventoryPrediction }) {
 
   return (
     <div className={`border-l-2 pl-3 py-2 ${borderColor}`}>
-      {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -71,12 +72,10 @@ function PredictionCard({ item }: { item: InventoryPrediction }) {
         </div>
       </div>
 
-      {/* AI explanation — always visible */}
       {explanation && (
         <p className="mt-1.5 text-xs text-foreground/80 leading-relaxed">{explanation}</p>
       )}
 
-      {/* Reorder action — prominent CTA */}
       {reorderAction && (
         <div className="mt-2 flex items-start gap-1.5 rounded-md bg-blue-50 border border-blue-100 px-2.5 py-1.5">
           <ShoppingCart className="h-3.5 w-3.5 text-blue-600 mt-0.5 shrink-0" />
@@ -84,7 +83,6 @@ function PredictionCard({ item }: { item: InventoryPrediction }) {
         </div>
       )}
 
-      {/* Fallback when no AI explanation yet */}
       {!explanation && (
         <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
           <CalendarClock className="h-3 w-3 shrink-0" />
@@ -97,6 +95,161 @@ function PredictionCard({ item }: { item: InventoryPrediction }) {
   )
 }
 
+// ── Shipment Intelligence section ─────────────────────────────────────────────
+
+function ShipmentIntelligence({ report }: { report: AgentReport }) {
+  const riskBorder = {
+    high: "border-red-200 bg-red-50",
+    medium: "border-amber-200 bg-amber-50",
+    low: "border-border bg-muted/30",
+  }
+  const riskText = {
+    high: "text-red-700",
+    medium: "text-amber-700",
+    low: "text-muted-foreground",
+  }
+
+  return (
+    <div className="space-y-4 pt-3 border-t border-border">
+      {/* Header */}
+      <div className="flex items-center gap-1.5">
+        <PackageSearch className="h-4 w-4 text-violet-500" />
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Shipment Intelligence
+        </p>
+        <span className="ml-auto text-[9px] font-medium uppercase tracking-wide rounded-full bg-violet-100 text-violet-700 px-1.5 py-0.5">
+          Gemini
+        </span>
+      </div>
+
+      {/* Summary */}
+      <div className="rounded-md bg-violet-50 border border-violet-100 px-3 py-2.5">
+        <p className="text-xs text-violet-900 leading-relaxed">{report.summary}</p>
+      </div>
+
+      {/* Order Patterns */}
+      {report.orderInsights.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Order Patterns — last 30 days
+          </p>
+          {report.orderInsights.map((insight) => (
+            <div key={insight.itemName} className="border-l-2 border-l-violet-300 pl-3 py-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-xs font-medium text-foreground">{insight.itemName}</span>
+                <span className="text-[10px] text-muted-foreground shrink-0">
+                  ordered {insight.orderCount}× · avg {insight.avgOrderSize}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{insight.rationale}</p>
+              <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-blue-50 border border-blue-100 px-2 py-1">
+                <ShoppingCart className="h-3 w-3 text-blue-600 shrink-0" />
+                <span className="text-[11px] text-blue-800 font-medium">
+                  Recommend {insight.recommendedQty} next order from {insight.vendorName}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Spoilage Alerts */}
+      {report.spoilageAlerts.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <TriangleAlert className="h-3.5 w-3.5 text-amber-500" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Spoilage Alerts
+            </p>
+          </div>
+          {report.spoilageAlerts.map((alert) => (
+            <div
+              key={alert.itemName}
+              className={`rounded-md border px-3 py-2 text-xs space-y-1 ${riskBorder[alert.riskLevel]}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-foreground">{alert.itemName}</span>
+                <span className={`text-[10px] font-semibold uppercase ${riskText[alert.riskLevel]}`}>
+                  {alert.riskLevel}
+                </span>
+              </div>
+              <p className="text-muted-foreground">{alert.evidence}</p>
+              <p className={`font-medium ${riskText[alert.riskLevel]}`}>
+                {alert.recommendation}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Vendor Negotiation Tactics */}
+      {report.negotiationOpportunities.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <BadgeDollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Negotiation Tactics
+            </p>
+          </div>
+          {report.negotiationOpportunities.map((opp) => (
+            <div
+              key={opp.vendorName}
+              className={`rounded-md border px-3 py-2 text-xs space-y-1.5 ${riskBorder[opp.priority]}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-foreground">{opp.vendorName}</span>
+                <span className={`text-[10px] font-semibold uppercase ${riskText[opp.priority]}`}>
+                  {opp.priority}
+                </span>
+              </div>
+              <p className="text-muted-foreground">{opp.evidence}</p>
+              <ul className="space-y-0.5">
+                {opp.tactics.map((tactic, i) => (
+                  <li key={i} className="flex items-start gap-1.5">
+                    <span className={`font-semibold shrink-0 ${riskText[opp.priority]}`}>
+                      {i + 1}.
+                    </span>
+                    <span className={`font-medium ${riskText[opp.priority]}`}>{tactic}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground">
+        Powered by Gemini 2.5 Flash · {new Date(report.generatedAt).toLocaleTimeString()}
+      </p>
+    </div>
+  )
+}
+
+// ── Loading skeleton ──────────────────────────────────────────────────────────
+
+function AgentSkeleton() {
+  return (
+    <div className="space-y-3 pt-3 border-t border-border animate-pulse">
+      <div className="flex items-center gap-1.5">
+        <PackageSearch className="h-4 w-4 text-violet-300" />
+        <div className="h-3 w-36 rounded bg-muted" />
+        <span className="ml-auto text-[9px] font-medium uppercase tracking-wide rounded-full bg-violet-100 text-violet-400 px-1.5 py-0.5">
+          Gemini
+        </span>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <RefreshCw className="h-3 w-3 animate-spin text-violet-400" />
+        Running deep shipment analysis…
+      </div>
+      <div className="space-y-2">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="rounded-md bg-muted/40 h-12" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export function AiAdvisorPanel() {
@@ -105,9 +258,33 @@ export function AiAdvisorPanel() {
   const [error, setError] = useState<string | null>(null)
   const [showLow, setShowLow] = useState(false)
 
+  const [agentReport, setAgentReport] = useState<AgentReport | null>(null)
+  const [agentLoading, setAgentLoading] = useState(false)
+  const [agentError, setAgentError] = useState<string | null>(null)
+
   async function refresh() {
+    // Predictions (Haiku) — existing
     setLoading(true)
     setError(null)
+
+    // Agent (Gemini) — new, fires in parallel
+    setAgentLoading(true)
+    setAgentError(null)
+
+    fetch("/api/inventory/agent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+      .then(async (r) => {
+        const data = await r.json()
+        if (!r.ok) throw new Error(data?.error ?? `HTTP ${r.status}`)
+        return data
+      })
+      .then((d) => setAgentReport(d.report as AgentReport))
+      .catch((e) => setAgentError(e instanceof Error ? e.message : "Agent error"))
+      .finally(() => setAgentLoading(false))
+
     try {
       const res = await fetch("/api/inventory/predictions/generate", {
         method: "POST",
@@ -140,17 +317,17 @@ export function AiAdvisorPanel() {
             variant="ghost"
             size="sm"
             onClick={refresh}
-            disabled={loading}
+            disabled={loading || agentLoading}
             className="h-7 px-2 text-xs"
           >
-            <RefreshCw className={`h-3 w-3 mr-1 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Analysing…" : "Run analysis"}
+            <RefreshCw className={`h-3 w-3 mr-1 ${loading || agentLoading ? "animate-spin" : ""}`} />
+            {loading || agentLoading ? "Analysing…" : "Run analysis"}
           </Button>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Error */}
+        {/* Errors */}
         {error && (
           <div className="flex items-center gap-1.5 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -159,29 +336,27 @@ export function AiAdvisorPanel() {
         )}
 
         {/* Idle state */}
-        {!report && !loading && !error && (
+        {!report && !loading && !error && !agentLoading && !agentReport && (
           <p className="text-xs text-muted-foreground">
             Click <span className="font-medium">Run analysis</span> for AI-powered reorder
-            recommendations — based on 30-day usage trends, upcoming reservation volume, and
-            per-item burn rates.
+            recommendations — based on 30-day order patterns, spoilage risk, and vendor
+            performance.
           </p>
         )}
 
+        {/* ── Predictions section (Haiku) ── */}
         {report && (
           <>
-            {/* AI summary */}
             <div className="rounded-md bg-violet-50 border border-violet-100 px-3 py-2.5">
               <p className="text-xs text-violet-900 leading-relaxed">{report.summaryText}</p>
             </div>
 
-            {/* Risk tally */}
             <div className="flex gap-4 text-xs font-medium">
               <span className="text-red-600">{report.highRiskCount} urgent</span>
               <span className="text-amber-600">{report.mediumRiskCount} soon</span>
               <span className="text-muted-foreground">{report.lowRiskCount} ok</span>
             </div>
 
-            {/* High risk */}
             {highItems.length > 0 && (
               <div className="space-y-3">
                 <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">
@@ -193,7 +368,6 @@ export function AiAdvisorPanel() {
               </div>
             )}
 
-            {/* Medium risk */}
             {medItems.length > 0 && (
               <div className="space-y-3">
                 <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">
@@ -205,16 +379,13 @@ export function AiAdvisorPanel() {
               </div>
             )}
 
-            {/* Low risk — collapsed by default */}
             {lowItems.length > 0 && (
               <div>
                 <button
                   onClick={() => setShowLow((v) => !v)}
                   className="text-xs text-muted-foreground hover:text-foreground underline"
                 >
-                  {showLow
-                    ? "Hide healthy items"
-                    : `Show ${lowItems.length} healthy items`}
+                  {showLow ? "Hide healthy items" : `Show ${lowItems.length} healthy items`}
                 </button>
                 {showLow && (
                   <div className="mt-3 space-y-3">
@@ -226,7 +397,7 @@ export function AiAdvisorPanel() {
               </div>
             )}
 
-            {/* Vendor insights */}
+            {/* Vendor insights from Haiku */}
             {report.vendorInsights && report.vendorInsights.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5">
@@ -262,9 +433,11 @@ export function AiAdvisorPanel() {
                     </div>
                     <p className="text-muted-foreground">{v.performanceSummary}</p>
                     {v.negotiationSuggestion && (
-                      <p className={`font-medium ${
-                        v.priority === "high" ? "text-red-800" : "text-amber-800"
-                      }`}>
+                      <p
+                        className={`font-medium ${
+                          v.priority === "high" ? "text-red-800" : "text-amber-800"
+                        }`}
+                      >
                         {v.negotiationSuggestion}
                       </p>
                     )}
@@ -273,11 +446,25 @@ export function AiAdvisorPanel() {
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] text-muted-foreground">
               Based on 30-day usage trends + upcoming reservations ·{" "}
               {new Date(report.generatedAt).toLocaleTimeString()}
             </p>
           </>
+        )}
+
+        {/* ── Shipment Intelligence section (Gemini) ── */}
+        {agentLoading && <AgentSkeleton />}
+
+        {agentError && (
+          <div className="flex items-center gap-1.5 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700 mt-2">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            Shipment analysis: {agentError}
+          </div>
+        )}
+
+        {agentReport && !agentLoading && (
+          <ShipmentIntelligence report={agentReport} />
         )}
       </CardContent>
     </Card>
