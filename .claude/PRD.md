@@ -3,22 +3,24 @@
 **Version:** 1.0
 **Status:** Draft for hackathon build
 **Product:** OpsPilot — Small Business AI Workflow Companion
-**Primary demo vertical:** Glow Studio hair salon
+**Primary demo vertical:** Ember Table restaurant
 
 ---
 
 ## 1. Product Overview
 
-OpsPilot is a web-based AI operations companion for small service businesses. It is designed to replace one fragmented manager workflow end-to-end: appointment event handling through invoice generation, customer follow-up, finance update, and manager action summary.
+OpsPilot is a web-based AI operations companion for small service businesses. It is designed to replace one fragmented manager workflow end-to-end: reservation event handling through invoice generation, guest follow-up, finance update, and manager action summary.
 
 That direction matches the current MVP plan and page structure already produced in Lovable, including the dashboard, workflow timeline, customers, invoices, feedback, integrations, and inventory/performance preview pages.
+
+For the hackathon demo, the product is framed around a restaurant. The underlying build approach stays mostly the same, so this PRD intentionally keeps much of the existing appointment/invoice/customer system structure because it maps cleanly to reservations, table service, and guest follow-up.
 
 ### 1.1 PRD Input Sources
 
 This PRD reflects three inputs:
 
 1. **The hackathon brief:** build an AI product that replaces one real workflow, shows clear before-vs-after, uses AI meaningfully, and demonstrates willingness to pay.
-2. **The current Lovable concept and IA** for Glow Studio.
+2. **The current Lovable concept and IA** for Ember Table.
 3. **The Figma discussions and screenshots**, which add missing detail around scheduling/cancellations, feedback workflows, inventory logic, business performance analysis, and especially finance.
 
 ---
@@ -29,7 +31,7 @@ This PRD reflects three inputs:
 
 Replace the manual small-business manager workflow of:
 
-- Handling booking changes
+- Handling reservation changes
 - Creating and sending invoices
 - Tracking payment status
 - Sending feedback/follow-up messages
@@ -50,7 +52,7 @@ The MVP must:
 ### 2.3 Product Objectives
 
 - Build a believable AI-first operations dashboard, not a generic chatbot
-- Make the appointment-to-invoice-to-follow-up workflow demoable in under 3 minutes
+- Make the reservation-to-invoice-to-follow-up workflow demoable in under 3 minutes
 - Show modular expansion paths for inventory, finance, and performance without overbuilding them
 - Fix the current weakest area: finance depth
 
@@ -66,22 +68,22 @@ The MVP must:
 
 ## 3. User Personas and Use Cases
 
-### 3.1 Primary Persona: Sarah, Salon Owner-Manager
+### 3.1 Primary Persona: Sarah, Restaurant Owner-Manager
 
-Sarah runs a 3-stylist salon. She manages appointments, payments, customer service, reminders, and stock ordering. She currently jumps across calendar, texting, payment apps, and memory. This matches the current Lovable framing.
+Sarah runs a neighborhood restaurant. She manages reservations, payments, guest service, reminders, and stock ordering. She currently jumps across booking tools, texting, payment apps, and memory. This matches the current Lovable framing while making the demo easier to understand.
 
 ### 3.2 Secondary Personas
 
 - Front-desk coordinator
 - Operations lead
-- Stylist or service provider with limited admin responsibility
+- Floor manager or shift lead with limited admin responsibility
 - Owner reviewing daily business health
 
 ### 3.3 Core Use Cases
 
 | # | Use Case |
 |---|----------|
-| 1 | As a manager, I want completed appointments to generate invoices automatically so I do not handwrite or re-enter service details. |
+| 1 | As a manager, I want completed reservations or table visits to generate invoices automatically so I do not handwrite or re-enter order details. |
 | 2 | As a manager, I want overdue invoices flagged and reminded automatically so cash collection improves. |
 | 3 | As a manager, I want poor customer feedback highlighted with suggested recovery actions. |
 | 4 | As a manager, I want a daily AI summary that tells me what needs action now. |
@@ -97,9 +99,9 @@ Sarah runs a 3-stylist salon. She manages appointments, payments, customer servi
 Based on the supplied screenshots, the current product has a solid shell:
 
 - **Left sidebar** with clear module grouping: Core, Support, Future Preview
-- **Dashboard** with KPI cards, appointment list, AI manager summary, recent AI activity, finance snapshot, and inventory alerts
+- **Dashboard** with KPI cards, reservation list, AI manager summary, recent AI activity, finance snapshot, and inventory alerts
 - **Workflow timeline** that makes the AI actions visible and demoable
-- **Customers page** with upcoming appointments and customer cards
+- **Customers page** with upcoming reservations and guest cards
 - **Invoices page** with status tagging
 - **Feedback page** with flagged unhappy customers and AI-suggested actions
 - **Integrations page** that explains the MCP bridge simply
@@ -132,11 +134,11 @@ The current "Financial Snapshot" is too shallow. It shows totals, but not the ma
 - Week-over-week trend
 - Alerts such as "cash flow risk" or "high overdue ratio"
 
-#### 4.2.2 Appointments
+#### 4.2.2 Appointments / Reservations
 
-The customers page shows appointments but not enough workflow state. Figma asks for:
+The customers page shows reservations but not enough workflow state. Figma asks for:
 
-- Booking confirmations
+- Reservation confirmations
 - Reminders
 - Rescheduling
 - Cancellations
@@ -160,8 +162,8 @@ The invoices page needs:
 The feedback page is strong, but should add:
 
 - Thank-you message status
-- Rebooking prompt status
-- Personalized follow-up suggestions based on service history
+- Return-visit prompt status
+- Personalized follow-up suggestions based on visit history
 - Feedback timeline tied to customer profile
 
 #### 4.2.5 Inventory and Performance
@@ -319,10 +321,10 @@ Business rules should decide when an event triggers the next step; AI should cla
 | `users` | System users |
 | `memberships` | Org-user relationships with roles |
 | `customers` | End customers of the business |
-| `staff` | Service providers |
+| `staff` | Restaurant staff |
 | `appointments` | Scheduled services |
 | `appointment_events` | Audit trail of appointment changes |
-| `services` | Service catalog |
+| `services` | Menu item or service catalog |
 | `invoices` | Customer invoices |
 | `invoice_items` | Line items |
 | `payments` | Payment records |
@@ -350,7 +352,7 @@ Business rules should decide when an event triggers the next step; AI should cla
 | email | text | Contact email |
 | phone | text | Contact phone |
 | preferred_contact_channel | text | Email/SMS preference |
-| last_visit_at | timestamptz | Last service date |
+| last_visit_at | timestamptz | Last visit date |
 | lifetime_value | numeric | Total spend |
 | avg_feedback_score | numeric | Average rating |
 | risk_status | text | Churn/flag status |
@@ -478,7 +480,7 @@ Business rules should decide when an event triggers the next step; AI should cla
 
 **Responsibilities:**
 
-- Generate invoice from completed appointment
+- Generate invoice from completed reservation
 - Compute tax, discounts, totals
 - Create line items
 - Mark sent/paid/overdue
@@ -489,11 +491,11 @@ Business rules should decide when an event triggers the next step; AI should cla
 
 **Responsibilities:**
 
-- Send post-service requests
+- Send post-visit requests
 - Classify responses
 - Flag unhappy customers
 - Generate recovery recommendations
-- Trigger thank-you or rebooking prompts
+- Trigger thank-you or return-visit prompts
 
 ### 8.4 Finance Service
 
@@ -540,7 +542,7 @@ Business rules should decide when an event triggers the next step; AI should cla
 ### 9.1 Core Workflow
 
 ```
-Appointment marked completed
+Reservation marked completed
         │
         ▼
    Invoice generated
@@ -562,9 +564,9 @@ Feedback request scheduled
 
 | Trigger | Action |
 |---------|--------|
-| Appointment scheduled | Confirmation + reminder |
-| Appointment rescheduled | Timeline update + customer notification |
-| Appointment cancelled | Slot vacancy suggestion |
+| Reservation scheduled | Confirmation + reminder |
+| Reservation rescheduled | Timeline update + customer notification |
+| Reservation cancelled | Slot vacancy suggestion |
 | Invoice overdue | Reminder + dashboard alert |
 | Feedback flagged negative | Recovery action + summary alert |
 | Inventory below threshold | Dashboard alert + reorder suggestion |
@@ -701,11 +703,11 @@ This product should avoid presenting itself as accounting or tax advice. Finance
 
 - Greeting and business context
 - KPI cards:
-  - Today's appointments
+  - Today's reservations
   - Today's revenue
   - Overdue payments
   - Unhappy customers
-- Today's appointments list
+- Today's reservations list
 - AI manager summary panel
 - Recent AI activity feed
 - Financial snapshot
@@ -728,7 +730,7 @@ This product should avoid presenting itself as accounting or tax advice. Finance
 
 **Acceptance:**
 
-- One completed appointment clearly propagates into downstream actions
+- One completed reservation clearly propagates into downstream actions
 
 #### 3. Appointments and Customers
 
@@ -743,7 +745,7 @@ This product should avoid presenting itself as accounting or tax advice. Finance
 **Acceptance:**
 
 - Can view scheduled, in-progress, completed states
-- At least one customer has repeat-visit context
+- At least one guest has repeat-visit context
 
 #### 4. Invoices
 
@@ -760,7 +762,7 @@ This product should avoid presenting itself as accounting or tax advice. Finance
 **Acceptance:**
 
 - At least two overdue invoices visible
-- Invoice generated from appointment relationship is clear
+- Invoice generated from reservation relationship is clear
 
 #### 5. Feedback and Follow-ups
 
@@ -776,7 +778,7 @@ This product should avoid presenting itself as accounting or tax advice. Finance
   - Requested
   - Thank-you sent
   - Callback needed
-  - Rebooking prompt suggested
+  - Return-visit prompt suggested
 
 **Acceptance:**
 
@@ -850,13 +852,13 @@ Manager can answer:
 - Refund handling
 - Fee tracking
 - Weekly trend chart
-- Simple service-line profitability preview
+- Simple menu-line profitability preview
 - Tax/write-off filter
 - Export CSV
 
 #### Feedback Enhancements
 
-- Personalized rebooking suggestion
+- Personalized return-visit suggestion
 - Thank-you automation status
 - Sentiment explanation
 - Customer-level satisfaction history
@@ -866,7 +868,7 @@ Manager can answer:
 - Expiry alerts
 - Price increase signals
 - Equipment issue signals
-- Service demand trend cards
+- Menu demand trend cards
 - "Future forecast" cards clearly marked preview
 
 ### 12.3 P2 — Later
@@ -952,7 +954,7 @@ Hackathon MVP load is light:
 
 #### Appointment Scheduling and Cancellation
 
-- Availability-based booking state
+- Availability-based reservation state
 - Confirmations
 - Reminders
 - Reschedule and cancel
@@ -961,7 +963,7 @@ Hackathon MVP load is light:
 
 #### Automating Invoice Creation
 
-- Invoice generated after appointment completion
+- Invoice generated after reservation completion
 - Line items (quantity, tax, discounts, total)
 - Email sending state
 - Paid/pending/overdue tracking
@@ -972,7 +974,7 @@ Hackathon MVP load is light:
 
 #### Feedback and Follow-up
 
-- Feedback request after service
+- Feedback request after visit
 - Ratings/comments
 - Unhappy customer flag
 - Thank-you flow
@@ -1027,7 +1029,7 @@ Add missing requirements beyond current UI:
 #### Not Yet Strong Enough
 
 - Finance depth
-- Appointment lifecycle detail
+- Reservation lifecycle detail
 - Invoice detail and reminder history
 - Customer history linkage
 - Role-based auth
@@ -1042,7 +1044,7 @@ Add missing requirements beyond current UI:
 The demo should follow this sequence:
 
 1. Show dashboard problem state
-2. Open completed appointment
+2. Open completed reservation
 3. Show generated invoice
 4. Show timeline event trail
 5. Show overdue alert and reminder
