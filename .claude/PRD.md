@@ -1051,3 +1051,41 @@ The demo should follow this sequence:
 6. Show negative feedback flag
 7. Show finance page proving this is not just a chatbot
 8. End on AI manager summary
+
+---
+
+### Appendix D — Implementation Memory Snapshot
+
+This appendix is additive project memory. It captures implementation truths that future contributors and tools should preserve.
+
+#### Current Milestone Status
+
+The codebase now contains a substantial part of the first operational milestone:
+
+- Supabase migration for the core ledger domain
+- deterministic seed data for Ember Table demo states
+- service-layer implementations for appointments, invoices, finance, and integrations
+- read-model query modules for dashboard, appointments, invoices, and finance
+- route handlers for dashboard summary, appointments, invoices, finance, and integration webhooks
+- server-rendered pages that consume real route/query-backed data patterns
+
+#### Engineering Rules Learned During Implementation
+
+- Prefer a dedicated read-model query layer for page and route response shaping instead of repeating row-to-UI mapping logic.
+- Keep `env.ts` and the Supabase server client server-only.
+- Do not rely on network-fetched fonts in baseline verification paths.
+- Use Zod v4-compatible record signatures.
+- Webhook ingestion must support payload normalization, raw payload storage, dedupe, and dispatch through the same service layer as first-party APIs.
+
+#### Stable Architectural Expectations
+
+- Supabase/Postgres remains the source of truth.
+- Service modules own deterministic business mutations.
+- Query modules own UI-facing read shaping.
+- AI stays downstream of facts and must not own financial truth or workflow truth.
+
+#### Known Next Priorities
+
+- connect and validate against a live Supabase project
+- add automated tests for `mark-paid` idempotency and webhook dedupe
+- complete feedback and AI summary flows on top of the deterministic foundation

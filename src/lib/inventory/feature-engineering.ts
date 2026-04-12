@@ -1,4 +1,4 @@
-import type { InventoryItem, MenuItemInventoryUsage, Reservation } from "@/lib/types"
+import type { InventoryItem, MenuItemInventoryUsage, HistoricalReservation as Reservation } from "@/lib/types"
 
 export type DailyUsageRow = {
   date: string        // YYYY-MM-DD

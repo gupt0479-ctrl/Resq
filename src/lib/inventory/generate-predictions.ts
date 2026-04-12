@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import type { InventoryItem, InventoryPrediction, AiInventoryReport, VendorInsight } from "@/lib/types"
-import type { MenuItemInventoryUsage, Reservation, Shipment, VendorPerformanceStat } from "@/lib/types"
+import type { MenuItemInventoryUsage, HistoricalReservation as Reservation, Shipment, VendorPerformanceStat } from "@/lib/types"
 import { buildDemandFeatures } from "./feature-engineering"
 import { baselineForecast } from "./baseline-forecast"
 import {
