@@ -36,7 +36,7 @@ export function InventoryTabs({
   const router = useRouter()
 
   return (
-    <Tabs value={activeTab} onValueChange={(tab) => router.push(`?tab=${tab}`)}>
+    <Tabs value={activeTab} onValueChange={(tab) => router.push(`?tab=${tab}`, { scroll: false })}>
       <TabsList>
         <TabsTrigger value="all">
           All Items

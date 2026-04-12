@@ -1,3 +1,4 @@
+import { cacheLife } from "next/cache"
 import { supabase } from "./client"
 import type {
   InventoryItem,
@@ -26,6 +27,17 @@ function mapInventoryItem(row: Record<string, unknown>): InventoryItem {
   }
 }
 
+function mapLineItem(row: Record<string, unknown>): ShipmentLineItem {
+  return {
+    id: row.id as string,
+    itemId: row.item_id as string,
+    itemName: row.item_name as string,
+    quantityOrdered: Number(row.quantity_ordered),
+    unitCost: Number(row.unit_cost),
+    totalCost: Number(row.total_cost),
+  }
+}
+
 function mapShipment(row: Record<string, unknown>, lineItems: ShipmentLineItem[]): Shipment {
   return {
     id: row.id as string,
@@ -42,23 +54,16 @@ function mapShipment(row: Record<string, unknown>, lineItems: ShipmentLineItem[]
   }
 }
 
-function mapLineItem(row: Record<string, unknown>): ShipmentLineItem {
-  return {
-    id: row.id as string,
-    itemId: row.item_id as string,
-    itemName: row.item_name as string,
-    quantityOrdered: Number(row.quantity_ordered),
-    unitCost: Number(row.unit_cost),
-    totalCost: Number(row.total_cost),
-  }
-}
-
 // ── public query functions ────────────────────────────────────
 
 export async function getInventoryItems(): Promise<InventoryItem[]> {
+  "use cache"
+  cacheLife("seconds") // revalidate every 30 s
   const { data, error } = await supabase
     .from("inventory_items")
-    .select("*")
+    .select(
+      "id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status"
+    )
     .order("id")
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => mapInventoryItem(r as Record<string, unknown>))
@@ -67,7 +72,9 @@ export async function getInventoryItems(): Promise<InventoryItem[]> {
 export async function getInventoryItemById(id: string): Promise<InventoryItem | null> {
   const { data, error } = await supabase
     .from("inventory_items")
-    .select("*")
+    .select(
+      "id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status"
+    )
     .eq("id", id)
     .maybeSingle()
   if (error) throw new Error(error.message)
@@ -76,9 +83,11 @@ export async function getInventoryItemById(id: string): Promise<InventoryItem | 
 }
 
 export async function getMenuItems(): Promise<MenuItem[]> {
+  "use cache"
+  cacheLife("hours")
   const { data, error } = await supabase
     .from("menu_items")
-    .select("*")
+    .select("id, name, category, price")
     .order("id")
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => ({
@@ -90,9 +99,11 @@ export async function getMenuItems(): Promise<MenuItem[]> {
 }
 
 export async function getMenuInventoryUsage(): Promise<MenuItemInventoryUsage[]> {
+  "use cache"
+  cacheLife("hours")
   const { data, error } = await supabase
     .from("menu_item_inventory_usage")
-    .select("*")
+    .select("menu_item_id, item_id, units_used_per_order")
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => ({
     menuItemId: r.menu_item_id as string,
@@ -102,9 +113,11 @@ export async function getMenuInventoryUsage(): Promise<MenuItemInventoryUsage[]>
 }
 
 export async function getReservations(): Promise<Reservation[]> {
+  "use cache"
+  cacheLife("hours")
   const { data, error } = await supabase
     .from("reservations")
-    .select("*")
+    .select("id, date, covers, menu_item_ids")
     .order("date")
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => ({
@@ -115,49 +128,41 @@ export async function getReservations(): Promise<Reservation[]> {
   }))
 }
 
+/** Fetches all shipments with their line items in a single JOIN query */
 export async function getShipments(): Promise<Shipment[]> {
-  const { data: shipmentRows, error: shipErr } = await supabase
+  "use cache"
+  cacheLife("seconds")
+  const { data, error } = await supabase
     .from("shipments")
-    .select("*")
+    .select(
+      "id, vendor_name, status, expected_delivery_date, actual_delivery_date, ordered_at, tracking_number, tracking_url, notes, total_cost, shipment_line_items ( id, item_id, item_name, quantity_ordered, unit_cost, total_cost )"
+    )
     .order("ordered_at", { ascending: false })
-  if (shipErr) throw new Error(shipErr.message)
+  if (error) throw new Error(error.message)
 
-  const { data: lineRows, error: lineErr } = await supabase
-    .from("shipment_line_items")
-    .select("*")
-  if (lineErr) throw new Error(lineErr.message)
-
-  const linesByShipment = new Map<string, ShipmentLineItem[]>()
-  for (const row of lineRows ?? []) {
-    const sid = row.shipment_id as string
-    if (!linesByShipment.has(sid)) linesByShipment.set(sid, [])
-    linesByShipment.get(sid)!.push(mapLineItem(row as Record<string, unknown>))
-  }
-
-  return (shipmentRows ?? []).map((row) =>
-    mapShipment(row as Record<string, unknown>, linesByShipment.get(row.id as string) ?? [])
-  )
+  return (data ?? []).map((row) => {
+    const lineItems = ((row.shipment_line_items as unknown[]) ?? []).map((li) =>
+      mapLineItem(li as Record<string, unknown>)
+    )
+    return mapShipment(row as Record<string, unknown>, lineItems)
+  })
 }
 
 export async function getShipmentById(id: string): Promise<Shipment | null> {
-  const { data: row, error: shipErr } = await supabase
+  const { data: row, error } = await supabase
     .from("shipments")
-    .select("*")
+    .select(
+      "id, vendor_name, status, expected_delivery_date, actual_delivery_date, ordered_at, tracking_number, tracking_url, notes, total_cost, shipment_line_items ( id, item_id, item_name, quantity_ordered, unit_cost, total_cost )"
+    )
     .eq("id", id)
     .maybeSingle()
-  if (shipErr) throw new Error(shipErr.message)
+  if (error) throw new Error(error.message)
   if (!row) return null
 
-  const { data: lineRows, error: lineErr } = await supabase
-    .from("shipment_line_items")
-    .select("*")
-    .eq("shipment_id", id)
-  if (lineErr) throw new Error(lineErr.message)
-
-  return mapShipment(
-    row as Record<string, unknown>,
-    (lineRows ?? []).map((r) => mapLineItem(r as Record<string, unknown>))
+  const lineItems = ((row.shipment_line_items as unknown[]) ?? []).map((li) =>
+    mapLineItem(li as Record<string, unknown>)
   )
+  return mapShipment(row as Record<string, unknown>, lineItems)
 }
 
 export async function cancelShipment(id: string): Promise<void> {

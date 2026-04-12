@@ -9,6 +9,7 @@ const PatchItemSchema = z.object({
   quantityOnHand: z.number().int().min(0).optional(),
   reorderLevel: z.number().int().min(0).optional(),
   unitCost: z.number().min(0).optional(),
+  previousUnitCost: z.number().min(0).nullable().optional(),
   expiresAt: z.string().nullable().optional(),
   vendorName: z.string().min(1).optional(),
   issueStatus: z
@@ -49,6 +50,7 @@ export async function PATCH(
   if (parsed.data.quantityOnHand !== undefined) updates.quantity_on_hand = parsed.data.quantityOnHand
   if (parsed.data.reorderLevel !== undefined) updates.reorder_level = parsed.data.reorderLevel
   if (parsed.data.unitCost !== undefined) updates.unit_cost = parsed.data.unitCost
+  if (parsed.data.previousUnitCost !== undefined) updates.previous_unit_cost = parsed.data.previousUnitCost
   if (parsed.data.expiresAt !== undefined) updates.expires_at = parsed.data.expiresAt
   if (parsed.data.vendorName) updates.vendor_name = parsed.data.vendorName
   if (parsed.data.issueStatus) updates.issue_status = parsed.data.issueStatus

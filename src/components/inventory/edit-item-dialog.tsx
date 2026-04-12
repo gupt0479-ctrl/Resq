@@ -84,6 +84,7 @@ export function EditItemDialog({ item, open, onClose, onSaved }: EditItemDialogP
           quantityOnHand: Number(form.quantityOnHand),
           reorderLevel: Number(form.reorderLevel),
           unitCost: Number(form.unitCost),
+          previousUnitCost: Number(form.unitCost) !== item.unitCost ? item.unitCost : item.previousUnitCost,
           vendorName: form.vendorName,
           expiresAt: form.expiresAt || null,
           issueStatus: form.issueStatus,
@@ -168,7 +169,6 @@ export function EditItemDialog({ item, open, onClose, onSaved }: EditItemDialogP
             />
           </div>
 
-          {/* Unit Cost */}
           <div className="space-y-1.5">
             <Label htmlFor="unitCost">Unit Cost ($)</Label>
             <Input
@@ -179,6 +179,23 @@ export function EditItemDialog({ item, open, onClose, onSaved }: EditItemDialogP
               value={form.unitCost}
               onChange={(e) => set("unitCost", Number(e.target.value))}
             />
+            {Number(form.unitCost) !== item.unitCost && item.unitCost > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">
+                  Prev: ${item.unitCost.toFixed(2)}
+                </span>
+                <span
+                  className={`font-semibold ${
+                    Number(form.unitCost) > item.unitCost
+                      ? "text-red-600"
+                      : "text-emerald-600"
+                  }`}
+                >
+                  {Number(form.unitCost) > item.unitCost ? "+" : ""}
+                  {(((Number(form.unitCost) - item.unitCost) / item.unitCost) * 100).toFixed(1)}%
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Expires At */}
