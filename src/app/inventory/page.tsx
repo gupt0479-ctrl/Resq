@@ -1,207 +1,144 @@
-import { Suspense } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { InventoryTabs } from "@/components/inventory/inventory-tabs"
-import { AiAdvisorPanel } from "@/components/inventory/ai-advisor-panel"
-import { ReceivingStatusStrip } from "@/components/inventory/receiving-status-strip"
-import { StockHealthChart } from "@/components/inventory/stock-health-chart"
-import { VendorPerformanceCard } from "@/components/inventory/vendor-performance-card"
-import { getInventoryItems, getShipments } from "@/lib/supabase/queries"
-import { computeVendorPerformance } from "@/lib/inventory/vendor-performance"
-import {
-  getAlertSummary,
-  getLowStockItems,
-  getExpiringItems,
-  getIssueItems,
-  getPriceSpikeItems,
-} from "@/lib/services/inventory"
-import type { InventoryItem } from "@/lib/types"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { AlertTriangle, Clock } from "lucide-react"
 
-const TODAY = "2026-04-11"
+// TODO: replace with Supabase query
+const MOCK_INVENTORY = [
+  { id: "i01", name: "Wagyu Ribeye",       category: "Protein",   qty: 4,    unit: "portions", reorder: 8,  max: 20, status: "critical", vendor: "Premium Meats Co",      expiresInDays: 2,  priceSpike: true },
+  { id: "i02", name: "Braised Short Rib",  category: "Protein",   qty: 7,    unit: "portions", reorder: 6,  max: 18, status: "low",      vendor: "Heritage Farms",         expiresInDays: null },
+  { id: "i03", name: "Heirloom Beets",     category: "Produce",   qty: 2.5,  unit: "kg",       reorder: 3,  max: 8,  status: "low",      vendor: "Local Harvest Farm",     expiresInDays: 5 },
+  { id: "i04", name: "Burrata",            category: "Dairy",     qty: 6,    unit: "units",    reorder: 8,  max: 20, status: "low",      vendor: "Artisan Dairy",          expiresInDays: 3 },
+  { id: "i05", name: "Duck Breast",        category: "Protein",   qty: 12,   unit: "portions", reorder: 8,  max: 24, status: "ok",       vendor: "Heritage Farms",         expiresInDays: null },
+  { id: "i06", name: "Crème Brûlée Mix",   category: "Pastry",    qty: 15,   unit: "portions", reorder: 10, max: 30, status: "ok",       vendor: "Kitchen Essentials",     expiresInDays: null },
+  { id: "i07", name: "Pinot Noir",         category: "Wine",      qty: 24,   unit: "bottles",  reorder: 12, max: 36, status: "ok",       vendor: "Midwest Wine Dist.",     expiresInDays: null },
+  { id: "i08", name: "Champagne",          category: "Wine",      qty: 18,   unit: "bottles",  reorder: 6,  max: 24, status: "ok",       vendor: "Midwest Wine Dist.",     expiresInDays: null },
+  { id: "i09", name: "Heirloom Tomatoes",  category: "Produce",   qty: 8,    unit: "kg",       reorder: 5,  max: 15, status: "ok",       vendor: "Local Harvest Farm",     expiresInDays: null },
+  { id: "i10", name: "Truffle Oil",        category: "Pantry",    qty: 4,    unit: "bottles",  reorder: 2,  max: 8,  status: "ok",       vendor: "Specialty Foods Inc",    expiresInDays: null },
+  { id: "i11", name: "Brioche Bread",      category: "Bakery",    qty: 20,   unit: "loaves",   reorder: 10, max: 30, status: "ok",       vendor: "Artisan Bakery",         expiresInDays: 2 },
+  { id: "i12", name: "Sea Bass",           category: "Seafood",   qty: 10,   unit: "portions", reorder: 6,  max: 20, status: "ok",       vendor: "Pacific Seafood",        expiresInDays: null },
+  { id: "i13", name: "Lobster",            category: "Seafood",   qty: 8,    unit: "portions", reorder: 4,  max: 16, status: "ok",       vendor: "Pacific Seafood",        expiresInDays: null, priceSpike: true },
+  { id: "i14", name: "Olive Oil",          category: "Pantry",    qty: 6,    unit: "liters",   reorder: 3,  max: 12, status: "ok",       vendor: "Specialty Foods Inc",    expiresInDays: null },
+]
 
-type Tab = "all" | "low_stock" | "expiring" | "issues" | "price_spikes"
-const VALID_TABS: Tab[] = ["all", "low_stock", "expiring", "issues", "price_spikes"]
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function resolveTab(raw: string | string[] | undefined): Tab {
-  const value = Array.isArray(raw) ? raw[0] : raw
-  return VALID_TABS.includes(value as Tab) ? (value as Tab) : "all"
+function statusStyle(status: string) {
+  switch (status) {
+    case "critical":    return { badge: "bg-red-100 text-red-700",    bar: "bg-red-500" }
+    case "low":         return { badge: "bg-amber-100 text-amber-700", bar: "bg-amber-400" }
+    case "price_spike": return { badge: "bg-purple-100 text-purple-700", bar: "bg-purple-500" }
+    default:            return { badge: "bg-emerald-100 text-emerald-700", bar: "bg-emerald-500" }
+  }
 }
 
-function sortByExpiry(items: InventoryItem[]): InventoryItem[] {
-  return [...items].sort((a, b) => {
-    if (!a.expiresAt && !b.expiresAt) return 0
-    if (!a.expiresAt) return 1
-    if (!b.expiresAt) return -1
-    return new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime()
+function categoryColor(cat: string) {
+  const map: Record<string, string> = {
+    Protein:  "bg-red-50 text-red-600",
+    Produce:  "bg-green-50 text-green-700",
+    Dairy:    "bg-blue-50 text-blue-600",
+    Wine:     "bg-purple-50 text-purple-600",
+    Seafood:  "bg-cyan-50 text-cyan-700",
+    Pastry:   "bg-pink-50 text-pink-600",
+    Bakery:   "bg-orange-50 text-orange-600",
+    Pantry:   "bg-gray-100 text-gray-600",
+  }
+  return map[cat] ?? "bg-muted text-muted-foreground"
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+export default function InventoryPage() {
+  const criticalCount = MOCK_INVENTORY.filter((i) => i.status === "critical" || i.status === "low").length
+
+  // Sort: critical first, then low, then ok
+  const sorted = [...MOCK_INVENTORY].sort((a, b) => {
+    const order = { critical: 0, low: 1, ok: 2 }
+    return (order[a.status as keyof typeof order] ?? 2) - (order[b.status as keyof typeof order] ?? 2)
   })
-}
 
-function sortByQty(items: InventoryItem[]): InventoryItem[] {
-  return [...items].sort((a, b) => a.quantityOnHand - b.quantityOnHand)
-}
-
-function sortAlpha(items: InventoryItem[]): InventoryItem[] {
-  return [...items].sort((a, b) => a.itemName.localeCompare(b.itemName))
-}
-
-// ── Content: reads searchParams + fetches data (runs inside Suspense) ────────
-
-async function InventoryContent({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-  // Await runtime API inside the Suspense boundary
-  const { tab: rawTab } = await searchParams
-  const activeTab = resolveTab(rawTab)
-
-  const [inventoryItems, shipments] = await Promise.all([
-    getInventoryItems(),
-    getShipments(),
-  ])
-
-  const now = new Date(TODAY)
-  const summary = getAlertSummary(inventoryItems, now)
-
-  const lowStockItems = sortByQty(getLowStockItems(inventoryItems))
-  const expiringItems = sortByExpiry(getExpiringItems(inventoryItems, 30, now))
-  const issueItems    = getIssueItems(inventoryItems)
-  const priceItems    = getPriceSpikeItems(inventoryItems)
-  const allItems      = sortAlpha(inventoryItems)
-
-  const todayStr           = TODAY
-  const pendingCount       = shipments.filter((s) => s.status === "pending").length
-  const inTransitCount     = shipments.filter((s) => s.status === "in_transit").length
-  const arrivingTodayCount = shipments.filter(
-    (s) => s.expectedDeliveryDate === todayStr && s.status !== "delivered" && s.status !== "cancelled"
-  ).length
-
-  const cutoff = new Date(TODAY)
-  cutoff.setDate(cutoff.getDate() + 7)
-  const cutoffStr = cutoff.toISOString().slice(0, 10)
-  const weekIncomingSpend = shipments
-    .filter(
-      (s) =>
-        s.status !== "cancelled" &&
-        s.expectedDeliveryDate >= TODAY &&
-        s.expectedDeliveryDate <= cutoffStr
-    )
-    .reduce((sum, s) => sum + s.totalCost, 0)
-
-  const vendorStats = computeVendorPerformance(shipments, inventoryItems)
-
-  const lowStockSet  = new Set(lowStockItems.map((i) => i.id))
-  const expiringSet  = new Set(expiringItems.map((i) => i.id))
-  const issueSet     = new Set(issueItems.map((i) => i.id))
-  const atRiskCount  = lowStockItems.length
-  const issueCount   = issueItems.length
-  const expiringCnt  = expiringItems.length
-  const healthyCount = inventoryItems.filter(
-    (i) => !lowStockSet.has(i.id) && !expiringSet.has(i.id) && !issueSet.has(i.id)
-  ).length
-
-  return (
-    <>
-      <ReceivingStatusStrip
-        pendingCount={pendingCount}
-        inTransitCount={inTransitCount}
-        arrivingTodayCount={arrivingTodayCount}
-        lowStockCount={summary.lowStockCount}
-        expiringCount={summary.expiringCount}
-        issueCount={summary.issueCount}
-        totalItems={summary.totalItems}
-        priceSpikeCount={summary.priceSpikeCount}
-        weekIncomingSpend={weekIncomingSpend}
-      />
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Stock Health
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-5">
-            <StockHealthChart
-              totalItems={summary.totalItems}
-              healthyCount={healthyCount}
-              atRiskCount={atRiskCount}
-              expiringCount={expiringCnt}
-              issueCount={issueCount}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Vendor Performance
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-5">
-            <VendorPerformanceCard vendorStats={vendorStats} />
-          </CardContent>
-        </Card>
-
-        <AiAdvisorPanel />
-      </div>
-
-      <Card className="overflow-visible">
-        <CardHeader className="border-b border-border pb-0 pt-4">
-          <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-0">
-            Inventory Items
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4">
-          <InventoryTabs
-            activeTab={activeTab}
-            allItems={allItems}
-            lowStockItems={lowStockItems}
-            expiringItems={expiringItems}
-            issueItems={issueItems}
-            priceItems={priceItems}
-            summary={summary}
-          />
-        </CardContent>
-      </Card>
-    </>
-  )
-}
-
-// ── Skeleton fallback ────────────────────────────────────────────────────────
-
-function InventorySkeleton() {
-  return (
-    <>
-      <div className="h-24 rounded-xl bg-muted animate-pulse" />
-      <div className="grid gap-5 lg:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="h-48 rounded-xl bg-muted animate-pulse" />
-        ))}
-      </div>
-      <div className="h-96 rounded-xl bg-muted animate-pulse" />
-    </>
-  )
-}
-
-// ── Page shell: does NOT await any runtime APIs ──────────────────────────────
-
-export default function InventoryPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
   return (
     <div className="space-y-5 p-6">
       <div>
         <h1 className="text-xl font-semibold text-foreground">Inventory</h1>
-        <p className="text-xs text-muted-foreground">
-          Stock levels, alerts, and reorder signals · Bistro Nova
-        </p>
+        <p className="text-xs text-muted-foreground">Stock levels, alerts, and reorder signals · Ember Table</p>
       </div>
 
-      <Suspense fallback={<InventorySkeleton />}>
-        <InventoryContent searchParams={searchParams} />
-      </Suspense>
+      {/* Alert banner */}
+      {criticalCount > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+          <p className="text-sm font-medium text-red-700">
+            {criticalCount} items critically low — reorder needed before dinner service
+          </p>
+        </div>
+      )}
+
+      {/* Cards grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {sorted.map((item) => {
+          const effectiveStatus = item.priceSpike && item.status === "ok" ? "price_spike" : item.status
+          const style = statusStyle(effectiveStatus)
+          const pct = Math.min(100, Math.round((item.qty / item.max) * 100))
+          const expiringSoon = item.expiresInDays !== null && item.expiresInDays !== undefined && item.expiresInDays <= 3
+
+          return (
+            <Card
+              key={item.id}
+              className={item.status === "critical" ? "ring-2 ring-red-300" : ""}
+            >
+              <CardContent className="p-4">
+                {/* Name + category */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-sm text-foreground leading-snug">{item.name}</p>
+                    <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${categoryColor(item.category)}`}>
+                      {item.category}
+                    </span>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${style.badge}`}>
+                    {effectiveStatus === "price_spike" ? "price spike" : effectiveStatus}
+                  </span>
+                </div>
+
+                {/* Qty */}
+                <div className="mt-3">
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="font-semibold text-foreground">
+                      {item.qty} {item.unit}
+                    </span>
+                    <span className="text-muted-foreground">reorder at {item.reorder}</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full transition-all ${style.bar}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Vendor */}
+                <p className="mt-2.5 text-[11px] text-muted-foreground">{item.vendor}</p>
+
+                {/* Badges */}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {item.priceSpike && (
+                    <Badge variant="outline" className="text-[10px] border-purple-200 text-purple-600">
+                      Price rising
+                    </Badge>
+                  )}
+                  {expiringSoon && (
+                    <span className="flex items-center gap-0.5 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+                      <Clock className="h-2.5 w-2.5" />
+                      Expires in {item.expiresInDays}d
+                    </span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
     </div>
   )
 }

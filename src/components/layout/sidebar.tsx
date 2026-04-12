@@ -2,11 +2,21 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Package, Truck, ChefHat } from "lucide-react"
+import {
+  Flame,
+  LayoutDashboard,
+  GitBranch,
+  MessageSquare,
+  FileText,
+  Package,
+} from "lucide-react"
 
 const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/workflow", label: "Workflow", icon: GitBranch },
+  { href: "/feedback", label: "Customer Service", icon: MessageSquare },
+  { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/inventory", label: "Inventory", icon: Package },
-  { href: "/shipments", label: "Shipments", icon: Truck },
 ]
 
 export function Sidebar() {
@@ -17,11 +27,11 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-14 items-center gap-2.5 border-b border-border px-5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-          <ChefHat className="h-4 w-4 text-white" />
+          <Flame className="h-4 w-4 text-white" />
         </div>
         <div className="leading-tight">
           <p className="text-sm font-semibold text-foreground">OpsPilot</p>
-          <p className="text-[10px] text-muted-foreground">Bistro Nova</p>
+          <p className="text-[10px] text-muted-foreground">Ember Table</p>
         </div>
       </div>
 
@@ -49,9 +59,9 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Bottom info */}
+      {/* Bottom */}
       <div className="border-t border-border p-4">
-        <p className="text-[10px] text-muted-foreground">v0.1.0 · Demo</p>
+        <p className="text-[10px] text-muted-foreground">Powered by Claude AI</p>
       </div>
     </aside>
   )
