@@ -1,42 +1,51 @@
-import { NextRequest, NextResponse } from "next/server"
-import { completeReservation, markFollowUpSent, createFollowUpRecord } from "@/lib/services/reservation.service"
-import { generateInvoice } from "@/lib/services/invoice.service"
-import { generateFollowUp } from "@/lib/ai/generate-followup"
+import { type NextRequest } from "next/server"
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { completeAppointment } from "@/lib/services/appointments"
+import { CompleteAppointmentBodySchema } from "@/lib/schemas/appointment"
 
 export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
-  const body = await req.json()
-
-  const completedResult = await completeReservation(id)
-  if (completedResult.error || !completedResult.data) {
-    return NextResponse.json({ error: completedResult.error ?? "Failed to complete." }, { status: 500 })
-  }
-
-  const reservation = completedResult.data
-  let invoice = null
-  if (body.line_items?.length) {
-    const invoiceResult = await generateInvoice({
-      reservation_id: id,
-      line_items: body.line_items,
-      tax_rate: body.tax_rate,
-      discount_amount: body.discount_amount,
-    })
-    invoice = invoiceResult.data ?? null
-  }
-
-  let followUpMessage = null
   try {
-    followUpMessage = await generateFollowUp(reservation)
-    if (reservation.customer_id) {
-      await createFollowUpRecord(id, reservation.customer_id, followUpMessage)
-    }
-    await markFollowUpSent(id)
-  } catch {
-    // non-blocking
-  }
+    const { id } = await ctx.params
 
-  return NextResponse.json({ reservation, invoice, follow_up_message: followUpMessage })
+    let body: unknown = {}
+    try {
+      body = await request.json()
+    } catch {
+      // empty body is fine
+    }
+
+    const parsed = CompleteAppointmentBodySchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json(
+        { error: "Validation failed", details: parsed.error.issues },
+        { status: 422 }
+      )
+    }
+
+    const client = createServerSupabaseClient()
+    const result = await completeAppointment(
+      client,
+      id,
+      DEMO_ORG_ID,
+      parsed.data.notes
+    )
+
+    return Response.json(
+      {
+        data: {
+          appointmentId: result.appointment.id,
+          invoiceId:     result.invoiceId,
+          status:        result.appointment.status,
+        },
+      },
+      { status: 200 }
+    )
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unexpected error"
+    const status  = message.includes("not found") ? 404 : 400
+    return Response.json({ error: message }, { status })
+  }
 }

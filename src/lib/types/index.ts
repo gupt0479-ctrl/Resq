@@ -27,23 +27,104 @@ export type InventoryAlert = {
   severity: "warning" | "critical"
 }
 
-export type AppointmentStatus =
-  | "scheduled"
-  | "confirmed"
-  | "in_progress"
-  | "completed"
-  | "rescheduled"
-  | "cancelled"
-  | "no_show"
+// ─── Domain types — authoritative definitions live in src/lib/constants/enums.ts
+// and src/lib/schemas/. These re-exports keep existing component imports working.
+
+export type {
+  AppointmentStatus,
+  InvoiceStatus,
+  FinanceTransactionType,
+  FinanceDirection,
+  DomainEventName,
+} from "@/lib/constants/enums"
+
+// ─── Canonical domain event strings — import from DOMAIN_EVENT constant.
+// WorkflowEventType below mirrors the DB event vocabulary for the UI timeline.
+
+export type WorkflowEventType =
+  | "reservation.created"
+  | "reservation.confirmed"
+  | "reservation.completed"
+  | "invoice.generated"
+  | "invoice.sent"
+  | "invoice.paid"
+  | "invoice.overdue"
+  | "feedback.received"
+  | "feedback.flagged"
+  | "summary.refresh_requested"
+
+// ─── UI-facing shapes (camelCase, safe to use in components) ─────────────
+
+export type Appointment = {
+  id:           string
+  customerId:   string
+  customerName: string
+  staffId:      string | null
+  staffName:    string | null
+  serviceId:    string
+  serviceName:  string
+  covers:       number
+  startsAt:     string
+  endsAt:       string
+  status:       import("@/lib/constants/enums").AppointmentStatus
+  bookingSource: string | null
+  notes:        string | null
+  createdAt:    string
+}
+
+export type InvoiceItem = {
+  id:          string
+  serviceId:   string | null
+  description: string
+  quantity:    number
+  unitPrice:   number
+  amount:      number
+}
+
+export type LedgerInvoice = {
+  id:             string
+  organizationId: string
+  appointmentId:  string | null
+  customerId:     string
+  customerName:   string
+  invoiceNumber:  string
+  currency:       string
+  subtotal:       number
+  taxRate:        number
+  taxAmount:      number
+  discountAmount: number
+  totalAmount:    number
+  amountPaid:     number
+  dueAt:          string
+  status:         import("@/lib/constants/enums").InvoiceStatus
+  sentAt:         string | null
+  paidAt:         string | null
+  notes:          string | null
+  createdAt:      string
+}
+
+export type WorkflowEvent = {
+  id:     string
+  time:   string
+  type:   WorkflowEventType
+  title:  string
+  detail: string
+  status: "completed" | "pending" | "failed"
+}
 
 export type FinanceTransaction = {
-  id: string
-  type: "revenue" | "expense" | "fee" | "inventory_purchase" | "writeoff" | "refund"
-  direction: "in" | "out"
-  category: string
-  amount: number
-  occurredAt: string
-  taxRelevant: boolean
+  id:               string
+  organizationId:   string
+  invoiceId:        string | null
+  type:             import("@/lib/constants/enums").FinanceTransactionType
+  direction:        import("@/lib/constants/enums").FinanceDirection
+  category:         string
+  amount:           number
+  occurredAt:       string
+  paymentMethod:    string | null
+  taxRelevant:      boolean
+  writeoffEligible: boolean
+  notes:            string | null
 }
 
 export type ShipmentStatus = "pending" | "confirmed" | "in_transit" | "delivered" | "cancelled"
@@ -166,7 +247,7 @@ export type AiInventoryReport = {
 }
 
 export type ReservationStatus = "confirmed" | "completed" | "cancelled" | "no_show"
-export type InvoiceStatus = "pending" | "paid" | "overdue"
+export type LegacyInvoiceStatus = "pending" | "paid" | "overdue"
 
 export interface Customer {
   id: string
@@ -211,7 +292,7 @@ export interface Invoice {
   tax_amount: number
   discount_amount: number
   total: number
-  status: InvoiceStatus
+  status: LegacyInvoiceStatus
   due_at: string
   paid_at?: string | null
   reminder_count: number
