@@ -1,4 +1,169 @@
-// ── Reservation + Invoice Types ──────────────────────────────
+export type InventoryIssueStatus = "none" | "equipment_issue" | "quality_concern" | "discontinued"
+
+export type PriceTrendStatus = "stable" | "rising" | "spike"
+
+export type InventoryAlertType = "low_stock" | "expiry_soon" | "price_increase" | "equipment_issue"
+
+export type InventoryItem = {
+  id: string
+  itemName: string
+  category: string
+  quantityOnHand: number
+  reorderLevel: number
+  unitCost: number
+  previousUnitCost?: number
+  expiresAt: string | null
+  vendorName: string
+  issueStatus: InventoryIssueStatus
+  priceTrendStatus: PriceTrendStatus
+}
+
+export type InventoryAlert = {
+  id: string
+  itemId: string
+  itemName: string
+  alertType: InventoryAlertType
+  message: string
+  severity: "warning" | "critical"
+}
+
+export type AppointmentStatus =
+  | "scheduled"
+  | "confirmed"
+  | "in_progress"
+  | "completed"
+  | "rescheduled"
+  | "cancelled"
+  | "no_show"
+
+export type FinanceTransaction = {
+  id: string
+  type: "revenue" | "expense" | "fee" | "inventory_purchase" | "writeoff" | "refund"
+  direction: "in" | "out"
+  category: string
+  amount: number
+  occurredAt: string
+  taxRelevant: boolean
+}
+
+export type ShipmentStatus = "pending" | "confirmed" | "in_transit" | "delivered" | "cancelled"
+
+export type ShipmentLineItem = {
+  id: string
+  itemId: string
+  itemName: string
+  quantityOrdered: number
+  unitCost: number
+  totalCost: number
+}
+
+export type Shipment = {
+  id: string
+  vendorName: string
+  status: ShipmentStatus
+  expectedDeliveryDate: string
+  actualDeliveryDate: string | null
+  orderedAt: string
+  trackingNumber: string | null
+  trackingUrl: string | null
+  lineItems: ShipmentLineItem[]
+  totalCost: number
+  notes: string | null
+}
+
+export type DeliveryPerformance = "early" | "on_time" | "late"
+
+export type VendorPerformanceStat = {
+  vendorName: string
+  totalDeliveries: number
+  onTimeCount: number
+  earlyCount: number
+  lateCount: number
+  onTimePct: number
+  avgDaysLate: number
+  maxDaysLate: number
+  totalSpend30d: number
+  hasPriceIncrease: boolean
+  negotiationPriority: "high" | "medium" | "low"
+}
+
+export type MenuItem = {
+  id: string
+  name: string
+  category: string
+  price: number
+}
+
+export type MenuItemInventoryUsage = {
+  menuItemId: string
+  itemId: string
+  unitsUsedPerOrder: number
+}
+
+export type HistoricalReservation = {
+  id: string
+  date: string
+  covers: number
+  menuItemIds: string[]
+}
+
+export type DemandForecast = {
+  itemId: string
+  itemName: string
+  projectedUnits7d: number
+  projectedUnits14d: number
+  projectedDailyUsage: number
+  currentStock: number
+  daysToStockout: number
+  shortfall7d: number
+}
+
+export type RiskLevel = "low" | "medium" | "high"
+
+export type PredictionDriver = {
+  driver: string
+  impact: "low" | "medium" | "high"
+}
+
+export type InventoryPrediction = {
+  itemId: string
+  itemName: string
+  category: string
+  vendorName: string
+  expiresAt: string | null
+  quantityOnHand: number
+  reorderLevel: number
+  predictedUsage7d: number
+  predictedUsage14d: number
+  predictedDailyUsage: number
+  safetyStock: number
+  daysToStockout: number
+  orderByDate: string | null
+  recommendedReorderQty: number
+  demandTrendPct: number
+  riskLevel: RiskLevel
+  confidenceScore: number | null
+  topDrivers: PredictionDriver[]
+  explanationText: string | null
+}
+
+export type VendorInsight = {
+  vendorName: string
+  performanceSummary: string
+  negotiationSuggestion: string | null
+  priority: "high" | "medium" | "low"
+}
+
+export type AiInventoryReport = {
+  predictionDate: string
+  highRiskCount: number
+  mediumRiskCount: number
+  lowRiskCount: number
+  predictions: InventoryPrediction[]
+  summaryText: string
+  vendorInsights: VendorInsight[]
+  generatedAt: string
+}
 
 export type ReservationStatus = "confirmed" | "completed" | "cancelled" | "no_show"
 export type InvoiceStatus = "pending" | "paid" | "overdue"
