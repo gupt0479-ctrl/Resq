@@ -5,8 +5,10 @@ import { AiAdvisorPanel } from "@/components/inventory/ai-advisor-panel"
 import { ReceivingStatusStrip } from "@/components/inventory/receiving-status-strip"
 import { StockHealthChart } from "@/components/inventory/stock-health-chart"
 import { VendorPerformanceCard } from "@/components/inventory/vendor-performance-card"
-import { getInventoryItems, getShipments } from "@/lib/supabase/queries"
+import { SpendTrendsCard } from "@/components/inventory/spend-trends-card"
+import { getInventoryItems, getShipments, getFinanceTransactions } from "@/lib/supabase/queries"
 import { computeVendorPerformance } from "@/lib/inventory/vendor-performance"
+import { computeSpendTrends } from "@/lib/inventory/spend-trends"
 import {
   getAlertSummary,
   getLowStockItems,
@@ -54,9 +56,10 @@ async function InventoryContent({
   const { tab: rawTab } = await searchParams
   const activeTab = resolveTab(rawTab)
 
-  const [inventoryItems, shipments] = await Promise.all([
+  const [inventoryItems, shipments, transactions] = await Promise.all([
     getInventoryItems(),
     getShipments(),
+    getFinanceTransactions(),
   ])
 
   const now = new Date(TODAY)
@@ -87,7 +90,8 @@ async function InventoryContent({
     )
     .reduce((sum, s) => sum + s.totalCost, 0)
 
-  const vendorStats = computeVendorPerformance(shipments, inventoryItems)
+  const vendorStats  = computeVendorPerformance(shipments, inventoryItems)
+  const spendTrends  = computeSpendTrends(shipments, transactions, TODAY)
 
   const lowStockSet  = new Set(lowStockItems.map((i) => i.id))
   const expiringSet  = new Set(expiringItems.map((i) => i.id))
@@ -113,7 +117,7 @@ async function InventoryContent({
         weekIncomingSpend={weekIncomingSpend}
       />
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -141,9 +145,20 @@ async function InventoryContent({
             <VendorPerformanceCard vendorStats={vendorStats} />
           </CardContent>
         </Card>
-
-        <AiAdvisorPanel />
       </div>
+
+      <AiAdvisorPanel />
+
+      <Card>
+        <CardHeader className="pb-1">
+          <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Spend Trends
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-5">
+          <SpendTrendsCard data={spendTrends} />
+        </CardContent>
+      </Card>
 
       <Card className="overflow-visible">
         <CardHeader className="border-b border-border pb-0 pt-4">

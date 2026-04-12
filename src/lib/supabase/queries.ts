@@ -7,6 +7,7 @@ import type {
   HistoricalReservation as Reservation,
   Shipment,
   ShipmentLineItem,
+  FinanceTransaction,
 } from "@/lib/types"
 
 // ── helpers: map snake_case rows → camelCase types ───────────
@@ -163,6 +164,30 @@ export async function getShipmentById(id: string): Promise<Shipment | null> {
     mapLineItem(li as Record<string, unknown>)
   )
   return mapShipment(row as Record<string, unknown>, lineItems)
+}
+
+export async function getFinanceTransactions(): Promise<FinanceTransaction[]> {
+  "use cache"
+  cacheLife("seconds")
+  const { data, error } = await supabase
+    .from("finance_transactions")
+    .select("id, organization_id, invoice_id, type, direction, category, amount, occurred_at, payment_method, tax_relevant, writeoff_eligible, notes")
+    .order("occurred_at", { ascending: false })
+  if (error) return []
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    invoiceId: r.invoice_id as string | null,
+    type: r.type as FinanceTransaction["type"],
+    direction: r.direction as FinanceTransaction["direction"],
+    category: r.category as string,
+    amount: Number(r.amount),
+    occurredAt: r.occurred_at as string,
+    paymentMethod: r.payment_method as string | null,
+    taxRelevant: Boolean(r.tax_relevant),
+    writeoffEligible: Boolean(r.writeoff_eligible),
+    notes: r.notes as string | null,
+  }))
 }
 
 export async function cancelShipment(id: string): Promise<void> {
