@@ -1,36 +1,20 @@
-import { NextRequest, NextResponse } from "next/server"
-import { getReservation, rescheduleReservation, cancelReservation } from "@/lib/services/reservation.service"
+import { type NextRequest } from "next/server"
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { getAppointmentDetailQuery } from "@/lib/queries/appointments"
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
-  const result = await getReservation(id)
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 404 })
-  return NextResponse.json({ reservation: result.data })
-}
+  try {
+    const { id } = await ctx.params
+    const client  = createServerSupabaseClient()
+    const data    = await getAppointmentDetailQuery(client, id, DEMO_ORG_ID)
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params
-  const body = await req.json()
-  if (!body.starts_at || !body.ends_at) {
-    return NextResponse.json({ error: "starts_at and ends_at required." }, { status: 400 })
+    return Response.json({ data })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unexpected error"
+    const status  = message.includes("not found") ? 404 : 500
+    return Response.json({ error: message }, { status })
   }
-  const result = await rescheduleReservation(id, body)
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 409 })
-  return NextResponse.json({ reservation: result.data })
-}
-
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params
-  const result = await cancelReservation(id)
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
-  return NextResponse.json({ reservation: result.data })
 }

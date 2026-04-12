@@ -1,471 +1,311 @@
--- ============================================================
--- OpsPilot seed data for Supabase
--- Run this in Supabase Dashboard → SQL Editor
--- ============================================================
+-- Ember Table — deterministic seed data
+-- Run after applying 0001_core_ledger.sql
+-- All dates relative to the demo anchor date: 2026-04-11
 
--- ── 1. inventory_items ───────────────────────────────────────
-create table if not exists inventory_items (
-  id                text primary key,
-  item_name         text not null,
-  category          text not null,
-  quantity_on_hand  numeric not null,
-  reorder_level     numeric not null,
-  unit_cost         numeric not null,
-  previous_unit_cost numeric,
-  expires_at        timestamptz,
-  vendor_name       text not null,
-  issue_status      text not null default 'none',
-  price_trend_status text not null default 'stable'
-);
+-- ─── Organisation ─────────────────────────────────────────────────────────
 
-truncate inventory_items restart identity cascade;
+INSERT INTO organizations (id, name, slug, timezone) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'Ember Table', 'ember-table', 'America/Chicago')
+ON CONFLICT (id) DO NOTHING;
 
-insert into inventory_items values
-('inv-001','Salmon Fillet (kg)','Protein',4,6,28.0,21.5,'2026-04-13T00:00:00Z','Ocean Fresh Co.','none','spike'),
-('inv-002','Chicken Breast (kg)','Protein',8,10,12.0,null,'2026-04-14T00:00:00Z','Farm Gate Meats','none','stable'),
-('inv-003','Beef Tenderloin (kg)','Protein',3,5,62.0,54.0,'2026-04-15T00:00:00Z','Farm Gate Meats','none','rising'),
-('inv-004','Tiger Prawns (kg)','Protein',2,4,34.0,null,'2026-04-13T00:00:00Z','Ocean Fresh Co.','none','stable'),
-('inv-005','Duck Breast (kg)','Protein',2,3,24.0,null,'2026-04-16T00:00:00Z','Farm Gate Meats','none','stable'),
-('inv-006','Roma Tomatoes (kg)','Produce',6,8,3.5,null,'2026-04-15T00:00:00Z','Green Valley Farms','none','stable'),
-('inv-007','Baby Spinach (kg)','Produce',1,3,8.0,null,'2026-04-13T00:00:00Z','Green Valley Farms','none','stable'),
-('inv-008','Portobello Mushrooms (kg)','Produce',3,4,14.0,11.5,'2026-04-14T00:00:00Z','Green Valley Farms','none','rising'),
-('inv-009','Garlic (kg)','Produce',5,3,6.0,null,'2026-05-10T00:00:00Z','Green Valley Farms','none','stable'),
-('inv-010','Mixed Lettuce (kg)','Produce',2,4,7.5,null,'2026-04-13T00:00:00Z','Green Valley Farms','none','stable'),
-('inv-011','Heavy Cream (L)','Dairy',5,6,4.2,null,'2026-04-18T00:00:00Z','Meadow Dairy','none','stable'),
-('inv-012','Parmesan Cheese (kg)','Dairy',2,3,22.0,18.5,'2026-05-01T00:00:00Z','Meadow Dairy','none','rising'),
-('inv-013','Eggs (dozen)','Dairy',6,5,5.5,null,'2026-04-25T00:00:00Z','Meadow Dairy','none','stable'),
-('inv-014','Unsalted Butter (kg)','Dairy',3,4,11.0,null,'2026-05-15T00:00:00Z','Meadow Dairy','none','stable'),
-('inv-015','Pasta — Tagliatelle (kg)','Dry Goods',7,5,4.8,null,'2027-03-01T00:00:00Z','Pantry Plus','none','stable'),
-('inv-016','Arborio Rice (kg)','Dry Goods',4,5,5.5,null,'2027-01-01T00:00:00Z','Pantry Plus','none','stable'),
-('inv-017','All-Purpose Flour (kg)','Dry Goods',12,8,1.8,null,'2026-10-01T00:00:00Z','Pantry Plus','none','stable'),
-('inv-018','Panko Breadcrumbs (kg)','Dry Goods',3,3,4.0,null,'2026-12-01T00:00:00Z','Pantry Plus','none','stable'),
-('inv-019','Extra Virgin Olive Oil (L)','Oils & Condiments',4,5,16.0,11.0,'2027-02-01T00:00:00Z','Pantry Plus','none','spike'),
-('inv-020','San Marzano Tomatoes (400g tin)','Oils & Condiments',14,10,3.2,null,'2028-01-01T00:00:00Z','Pantry Plus','none','stable'),
-('inv-021','Dijon Mustard (kg)','Oils & Condiments',2,2,9.0,null,'2026-11-01T00:00:00Z','Pantry Plus','none','stable'),
-('inv-022','Dry White Wine (750ml)','Beverages',6,8,14.0,11.5,null,'Vine & Cellar','none','rising'),
-('inv-023','Chicken Stock (L)','Beverages',8,6,3.5,null,'2026-07-01T00:00:00Z','Pantry Plus','none','stable'),
-('inv-024','Disposable Gloves (100pk)','Supplies',5,4,9.0,null,null,'Kitchen Direct','none','stable'),
-('inv-025','Parchment Paper Roll (50m)','Supplies',2,3,7.5,null,null,'Kitchen Direct','none','stable'),
-('inv-026','Immersion Blender','Equipment',1,1,180.0,null,null,'Chef''s Choice','equipment_issue','stable'),
-('inv-027','Chef''s Knife (10-inch)','Equipment',4,3,95.0,null,null,'Chef''s Choice','none','stable');
+-- ─── Staff ────────────────────────────────────────────────────────────────
 
--- ── 2. menu_items ────────────────────────────────────────────
-create table if not exists menu_items (
-  id       text primary key,
-  name     text not null,
-  category text not null,
-  price    numeric not null
-);
+INSERT INTO staff (id, organization_id, full_name, role, email, is_active) VALUES
+  ('00000000-0000-0000-0001-000000000001', '00000000-0000-0000-0000-000000000001', 'Sarah Chen',   'manager', 'sarah@embertable.com',  TRUE),
+  ('00000000-0000-0000-0001-000000000002', '00000000-0000-0000-0000-000000000001', 'James Park',   'server',  'james@embertable.com',  TRUE),
+  ('00000000-0000-0000-0001-000000000003', '00000000-0000-0000-0000-000000000001', 'Mia Torres',   'server',  'mia@embertable.com',    TRUE)
+ON CONFLICT (id) DO NOTHING;
 
-truncate menu_items restart identity cascade;
+-- ─── Services / Menu Catalog ──────────────────────────────────────────────
 
-insert into menu_items values
-('menu-001','Garlic Prawn Bruschetta','Starter',18),
-('menu-002','Mushroom & Spinach Tartlet','Starter',16),
-('menu-003','Caesar Salad','Starter',17),
-('menu-004','Beef Carpaccio','Starter',22),
-('menu-005','Pan-Seared Salmon','Main',42),
-('menu-006','Chicken Supreme','Main',36),
-('menu-007','Beef Tenderloin','Main',58),
-('menu-008','Duck Confit','Main',46),
-('menu-009','Prawn Linguine','Main',38),
-('menu-010','Mushroom Risotto','Main',32),
-('menu-011','Tomato & Basil Tagliatelle','Main',28),
-('menu-012','Roasted Garlic Potatoes','Side',10),
-('menu-013','Sautéed Spinach','Side',9),
-('menu-014','Truffle Fries','Side',12),
-('menu-015','Crème Brûlée','Dessert',14),
-('menu-016','Flourless Chocolate Cake','Dessert',13);
+INSERT INTO services (id, organization_id, name, description, category, price_per_person, is_active) VALUES
+  ('00000000-0000-0000-0002-000000000001', '00000000-0000-0000-0000-000000000001',
+   'Prix-Fixe Dinner',        '3-course seasonal menu',           'main_course',  95.00, TRUE),
+  ('00000000-0000-0000-0002-000000000002', '00000000-0000-0000-0000-000000000001',
+   'Seasonal Tasting Menu',   '7-course chef tasting experience',  'main_course', 145.00, TRUE),
+  ('00000000-0000-0000-0002-000000000003', '00000000-0000-0000-0000-000000000001',
+   'Wine Pairing Experience', 'Curated wine flight per course',   'beverage',     65.00, TRUE),
+  ('00000000-0000-0000-0002-000000000004', '00000000-0000-0000-0000-000000000001',
+   'Dessert Course',          'Pastry chef selection',            'dessert',      18.00, TRUE),
+  ('00000000-0000-0000-0002-000000000005', '00000000-0000-0000-0000-000000000001',
+   'Private Dining Experience','Exclusive room + personalised menu','experience', 200.00, TRUE)
+ON CONFLICT (id) DO NOTHING;
 
--- ── 3. menu_item_inventory_usage ─────────────────────────────
-create table if not exists menu_item_inventory_usage (
-  menu_item_id        text not null references menu_items(id) on delete cascade,
-  item_id             text not null references inventory_items(id) on delete cascade,
-  units_used_per_order numeric not null,
-  primary key (menu_item_id, item_id)
-);
+-- ─── Customers / Guests ──────────────────────────────────────────────────
 
-truncate menu_item_inventory_usage restart identity cascade;
+INSERT INTO customers (id, organization_id, full_name, email, phone, preferred_contact_channel, last_visit_at, lifetime_value, avg_feedback_score, risk_status) VALUES
+  ('00000000-0000-0000-0003-000000000001', '00000000-0000-0000-0000-000000000001',
+   'Emily Hartley',   'emily.h@example.com',   '+1-312-555-0101', 'email', '2026-04-08 19:00:00+00', 621.30,  4.8, 'none'),
+  ('00000000-0000-0000-0003-000000000002', '00000000-0000-0000-0000-000000000001',
+   'Michael Torres',  'm.torres@example.com',  '+1-312-555-0102', 'email', '2026-04-11 19:30:00+00', 414.20,  4.5, 'none'),
+  ('00000000-0000-0000-0003-000000000003', '00000000-0000-0000-0000-000000000001',
+   'Priya Nair',      'priya.n@example.com',   '+1-312-555-0103', 'email', '2026-04-11 18:00:00+00', 316.10,  4.9, 'none'),
+  ('00000000-0000-0000-0003-000000000004', '00000000-0000-0000-0000-000000000001',
+   'Carlos Reyes',    'c.reyes@example.com',   '+1-312-555-0104', 'sms',  '2026-03-31 20:00:00+00', 632.20,  1.8, 'flagged'),
+  ('00000000-0000-0000-0003-000000000005', '00000000-0000-0000-0000-000000000001',
+   'Jennifer Kim',    'jen.kim@example.com',   '+1-312-555-0105', 'email', '2026-04-09 19:00:00+00', 1308.00, 5.0, 'none'),
+  ('00000000-0000-0000-0003-000000000006', '00000000-0000-0000-0000-000000000001',
+   'David Chen',      'd.chen@example.com',    '+1-312-555-0106', 'email', '2026-03-15 19:00:00+00', 207.10,  3.9, 'at_risk'),
+  ('00000000-0000-0000-0003-000000000007', '00000000-0000-0000-0000-000000000001',
+   'Aisha Johnson',   'aisha.j@example.com',   '+1-312-555-0107', 'email', '2026-03-28 19:30:00+00', 380.00,  4.6, 'none'),
+  ('00000000-0000-0000-0003-000000000008', '00000000-0000-0000-0000-000000000001',
+   'Robert Walsh',    'r.walsh@example.com',   '+1-312-555-0108', 'email', NULL,                     0.00,    NULL,'none')
+ON CONFLICT (id) DO NOTHING;
 
-insert into menu_item_inventory_usage values
-('menu-001','inv-004',0.15),('menu-001','inv-009',0.02),('menu-001','inv-019',0.03),('menu-001','inv-017',0.05),
-('menu-002','inv-008',0.1),('menu-002','inv-007',0.05),('menu-002','inv-013',0.08),('menu-002','inv-011',0.04),('menu-002','inv-017',0.08),
-('menu-003','inv-010',0.12),('menu-003','inv-012',0.04),('menu-003','inv-013',0.08),('menu-003','inv-019',0.02),('menu-003','inv-018',0.02),
-('menu-004','inv-003',0.1),('menu-004','inv-012',0.03),('menu-004','inv-019',0.02),('menu-004','inv-021',0.01),
-('menu-005','inv-001',0.22),('menu-005','inv-014',0.03),('menu-005','inv-009',0.02),('menu-005','inv-019',0.02),('menu-005','inv-007',0.04),
-('menu-006','inv-002',0.25),('menu-006','inv-011',0.06),('menu-006','inv-009',0.02),('menu-006','inv-014',0.02),('menu-006','inv-023',0.1),
-('menu-007','inv-003',0.3),('menu-007','inv-014',0.04),('menu-007','inv-009',0.02),('menu-007','inv-021',0.015),
-('menu-008','inv-005',0.28),('menu-008','inv-009',0.02),('menu-008','inv-019',0.03),
-('menu-009','inv-004',0.2),('menu-009','inv-015',0.12),('menu-009','inv-006',0.08),('menu-009','inv-009',0.02),('menu-009','inv-019',0.03),('menu-009','inv-022',0.05),
-('menu-010','inv-016',0.1),('menu-010','inv-008',0.12),('menu-010','inv-012',0.04),('menu-010','inv-014',0.03),('menu-010','inv-023',0.2),('menu-010','inv-022',0.05),
-('menu-011','inv-015',0.12),('menu-011','inv-020',0.25),('menu-011','inv-009',0.02),('menu-011','inv-019',0.02),('menu-011','inv-012',0.03),
-('menu-012','inv-009',0.03),('menu-012','inv-019',0.02),
-('menu-013','inv-007',0.08),('menu-013','inv-009',0.01),('menu-013','inv-019',0.01),
-('menu-014','inv-019',0.015),
-('menu-015','inv-011',0.1),('menu-015','inv-013',0.17),
-('menu-016','inv-013',0.17),('menu-016','inv-014',0.04),('menu-016','inv-011',0.05);
+-- ─── Appointments / Reservations ─────────────────────────────────────────
 
--- ── 4. reservations ──────────────────────────────────────────
-create table if not exists reservations (
-  id              text primary key,
-  date            date not null,
-  covers          int not null,
-  menu_item_ids   text[] not null
-);
+INSERT INTO appointments (id, organization_id, customer_id, staff_id, service_id, covers, starts_at, ends_at, status, booking_source, confirmation_sent_at, notes) VALUES
+  -- COMPLETED: Emily, Prix-Fixe, 2 covers — 3 days ago (has paid invoice)
+  ('00000000-0000-0000-0004-000000000001', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000001', '00000000-0000-0000-0001-000000000002',
+   '00000000-0000-0000-0002-000000000001', 2,
+   '2026-04-08 19:00:00+00', '2026-04-08 21:00:00+00',
+   'completed', 'opentable', '2026-04-06 10:00:00+00', 'Anniversary dinner'),
 
-truncate reservations restart identity cascade;
+  -- COMPLETED: Carlos, Seasonal Tasting, 4 covers — 11 days ago (invoice overdue)
+  ('00000000-0000-0000-0004-000000000002', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000004', '00000000-0000-0000-0001-000000000003',
+   '00000000-0000-0000-0002-000000000002', 4,
+   '2026-03-31 19:00:00+00', '2026-03-31 22:00:00+00',
+   'completed', 'manual', '2026-03-29 09:00:00+00', 'Group booking'),
 
-insert into reservations values
-('r-001','2026-03-12',4,array['menu-005','menu-006','menu-003','menu-015']),
-('r-002','2026-03-12',2,array['menu-007','menu-011','menu-016']),
-('r-003','2026-03-12',3,array['menu-009','menu-002','menu-013']),
-('r-004','2026-03-13',6,array['menu-005','menu-007','menu-006','menu-003','menu-015','menu-016']),
-('r-005','2026-03-13',4,array['menu-010','menu-009','menu-002','menu-014']),
-('r-006','2026-03-13',5,array['menu-008','menu-005','menu-011','menu-013','menu-015']),
-('r-007','2026-03-13',3,array['menu-007','menu-004','menu-016']),
-('r-008','2026-03-14',8,array['menu-005','menu-007','menu-006','menu-008','menu-003','menu-015','menu-016','menu-012']),
-('r-009','2026-03-14',6,array['menu-009','menu-010','menu-002','menu-013','menu-015','menu-016']),
-('r-010','2026-03-14',4,array['menu-007','menu-005','menu-014','menu-015']),
-('r-011','2026-03-14',5,array['menu-011','menu-009','menu-004','menu-013','menu-016']),
-('r-012','2026-03-15',6,array['menu-006','menu-005','menu-003','menu-012','menu-015','menu-016']),
-('r-013','2026-03-15',4,array['menu-008','menu-010','menu-002','menu-015']),
-('r-014','2026-03-15',3,array['menu-011','menu-013','menu-016']),
-('r-015','2026-03-16',2,array['menu-005','menu-015']),
-('r-016','2026-03-16',3,array['menu-011','menu-003','menu-016']),
-('r-017','2026-03-17',3,array['menu-006','menu-009','menu-015']),
-('r-018','2026-03-17',2,array['menu-010','menu-016']),
-('r-019','2026-03-18',4,array['menu-005','menu-007','menu-003','menu-015']),
-('r-020','2026-03-18',3,array['menu-009','menu-002','menu-016']),
-('r-021','2026-03-19',5,array['menu-007','menu-006','menu-005','menu-013','menu-015']),
-('r-022','2026-03-19',3,array['menu-010','menu-011','menu-016']),
-('r-023','2026-03-20',7,array['menu-005','menu-007','menu-006','menu-008','menu-003','menu-015','menu-014']),
-('r-024','2026-03-20',5,array['menu-009','menu-010','menu-002','menu-016','menu-013']),
-('r-025','2026-03-20',4,array['menu-007','menu-005','menu-004','menu-015']),
-('r-026','2026-03-20',3,array['menu-011','menu-012','menu-016']),
-('r-027','2026-03-21',9,array['menu-005','menu-007','menu-006','menu-008','menu-003','menu-015','menu-016','menu-012','menu-013']),
-('r-028','2026-03-21',6,array['menu-009','menu-010','menu-005','menu-002','menu-015','menu-016']),
-('r-029','2026-03-21',4,array['menu-007','menu-004','menu-014','menu-015']),
-('r-030','2026-03-21',5,array['menu-011','menu-009','menu-013','menu-016','menu-002']),
-('r-031','2026-03-22',5,array['menu-006','menu-005','menu-003','menu-015','menu-016']),
-('r-032','2026-03-22',4,array['menu-010','menu-008','menu-013','menu-015']),
-('r-033','2026-03-22',3,array['menu-011','menu-002','menu-016']),
-('r-034','2026-03-23',2,array['menu-005','menu-016']),
-('r-035','2026-03-23',2,array['menu-009','menu-015']),
-('r-036','2026-03-24',3,array['menu-007','menu-003','menu-015']),
-('r-037','2026-03-24',2,array['menu-010','menu-016']),
-('r-038','2026-03-25',4,array['menu-005','menu-006','menu-014','menu-015']),
-('r-039','2026-03-25',3,array['menu-009','menu-011','menu-016']),
-('r-040','2026-03-26',5,array['menu-007','menu-005','menu-006','menu-013','menu-015']),
-('r-041','2026-03-26',3,array['menu-010','menu-002','menu-016']),
-('r-042','2026-03-27',8,array['menu-005','menu-007','menu-006','menu-008','menu-003','menu-015','menu-016','menu-012']),
-('r-043','2026-03-27',5,array['menu-009','menu-010','menu-002','menu-015','menu-013']),
-('r-044','2026-03-27',4,array['menu-007','menu-005','menu-004','menu-016']),
-('r-045','2026-03-27',3,array['menu-011','menu-014','menu-015']),
-('r-046','2026-03-28',10,array['menu-005','menu-007','menu-006','menu-008','menu-009','menu-003','menu-015','menu-016','menu-014','menu-013']),
-('r-047','2026-03-28',7,array['menu-010','menu-005','menu-006','menu-002','menu-015','menu-016','menu-012']),
-('r-048','2026-03-28',5,array['menu-007','menu-004','menu-011','menu-016','menu-015']),
-('r-049','2026-03-28',4,array['menu-009','menu-013','menu-016','menu-002']),
-('r-050','2026-03-29',6,array['menu-006','menu-005','menu-010','menu-015','menu-016','menu-013']),
-('r-051','2026-03-29',4,array['menu-008','menu-011','menu-003','menu-015']),
-('r-052','2026-03-29',3,array['menu-009','menu-014','menu-016']),
-('r-053','2026-03-30',2,array['menu-005','menu-015']),
-('r-054','2026-03-30',3,array['menu-011','menu-003','menu-016']),
-('r-055','2026-03-31',3,array['menu-006','menu-009','menu-015']),
-('r-056','2026-03-31',2,array['menu-010','menu-016']),
-('r-057','2026-04-01',4,array['menu-005','menu-007','menu-002','menu-015']),
-('r-058','2026-04-01',3,array['menu-009','menu-003','menu-016']),
-('r-059','2026-04-02',5,array['menu-007','menu-006','menu-005','menu-013','menu-015']),
-('r-060','2026-04-02',4,array['menu-010','menu-011','menu-002','menu-016']),
-('r-061','2026-04-03',8,array['menu-005','menu-007','menu-006','menu-008','menu-003','menu-015','menu-016','menu-014']),
-('r-062','2026-04-03',5,array['menu-009','menu-010','menu-002','menu-015','menu-012']),
-('r-063','2026-04-03',4,array['menu-007','menu-004','menu-013','menu-016']),
-('r-064','2026-04-03',3,array['menu-011','menu-014','menu-015']),
-('r-065','2026-04-04',11,array['menu-005','menu-007','menu-006','menu-008','menu-009','menu-003','menu-015','menu-016','menu-012','menu-013','menu-014']),
-('r-066','2026-04-04',7,array['menu-010','menu-005','menu-006','menu-002','menu-015','menu-016','menu-011']),
-('r-067','2026-04-04',5,array['menu-007','menu-004','menu-009','menu-016','menu-015']),
-('r-068','2026-04-04',4,array['menu-009','menu-013','menu-016','menu-002']),
-('r-069','2026-04-05',6,array['menu-006','menu-005','menu-010','menu-015','menu-016','menu-012']),
-('r-070','2026-04-05',5,array['menu-008','menu-011','menu-003','menu-015','menu-013']),
-('r-071','2026-04-05',3,array['menu-009','menu-014','menu-016']),
-('r-072','2026-04-06',2,array['menu-005','menu-015']),
-('r-073','2026-04-06',2,array['menu-009','menu-016']),
-('r-074','2026-04-07',3,array['menu-006','menu-003','menu-015']),
-('r-075','2026-04-07',2,array['menu-010','menu-016']),
-('r-076','2026-04-08',4,array['menu-005','menu-007','menu-013','menu-015']),
-('r-077','2026-04-08',3,array['menu-009','menu-011','menu-016']),
-('r-078','2026-04-09',5,array['menu-007','menu-005','menu-006','menu-003','menu-015']),
-('r-079','2026-04-09',4,array['menu-010','menu-002','menu-013','menu-016']),
-('r-080','2026-04-10',9,array['menu-005','menu-007','menu-006','menu-008','menu-003','menu-015','menu-016','menu-012','menu-014']),
-('r-081','2026-04-10',6,array['menu-009','menu-010','menu-002','menu-015','menu-013','menu-016']),
-('r-082','2026-04-10',4,array['menu-007','menu-004','menu-011','menu-015']),
-('r-083','2026-04-10',3,array['menu-011','menu-014','menu-016']),
-('r-084','2026-04-11',12,array['menu-005','menu-007','menu-006','menu-008','menu-009','menu-003','menu-015','menu-016','menu-012','menu-013','menu-014','menu-004']),
-('r-085','2026-04-11',8,array['menu-010','menu-005','menu-006','menu-002','menu-015','menu-016','menu-011','menu-013']),
-('r-086','2026-04-11',5,array['menu-007','menu-004','menu-009','menu-016','menu-015']),
-('r-087','2026-04-11',4,array['menu-009','menu-013','menu-016','menu-002']),
-('r-088','2026-04-12',7,array['menu-006','menu-005','menu-010','menu-015','menu-016','menu-012','menu-013']),
-('r-089','2026-04-12',5,array['menu-008','menu-011','menu-003','menu-015','menu-013']),
-('r-090','2026-04-12',3,array['menu-009','menu-014','menu-016']),
-('r-091','2026-04-13',2,array['menu-005','menu-015']),
-('r-092','2026-04-13',2,array['menu-011','menu-016']),
-('r-093','2026-04-14',3,array['menu-006','menu-003','menu-015']),
-('r-094','2026-04-14',2,array['menu-010','menu-016']),
-('r-095','2026-04-15',4,array['menu-005','menu-007','menu-013','menu-015']),
-('r-096','2026-04-15',3,array['menu-009','menu-011','menu-016']),
-('r-097','2026-04-16',5,array['menu-007','menu-005','menu-006','menu-003','menu-015']),
-('r-098','2026-04-16',4,array['menu-010','menu-008','menu-013','menu-016']),
-('r-099','2026-04-17',10,array['menu-005','menu-007','menu-006','menu-008','menu-003','menu-015','menu-016','menu-012','menu-014','menu-004']),
-('r-100','2026-04-17',6,array['menu-009','menu-010','menu-002','menu-015','menu-013','menu-016']),
-('r-101','2026-04-17',5,array['menu-007','menu-005','menu-011','menu-015','menu-016']),
-('r-102','2026-04-17',3,array['menu-009','menu-014','menu-016']),
-('r-103','2026-04-18',14,array['menu-005','menu-007','menu-006','menu-008','menu-009','menu-003','menu-001','menu-015','menu-016','menu-012','menu-013','menu-014','menu-004','menu-011']),
-('r-104','2026-04-18',9,array['menu-010','menu-005','menu-006','menu-002','menu-015','menu-016','menu-011','menu-013','menu-012']),
-('r-105','2026-04-18',6,array['menu-007','menu-004','menu-009','menu-016','menu-015','menu-014']),
-('r-106','2026-04-18',4,array['menu-009','menu-013','menu-016','menu-002']),
-('r-107','2026-04-19',7,array['menu-006','menu-005','menu-010','menu-015','menu-016','menu-012','menu-013']),
-('r-108','2026-04-19',5,array['menu-008','menu-007','menu-003','menu-015','menu-013']),
-('r-109','2026-04-19',4,array['menu-009','menu-011','menu-014','menu-016']),
-('r-110','2026-04-20',2,array['menu-005','menu-015']),
-('r-111','2026-04-20',2,array['menu-009','menu-016']),
-('r-112','2026-04-21',3,array['menu-006','menu-003','menu-015']),
-('r-113','2026-04-21',2,array['menu-010','menu-016']),
-('r-114','2026-04-22',4,array['menu-005','menu-007','menu-002','menu-015']),
-('r-115','2026-04-22',3,array['menu-009','menu-011','menu-016']),
-('r-116','2026-04-23',5,array['menu-007','menu-006','menu-005','menu-013','menu-015']),
-('r-117','2026-04-23',3,array['menu-010','menu-003','menu-016']),
-('r-118','2026-04-24',10,array['menu-005','menu-007','menu-006','menu-008','menu-003','menu-015','menu-016','menu-012','menu-014','menu-013']),
-('r-119','2026-04-24',6,array['menu-009','menu-010','menu-002','menu-015','menu-016','menu-011']),
-('r-120','2026-04-24',4,array['menu-007','menu-004','menu-013','menu-015']),
-('r-121','2026-04-24',3,array['menu-011','menu-014','menu-016']),
-('r-122','2026-04-25',12,array['menu-005','menu-007','menu-006','menu-008','menu-009','menu-003','menu-015','menu-016','menu-012','menu-013','menu-011','menu-004']),
-('r-123','2026-04-25',8,array['menu-010','menu-005','menu-006','menu-002','menu-015','menu-016','menu-013','menu-014']),
-('r-124','2026-04-25',5,array['menu-007','menu-004','menu-009','menu-016','menu-015']),
-('r-125','2026-04-25',4,array['menu-009','menu-013','menu-016','menu-002']);
+  -- COMPLETED: Jennifer, Private Dining, 6 covers — 2 days ago (invoice sent/pending)
+  ('00000000-0000-0000-0004-000000000003', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000005', '00000000-0000-0000-0001-000000000001',
+   '00000000-0000-0000-0002-000000000005', 6,
+   '2026-04-09 19:00:00+00', '2026-04-09 22:30:00+00',
+   'completed', 'manual', '2026-04-07 11:00:00+00', 'Corporate event'),
 
--- ── 5. shipments ─────────────────────────────────────────────
-create table if not exists shipments (
-  id                     text primary key,
-  vendor_name            text not null,
-  status                 text not null,
-  expected_delivery_date date not null,
-  actual_delivery_date   date,
-  ordered_at             timestamptz not null,
-  tracking_number        text,
-  tracking_url           text,
-  notes                  text,
-  total_cost             numeric not null
-);
+  -- COMPLETED today: Michael, Prix-Fixe, 2 covers (invoice should be generated + sent)
+  ('00000000-0000-0000-0004-000000000004', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000002', '00000000-0000-0000-0001-000000000002',
+   '00000000-0000-0000-0002-000000000001', 2,
+   '2026-04-11 19:30:00+00', '2026-04-11 21:30:00+00',
+   'completed', 'opentable', '2026-04-09 10:00:00+00', NULL),
 
--- ── 6. shipment_line_items ───────────────────────────────────
-create table if not exists shipment_line_items (
-  id               text primary key,
-  shipment_id      text not null references shipments(id) on delete cascade,
-  item_id          text not null references inventory_items(id),
-  item_name        text not null,
-  quantity_ordered numeric not null,
-  unit_cost        numeric not null,
-  total_cost       numeric not null
-);
+  -- IN_PROGRESS: Priya, Seasonal Tasting, 3 covers (no invoice yet)
+  ('00000000-0000-0000-0004-000000000005', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000003', '00000000-0000-0000-0001-000000000003',
+   '00000000-0000-0000-0002-000000000002', 3,
+   '2026-04-11 18:00:00+00', '2026-04-11 21:00:00+00',
+   'in_progress', 'opentable', '2026-04-09 09:30:00+00', NULL),
 
-truncate shipment_line_items restart identity cascade;
-truncate shipments restart identity cascade;
+  -- CONFIRMED today +2h: David, Wine Pairing, 2 covers
+  ('00000000-0000-0000-0004-000000000006', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000006', '00000000-0000-0000-0001-000000000002',
+   '00000000-0000-0000-0002-000000000003', 2,
+   '2026-04-11 21:30:00+00', '2026-04-11 23:00:00+00',
+   'confirmed', 'manual', '2026-04-09 14:00:00+00', NULL),
 
--- Current week shipments
-insert into shipments values
-('shp-001','Ocean Fresh Co.','in_transit','2026-04-11',null,'2026-04-09T08:30:00Z','OFC-7812-AU','https://track.oceanfreshco.com.au/OFC-7812-AU','Morning delivery, leave at cool-room entrance if no answer.',304.00),
-('shp-002','Green Valley Farms','delivered','2026-04-11','2026-04-11','2026-04-10T07:00:00Z',null,null,null,96.50),
-('shp-003','Farm Gate Meats','confirmed','2026-04-12',null,'2026-04-10T09:15:00Z','FGM-20260412-003','https://track.farmgatedispatch.com.au/FGM-20260412-003','Request early morning slot — chef needs protein before 7 AM prep.',582.00),
-('shp-004','Meadow Dairy','confirmed','2026-04-12',null,'2026-04-10T10:00:00Z','MDR-APR12-2026','https://deliveries.meadowdairy.com.au/MDR-APR12-2026',null,196.50),
-('shp-005','Pantry Plus','confirmed','2026-04-13',null,'2026-04-09T14:00:00Z','PPL-13042026-5','https://pantryplus.com.au/track/PPL-13042026-5','Check olive oil lot number — previous batch had quality issue.',327.60),
-('shp-006','Ocean Fresh Co.','pending','2026-04-14',null,'2026-04-11T09:00:00Z',null,null,'Mid-week top-up — confirm quantities after Saturday service.',228.00),
-('shp-007','Green Valley Farms','pending','2026-04-14',null,'2026-04-11T09:30:00Z',null,null,null,112.50),
-('shp-008','Vine & Cellar','confirmed','2026-04-15',null,'2026-04-08T11:00:00Z','VNC-0415-BN','https://vine-cellar.com.au/deliveries/VNC-0415-BN','Weekend stock-up. Cellar temp must be below 16°C on arrival.',224.00),
-('shp-009','Farm Gate Meats','pending','2026-04-16',null,'2026-04-11T10:00:00Z',null,null,'Pre-weekend protein top-up. Confirm by Monday.',496.00),
-('shp-010','Kitchen Direct','cancelled','2026-04-13',null,'2026-04-08T15:00:00Z',null,null,'Cancelled — switched to Salon Supplies Direct for better pricing.',63.50);
+  -- SCHEDULED tomorrow: Aisha, Prix-Fixe, 4 covers
+  ('00000000-0000-0000-0004-000000000007', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000007', '00000000-0000-0000-0001-000000000002',
+   '00000000-0000-0000-0002-000000000001', 4,
+   '2026-04-12 19:00:00+00', '2026-04-12 21:30:00+00',
+   'scheduled', 'opentable', '2026-04-10 10:00:00+00', 'Birthday celebration'),
 
--- Historical shipments
-insert into shipments values
-('h-ofc-01','Ocean Fresh Co.','delivered','2026-03-13','2026-03-15','2026-03-11T08:00:00Z','OFC-6901-AU',null,null,196.00),
-('h-ofc-02','Ocean Fresh Co.','delivered','2026-03-17','2026-03-17','2026-03-15T08:00:00Z',null,null,null,168.00),
-('h-ofc-03','Ocean Fresh Co.','delivered','2026-03-20','2026-03-21','2026-03-18T08:00:00Z',null,null,null,182.00),
-('h-ofc-04','Ocean Fresh Co.','delivered','2026-03-24','2026-03-24','2026-03-22T08:00:00Z',null,null,null,162.00),
-('h-ofc-05','Ocean Fresh Co.','delivered','2026-03-27','2026-03-30','2026-03-25T08:00:00Z',null,null,'Late — driver called in sick, no substitute arranged.',244.00),
-('h-ofc-06','Ocean Fresh Co.','delivered','2026-03-31','2026-03-31','2026-03-29T08:00:00Z',null,null,null,168.00),
-('h-ofc-07','Ocean Fresh Co.','delivered','2026-04-03','2026-04-05','2026-04-01T08:00:00Z',null,null,'Late again — weekend dispatch issues.',236.00),
-('h-ofc-08','Ocean Fresh Co.','delivered','2026-04-07','2026-04-07','2026-04-05T08:00:00Z',null,null,null,196.00),
-('h-ofc-09','Ocean Fresh Co.','delivered','2026-04-09','2026-04-10','2026-04-07T08:00:00Z',null,null,null,170.00),
-('h-fgm-01','Farm Gate Meats','delivered','2026-03-14','2026-03-14','2026-03-12T09:00:00Z',null,null,null,468.00),
-('h-fgm-02','Farm Gate Meats','delivered','2026-03-19','2026-03-19','2026-03-17T09:00:00Z',null,null,null,390.00),
-('h-fgm-03','Farm Gate Meats','delivered','2026-03-24','2026-03-25','2026-03-22T09:00:00Z',null,null,'1-day delay, cold chain maintained.',432.00),
-('h-fgm-04','Farm Gate Meats','delivered','2026-03-28','2026-03-28','2026-03-26T09:00:00Z',null,null,null,408.00),
-('h-fgm-05','Farm Gate Meats','delivered','2026-04-01','2026-04-01','2026-03-30T09:00:00Z',null,null,null,358.00),
-('h-fgm-06','Farm Gate Meats','delivered','2026-04-04','2026-04-05','2026-04-02T09:00:00Z',null,null,null,382.00),
-('h-fgm-07','Farm Gate Meats','delivered','2026-04-07','2026-04-07','2026-04-05T09:00:00Z',null,null,null,406.00),
-('h-fgm-08','Farm Gate Meats','delivered','2026-04-10','2026-04-10','2026-04-08T09:00:00Z',null,null,null,452.00),
-('h-gvf-01','Green Valley Farms','delivered','2026-03-13','2026-03-12','2026-03-11T07:00:00Z',null,null,null,86.00),
-('h-gvf-02','Green Valley Farms','delivered','2026-03-17','2026-03-17','2026-03-15T07:00:00Z',null,null,null,92.00),
-('h-gvf-03','Green Valley Farms','delivered','2026-03-21','2026-03-21','2026-03-19T07:00:00Z',null,null,null,88.00),
-('h-gvf-04','Green Valley Farms','delivered','2026-03-25','2026-03-27','2026-03-23T07:00:00Z',null,null,'Delivery delayed due to supplier issue.',94.00),
-('h-gvf-05','Green Valley Farms','delivered','2026-03-29','2026-03-28','2026-03-27T07:00:00Z',null,null,null,81.00),
-('h-gvf-06','Green Valley Farms','delivered','2026-04-02','2026-04-02','2026-03-31T07:00:00Z',null,null,null,96.50),
-('h-gvf-07','Green Valley Farms','delivered','2026-04-06','2026-04-06','2026-04-04T07:00:00Z',null,null,null,94.50),
-('h-gvf-08','Green Valley Farms','delivered','2026-04-09','2026-04-09','2026-04-07T07:00:00Z',null,null,null,90.00),
-('h-mdr-01','Meadow Dairy','delivered','2026-03-14','2026-03-14','2026-03-12T10:00:00Z',null,null,null,178.00),
-('h-mdr-02','Meadow Dairy','delivered','2026-03-21','2026-03-21','2026-03-19T10:00:00Z',null,null,null,196.50),
-('h-mdr-03','Meadow Dairy','delivered','2026-03-26','2026-03-26','2026-03-24T10:00:00Z',null,null,null,182.60),
-('h-mdr-04','Meadow Dairy','delivered','2026-03-31','2026-03-31','2026-03-29T10:00:00Z',null,null,null,196.50),
-('h-mdr-05','Meadow Dairy','delivered','2026-04-04','2026-04-04','2026-04-02T10:00:00Z',null,null,null,178.60),
-('h-mdr-06','Meadow Dairy','delivered','2026-04-08','2026-04-08','2026-04-06T10:00:00Z',null,null,null,196.50),
-('h-ppl-01','Pantry Plus','delivered','2026-03-15','2026-03-15','2026-03-12T14:00:00Z',null,null,null,312.00),
-('h-ppl-02','Pantry Plus','delivered','2026-03-22','2026-03-24','2026-03-19T14:00:00Z',null,null,'2-day delay, no advance notice from vendor.',298.00),
-('h-ppl-03','Pantry Plus','delivered','2026-03-28','2026-03-28','2026-03-25T14:00:00Z',null,null,null,324.00),
-('h-ppl-04','Pantry Plus','delivered','2026-04-01','2026-04-04','2026-03-29T14:00:00Z',null,null,'3-day delay — warehouse staffing issue. Ran low on olive oil.',310.00),
-('h-ppl-05','Pantry Plus','delivered','2026-04-06','2026-04-08','2026-04-03T14:00:00Z',null,null,'Late again. Price of olive oil up again on this invoice.',340.20),
-('h-ppl-06','Pantry Plus','delivered','2026-04-10','2026-04-10','2026-04-08T14:00:00Z',null,null,null,316.80),
-('h-vnc-01','Vine & Cellar','delivered','2026-03-18','2026-03-18','2026-03-15T11:00:00Z',null,null,null,182.00),
-('h-vnc-02','Vine & Cellar','delivered','2026-03-29','2026-03-29','2026-03-26T11:00:00Z',null,null,null,196.00),
-('h-vnc-03','Vine & Cellar','delivered','2026-04-08','2026-04-08','2026-04-05T11:00:00Z',null,null,null,210.00);
+  -- SCHEDULED tomorrow: Robert, Tasting Menu, 2 covers
+  ('00000000-0000-0000-0004-000000000008', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000008', '00000000-0000-0000-0001-000000000003',
+   '00000000-0000-0000-0002-000000000002', 2,
+   '2026-04-12 20:00:00+00', '2026-04-12 23:00:00+00',
+   'scheduled', 'manual', NULL, 'First visit'),
 
--- shipment_line_items (current week)
-insert into shipment_line_items values
-('li-001-1','shp-001','inv-001','Salmon Fillet (kg)',6,28.00,168.00),
-('li-001-2','shp-001','inv-004','Tiger Prawns (kg)',4,34.00,136.00),
-('li-002-1','shp-002','inv-006','Roma Tomatoes (kg)',8,3.50,28.00),
-('li-002-2','shp-002','inv-007','Baby Spinach (kg)',3,8.00,24.00),
-('li-002-3','shp-002','inv-010','Mixed Lettuce (kg)',3,7.50,22.50),
-('li-002-4','shp-002','inv-008','Portobello Mushrooms (kg)',2,11.00,22.00),
-('li-003-1','shp-003','inv-002','Chicken Breast (kg)',12,12.00,144.00),
-('li-003-2','shp-003','inv-003','Beef Tenderloin (kg)',5,62.00,310.00),
-('li-003-3','shp-003','inv-005','Duck Breast (kg)',5,24.00,120.00),
-('li-003-4','shp-003','inv-004','Tiger Prawns (kg)',1,8.00,8.00),
-('li-004-1','shp-004','inv-011','Heavy Cream (L)',8,4.20,33.60),
-('li-004-2','shp-004','inv-012','Parmesan Cheese (kg)',3,22.00,66.00),
-('li-004-3','shp-004','inv-013','Eggs (dozen)',10,5.50,55.00),
-('li-004-4','shp-004','inv-014','Unsalted Butter (kg)',4,11.00,44.00),
-('li-005-1','shp-005','inv-019','Extra Virgin Olive Oil (L)',6,16.00,96.00),
-('li-005-2','shp-005','inv-015','Pasta — Tagliatelle (kg)',8,4.80,38.40),
-('li-005-3','shp-005','inv-016','Arborio Rice (kg)',6,5.50,33.00),
-('li-005-4','shp-005','inv-017','All-Purpose Flour (kg)',10,1.80,18.00),
-('li-005-5','shp-005','inv-020','San Marzano Tomatoes (400g tin)',24,3.20,76.80),
-('li-005-6','shp-005','inv-023','Chicken Stock (L)',10,3.50,35.00),
-('li-005-7','shp-005','inv-018','Panko Breadcrumbs (kg)',3,4.00,12.00),
-('li-005-8','shp-005','inv-021','Dijon Mustard (kg)',2,9.00,18.00),
-('li-005-9','shp-005','inv-025','Parchment Paper Roll (50m)',3,7.50,22.50),
-('li-006-1','shp-006','inv-001','Salmon Fillet (kg)',5,28.00,140.00),
-('li-006-2','shp-006','inv-004','Tiger Prawns (kg)',3,34.00,102.00),
-('li-007-1','shp-007','inv-006','Roma Tomatoes (kg)',6,3.50,21.00),
-('li-007-2','shp-007','inv-007','Baby Spinach (kg)',4,8.00,32.00),
-('li-007-3','shp-007','inv-008','Portobello Mushrooms (kg)',3,14.00,42.00),
-('li-007-4','shp-007','inv-009','Garlic (kg)',2,6.00,12.00),
-('li-007-5','shp-007','inv-010','Mixed Lettuce (kg)',1,7.50,7.50),
-('li-008-1','shp-008','inv-022','Dry White Wine (750ml)',16,14.00,224.00),
-('li-009-1','shp-009','inv-002','Chicken Breast (kg)',10,12.00,120.00),
-('li-009-2','shp-009','inv-003','Beef Tenderloin (kg)',4,62.00,248.00),
-('li-009-3','shp-009','inv-005','Duck Breast (kg)',4,24.00,96.00),
-('li-009-4','shp-009','inv-004','Tiger Prawns (kg)',2,34.00,68.00),
-('li-010-1','shp-010','inv-024','Disposable Gloves (100pk)',4,9.00,36.00),
-('li-010-2','shp-010','inv-025','Parchment Paper Roll (50m)',3,7.50,22.50),
-('li-010-3','shp-010','inv-014','Unsalted Butter (kg)',1,5.00,5.00);
+  -- RESCHEDULED: Aisha moved her reservation to a later date
+  ('00000000-0000-0000-0004-000000000011', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000007', '00000000-0000-0000-0001-000000000002',
+   '00000000-0000-0000-0002-000000000001', 4,
+   '2026-04-13 19:30:00+00', '2026-04-13 22:00:00+00',
+   'rescheduled', 'opentable', '2026-04-10 10:00:00+00', 'Moved from original birthday reservation'),
 
--- historical line items
-insert into shipment_line_items values
-('h-ofc-01-1','h-ofc-01','inv-001','Salmon Fillet (kg)',7,26.00,182.00),
-('h-ofc-01-2','h-ofc-01','inv-004','Tiger Prawns (kg)',2,34.00,68.00),
-('h-ofc-02-1','h-ofc-02','inv-001','Salmon Fillet (kg)',6,26.00,156.00),
-('h-ofc-02-2','h-ofc-02','inv-004','Tiger Prawns (kg)',1,34.00,34.00),
-('h-ofc-03-1','h-ofc-03','inv-001','Salmon Fillet (kg)',5,26.00,130.00),
-('h-ofc-03-2','h-ofc-03','inv-004','Tiger Prawns (kg)',2,26.00,52.00),
-('h-ofc-04-1','h-ofc-04','inv-001','Salmon Fillet (kg)',6,27.00,162.00),
-('h-ofc-05-1','h-ofc-05','inv-001','Salmon Fillet (kg)',5,28.00,140.00),
-('h-ofc-05-2','h-ofc-05','inv-004','Tiger Prawns (kg)',3,34.00,102.00),
-('h-ofc-06-1','h-ofc-06','inv-001','Salmon Fillet (kg)',6,28.00,168.00),
-('h-ofc-07-1','h-ofc-07','inv-001','Salmon Fillet (kg)',5,28.00,140.00),
-('h-ofc-07-2','h-ofc-07','inv-004','Tiger Prawns (kg)',2,34.00,68.00),
-('h-ofc-08-1','h-ofc-08','inv-001','Salmon Fillet (kg)',7,28.00,196.00),
-('h-ofc-09-1','h-ofc-09','inv-001','Salmon Fillet (kg)',5,28.00,140.00),
-('h-ofc-09-2','h-ofc-09','inv-004','Tiger Prawns (kg)',1,34.00,34.00),
-('h-fgm-01-1','h-fgm-01','inv-002','Chicken Breast (kg)',10,12.00,120.00),
-('h-fgm-01-2','h-fgm-01','inv-003','Beef Tenderloin (kg)',4,57.00,228.00),
-('h-fgm-01-3','h-fgm-01','inv-005','Duck Breast (kg)',5,24.00,120.00),
-('h-fgm-02-1','h-fgm-02','inv-002','Chicken Breast (kg)',12,12.00,144.00),
-('h-fgm-02-2','h-fgm-02','inv-003','Beef Tenderloin (kg)',4,59.00,236.00),
-('h-fgm-03-1','h-fgm-03','inv-002','Chicken Breast (kg)',10,12.00,120.00),
-('h-fgm-03-2','h-fgm-03','inv-003','Beef Tenderloin (kg)',5,62.00,310.00),
-('h-fgm-04-1','h-fgm-04','inv-002','Chicken Breast (kg)',12,12.00,144.00),
-('h-fgm-04-2','h-fgm-04','inv-003','Beef Tenderloin (kg)',4,62.00,248.00),
-('h-fgm-05-1','h-fgm-05','inv-002','Chicken Breast (kg)',10,12.00,120.00),
-('h-fgm-05-2','h-fgm-05','inv-003','Beef Tenderloin (kg)',4,62.00,248.00),
-('h-fgm-06-1','h-fgm-06','inv-002','Chicken Breast (kg)',10,12.00,120.00),
-('h-fgm-06-2','h-fgm-06','inv-003','Beef Tenderloin (kg)',4,62.00,248.00),
-('h-fgm-07-1','h-fgm-07','inv-002','Chicken Breast (kg)',12,12.00,144.00),
-('h-fgm-07-2','h-fgm-07','inv-003','Beef Tenderloin (kg)',4,62.00,248.00),
-('h-fgm-08-1','h-fgm-08','inv-002','Chicken Breast (kg)',12,12.00,144.00),
-('h-fgm-08-2','h-fgm-08','inv-003','Beef Tenderloin (kg)',5,62.00,310.00),
-('h-gvf-01-1','h-gvf-01','inv-006','Roma Tomatoes (kg)',8,3.50,28.00),
-('h-gvf-01-2','h-gvf-01','inv-007','Baby Spinach (kg)',3,8.00,24.00),
-('h-gvf-01-3','h-gvf-01','inv-010','Mixed Lettuce (kg)',3,7.50,22.50),
-('h-gvf-02-1','h-gvf-02','inv-006','Roma Tomatoes (kg)',8,3.50,28.00),
-('h-gvf-02-2','h-gvf-02','inv-007','Baby Spinach (kg)',3,8.00,24.00),
-('h-gvf-02-3','h-gvf-02','inv-008','Portobello Mushrooms (kg)',2,11.50,23.00),
-('h-gvf-03-1','h-gvf-03','inv-006','Roma Tomatoes (kg)',6,3.50,21.00),
-('h-gvf-03-2','h-gvf-03','inv-007','Baby Spinach (kg)',4,8.00,32.00),
-('h-gvf-03-3','h-gvf-03','inv-010','Mixed Lettuce (kg)',3,7.50,22.50),
-('h-gvf-04-1','h-gvf-04','inv-006','Roma Tomatoes (kg)',8,3.50,28.00),
-('h-gvf-04-2','h-gvf-04','inv-007','Baby Spinach (kg)',3,8.00,24.00),
-('h-gvf-04-3','h-gvf-04','inv-008','Portobello Mushrooms (kg)',3,14.00,42.00),
-('h-gvf-05-1','h-gvf-05','inv-006','Roma Tomatoes (kg)',6,3.50,21.00),
-('h-gvf-05-2','h-gvf-05','inv-007','Baby Spinach (kg)',3,8.00,24.00),
-('h-gvf-05-3','h-gvf-05','inv-010','Mixed Lettuce (kg)',3,7.50,22.50),
-('h-gvf-06-1','h-gvf-06','inv-006','Roma Tomatoes (kg)',8,3.50,28.00),
-('h-gvf-06-2','h-gvf-06','inv-007','Baby Spinach (kg)',3,8.00,24.00),
-('h-gvf-06-3','h-gvf-06','inv-010','Mixed Lettuce (kg)',3,7.50,22.50),
-('h-gvf-07-1','h-gvf-07','inv-006','Roma Tomatoes (kg)',8,3.50,28.00),
-('h-gvf-07-2','h-gvf-07','inv-007','Baby Spinach (kg)',3,8.00,24.00),
-('h-gvf-07-3','h-gvf-07','inv-008','Portobello Mushrooms (kg)',3,14.00,42.00),
-('h-gvf-08-1','h-gvf-08','inv-006','Roma Tomatoes (kg)',8,3.50,28.00),
-('h-gvf-08-2','h-gvf-08','inv-007','Baby Spinach (kg)',4,8.00,32.00),
-('h-gvf-08-3','h-gvf-08','inv-010','Mixed Lettuce (kg)',3,7.50,22.50),
-('h-mdr-01-1','h-mdr-01','inv-011','Heavy Cream (L)',8,4.20,33.60),
-('h-mdr-01-2','h-mdr-01','inv-012','Parmesan Cheese (kg)',3,19.00,57.00),
-('h-mdr-01-3','h-mdr-01','inv-013','Eggs (dozen)',10,5.50,55.00),
-('h-mdr-02-1','h-mdr-02','inv-011','Heavy Cream (L)',8,4.20,33.60),
-('h-mdr-02-2','h-mdr-02','inv-012','Parmesan Cheese (kg)',3,20.00,60.00),
-('h-mdr-02-3','h-mdr-02','inv-013','Eggs (dozen)',10,5.50,55.00),
-('h-mdr-02-4','h-mdr-02','inv-014','Unsalted Butter (kg)',4,11.00,44.00),
-('h-mdr-03-1','h-mdr-03','inv-011','Heavy Cream (L)',8,4.20,33.60),
-('h-mdr-03-2','h-mdr-03','inv-012','Parmesan Cheese (kg)',3,21.00,63.00),
-('h-mdr-03-3','h-mdr-03','inv-013','Eggs (dozen)',10,5.50,55.00),
-('h-mdr-04-1','h-mdr-04','inv-011','Heavy Cream (L)',8,4.20,33.60),
-('h-mdr-04-2','h-mdr-04','inv-012','Parmesan Cheese (kg)',3,22.00,66.00),
-('h-mdr-04-3','h-mdr-04','inv-013','Eggs (dozen)',10,5.50,55.00),
-('h-mdr-04-4','h-mdr-04','inv-014','Unsalted Butter (kg)',4,11.00,44.00),
-('h-mdr-05-1','h-mdr-05','inv-011','Heavy Cream (L)',8,4.20,33.60),
-('h-mdr-05-2','h-mdr-05','inv-012','Parmesan Cheese (kg)',3,22.00,66.00),
-('h-mdr-05-3','h-mdr-05','inv-013','Eggs (dozen)',10,5.50,55.00),
-('h-mdr-06-1','h-mdr-06','inv-011','Heavy Cream (L)',8,4.20,33.60),
-('h-mdr-06-2','h-mdr-06','inv-012','Parmesan Cheese (kg)',3,22.00,66.00),
-('h-mdr-06-3','h-mdr-06','inv-013','Eggs (dozen)',10,5.50,55.00),
-('h-mdr-06-4','h-mdr-06','inv-014','Unsalted Butter (kg)',4,11.00,44.00),
-('h-ppl-01-1','h-ppl-01','inv-019','Extra Virgin Olive Oil (L)',6,11.00,66.00),
-('h-ppl-01-2','h-ppl-01','inv-015','Pasta — Tagliatelle (kg)',10,4.80,48.00),
-('h-ppl-01-3','h-ppl-01','inv-020','San Marzano Tomatoes (400g tin)',24,3.20,76.80),
-('h-ppl-01-4','h-ppl-01','inv-017','All-Purpose Flour (kg)',10,1.80,18.00),
-('h-ppl-01-5','h-ppl-01','inv-023','Chicken Stock (L)',10,3.50,35.00),
-('h-ppl-02-1','h-ppl-02','inv-019','Extra Virgin Olive Oil (L)',5,11.00,55.00),
-('h-ppl-02-2','h-ppl-02','inv-015','Pasta — Tagliatelle (kg)',8,4.80,38.40),
-('h-ppl-02-3','h-ppl-02','inv-020','San Marzano Tomatoes (400g tin)',24,3.20,76.80),
-('h-ppl-03-1','h-ppl-03','inv-019','Extra Virgin Olive Oil (L)',6,14.00,84.00),
-('h-ppl-03-2','h-ppl-03','inv-015','Pasta — Tagliatelle (kg)',10,4.80,48.00),
-('h-ppl-03-3','h-ppl-03','inv-020','San Marzano Tomatoes (400g tin)',24,3.20,76.80),
-('h-ppl-04-1','h-ppl-04','inv-019','Extra Virgin Olive Oil (L)',6,15.00,90.00),
-('h-ppl-04-2','h-ppl-04','inv-016','Arborio Rice (kg)',6,5.50,33.00),
-('h-ppl-04-3','h-ppl-04','inv-020','San Marzano Tomatoes (400g tin)',24,3.20,76.80),
-('h-ppl-05-1','h-ppl-05','inv-019','Extra Virgin Olive Oil (L)',6,16.00,96.00),
-('h-ppl-05-2','h-ppl-05','inv-015','Pasta — Tagliatelle (kg)',8,4.80,38.40),
-('h-ppl-05-3','h-ppl-05','inv-020','San Marzano Tomatoes (400g tin)',24,3.20,76.80),
-('h-ppl-06-1','h-ppl-06','inv-019','Extra Virgin Olive Oil (L)',5,16.00,80.00),
-('h-ppl-06-2','h-ppl-06','inv-015','Pasta — Tagliatelle (kg)',8,4.80,38.40),
-('h-ppl-06-3','h-ppl-06','inv-020','San Marzano Tomatoes (400g tin)',24,3.20,76.80),
-('h-vnc-01-1','h-vnc-01','inv-022','Dry White Wine (750ml)',13,14.00,182.00),
-('h-vnc-02-1','h-vnc-02','inv-022','Dry White Wine (750ml)',14,14.00,196.00),
-('h-vnc-03-1','h-vnc-03','inv-022','Dry White Wine (750ml)',15,14.00,210.00);
+  -- CANCELLED: past booking
+  ('00000000-0000-0000-0004-000000000009', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000006', '00000000-0000-0000-0001-000000000001',
+   '00000000-0000-0000-0002-000000000001', 2,
+   '2026-04-10 19:00:00+00', '2026-04-10 21:00:00+00',
+   'cancelled', 'manual', NULL, NULL),
+
+  -- NO_SHOW
+  ('00000000-0000-0000-0004-000000000010', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0003-000000000008', '00000000-0000-0000-0001-000000000003',
+   '00000000-0000-0000-0002-000000000001', 2,
+   '2026-04-08 20:00:00+00', '2026-04-08 22:00:00+00',
+   'no_show', 'manual', '2026-04-06 10:00:00+00', NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Appointment Events ───────────────────────────────────────────────────
+
+INSERT INTO appointment_events (id, appointment_id, organization_id, event_type, from_status, to_status, notes) VALUES
+  ('00000000-0000-0000-0006-000000000001', '00000000-0000-0000-0004-000000000001',
+   '00000000-0000-0000-0000-000000000001', 'reservation.completed', 'confirmed', 'completed', NULL),
+  ('00000000-0000-0000-0006-000000000002', '00000000-0000-0000-0004-000000000001',
+   '00000000-0000-0000-0000-000000000001', 'invoice.generated', 'completed', 'completed', 'Invoice ET-2026-0001 generated'),
+  ('00000000-0000-0000-0006-000000000003', '00000000-0000-0000-0004-000000000001',
+   '00000000-0000-0000-0000-000000000001', 'invoice.sent', NULL, NULL, 'Invoice ET-2026-0001 sent'),
+  ('00000000-0000-0000-0006-000000000004', '00000000-0000-0000-0004-000000000001',
+   '00000000-0000-0000-0000-000000000001', 'invoice.paid', NULL, NULL, 'Invoice ET-2026-0001 paid'),
+  ('00000000-0000-0000-0006-000000000005', '00000000-0000-0000-0004-000000000002',
+   '00000000-0000-0000-0000-000000000001', 'reservation.completed', 'confirmed', 'completed', NULL),
+  ('00000000-0000-0000-0006-000000000006', '00000000-0000-0000-0004-000000000002',
+   '00000000-0000-0000-0000-000000000001', 'invoice.generated', 'completed', 'completed', 'Invoice ET-2026-0002 generated'),
+  ('00000000-0000-0000-0006-000000000007', '00000000-0000-0000-0004-000000000002',
+   '00000000-0000-0000-0000-000000000001', 'invoice.sent', NULL, NULL, 'Invoice ET-2026-0002 sent'),
+  ('00000000-0000-0000-0006-000000000008', '00000000-0000-0000-0004-000000000003',
+   '00000000-0000-0000-0000-000000000001', 'reservation.completed', 'confirmed', 'completed', NULL),
+  ('00000000-0000-0000-0006-000000000009', '00000000-0000-0000-0004-000000000003',
+   '00000000-0000-0000-0000-000000000001', 'invoice.generated', 'completed', 'completed', 'Invoice ET-2026-0003 generated'),
+  ('00000000-0000-0000-0006-000000000010', '00000000-0000-0000-0004-000000000003',
+   '00000000-0000-0000-0000-000000000001', 'invoice.sent', NULL, NULL, 'Invoice ET-2026-0003 sent'),
+  ('00000000-0000-0000-0006-000000000011', '00000000-0000-0000-0004-000000000004',
+   '00000000-0000-0000-0000-000000000001', 'reservation.completed', 'confirmed', 'completed', NULL),
+  ('00000000-0000-0000-0006-000000000012', '00000000-0000-0000-0004-000000000004',
+   '00000000-0000-0000-0000-000000000001', 'invoice.generated', 'completed', 'completed', 'Invoice ET-2026-0004 generated')
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Invoices ─────────────────────────────────────────────────────────────
+-- Prices: Prix-Fixe $95/person, Tasting $145/person, Private Dining $200/person
+-- Tax rate: 9%
+
+INSERT INTO invoices (id, organization_id, appointment_id, customer_id, invoice_number, currency, subtotal, tax_rate, tax_amount, discount_amount, total_amount, amount_paid, due_at, status, sent_at, paid_at) VALUES
+  -- ET-2026-0001: Emily, 2×$95 = $190 subtotal, $17.10 tax, $207.10 total — PAID
+  ('00000000-0000-0000-0005-000000000001', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0004-000000000001', '00000000-0000-0000-0003-000000000001',
+   'ET-2026-0001', 'USD', 190.00, 0.0900, 17.10, 0.00, 207.10, 207.10,
+   '2026-04-22 23:59:59+00', 'paid',
+   '2026-04-08 21:15:00+00', '2026-04-09 10:30:00+00'),
+
+  -- ET-2026-0002: Carlos, 4×$145 = $580 subtotal, $52.20 tax, $632.20 total — OVERDUE
+  ('00000000-0000-0000-0005-000000000002', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0004-000000000002', '00000000-0000-0000-0003-000000000004',
+   'ET-2026-0002', 'USD', 580.00, 0.0900, 52.20, 0.00, 632.20, 0.00,
+   '2026-04-07 23:59:59+00', 'overdue',
+   '2026-03-31 22:15:00+00', NULL),
+
+  -- ET-2026-0003: Jennifer, 6×$200 = $1200 subtotal, $108 tax, $1308 total — SENT/PENDING
+  ('00000000-0000-0000-0005-000000000003', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0004-000000000003', '00000000-0000-0000-0003-000000000005',
+   'ET-2026-0003', 'USD', 1200.00, 0.0900, 108.00, 0.00, 1308.00, 0.00,
+   '2026-04-23 23:59:59+00', 'sent',
+   '2026-04-09 22:45:00+00', NULL),
+
+  -- ET-2026-0004: Michael, 2×$95 = $190 subtotal, $17.10 tax, $207.10 total — SENT (today)
+  ('00000000-0000-0000-0005-000000000004', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0004-000000000004', '00000000-0000-0000-0003-000000000002',
+   'ET-2026-0004', 'USD', 190.00, 0.0900, 17.10, 0.00, 207.10, 0.00,
+   '2026-04-25 23:59:59+00', 'sent',
+   '2026-04-11 21:45:00+00', NULL),
+
+  -- ET-2026-0005: David, old invoice from March — OVERDUE (different org scenario)
+  ('00000000-0000-0000-0005-000000000005', '00000000-0000-0000-0000-000000000001',
+   NULL, '00000000-0000-0000-0003-000000000006',
+   'ET-2026-0005', 'USD', 190.00, 0.0900, 17.10, 0.00, 207.10, 0.00,
+   '2026-03-29 23:59:59+00', 'overdue',
+   '2026-03-15 20:30:00+00', NULL),
+
+  -- ET-2026-0006: Aisha, manual follow-up invoice — PENDING
+  ('00000000-0000-0000-0005-000000000006', '00000000-0000-0000-0000-000000000001',
+   NULL, '00000000-0000-0000-0003-000000000007',
+   'ET-2026-0006', 'USD', 260.00, 0.0900, 23.40, 0.00, 283.40, 0.00,
+   '2026-04-24 23:59:59+00', 'pending',
+   '2026-04-10 16:30:00+00', NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Invoice Line Items ───────────────────────────────────────────────────
+
+INSERT INTO invoice_items (id, invoice_id, organization_id, service_id, description, quantity, unit_price, amount) VALUES
+  -- Invoice 0001: Emily, Prix-Fixe × 2
+  ('00000000-0000-0000-0007-000000000001', '00000000-0000-0000-0005-000000000001',
+   '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000001',
+   'Prix-Fixe Dinner × 2 guests', 2, 95.00, 190.00),
+
+  -- Invoice 0002: Carlos, Tasting Menu × 4
+  ('00000000-0000-0000-0007-000000000002', '00000000-0000-0000-0005-000000000002',
+   '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000002',
+   'Seasonal Tasting Menu × 4 guests', 4, 145.00, 580.00),
+
+  -- Invoice 0003: Jennifer, Private Dining × 6
+  ('00000000-0000-0000-0007-000000000003', '00000000-0000-0000-0005-000000000003',
+   '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000005',
+   'Private Dining Experience × 6 guests', 6, 200.00, 1200.00),
+
+  -- Invoice 0004: Michael, Prix-Fixe × 2
+  ('00000000-0000-0000-0007-000000000004', '00000000-0000-0000-0005-000000000004',
+   '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000001',
+   'Prix-Fixe Dinner × 2 guests', 2, 95.00, 190.00),
+
+  -- Invoice 0005: David, Prix-Fixe × 2
+  ('00000000-0000-0000-0007-000000000005', '00000000-0000-0000-0005-000000000005',
+   '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000001',
+   'Prix-Fixe Dinner × 2 guests', 2, 95.00, 190.00),
+
+  -- Invoice 0006: Aisha, Wine Pairing × 4
+  ('00000000-0000-0000-0007-000000000006', '00000000-0000-0000-0005-000000000006',
+   '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000003',
+   'Wine Pairing Experience × 4 guests', 4, 65.00, 260.00)
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Finance Transactions (ledger) ───────────────────────────────────────
+
+INSERT INTO finance_transactions (id, organization_id, invoice_id, type, category, amount, direction, occurred_at, payment_method, tax_relevant, writeoff_eligible, notes) VALUES
+  -- Revenue: Emily's paid invoice
+  ('00000000-0000-0000-0008-000000000001', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0005-000000000001',
+   'revenue', 'dining_revenue', 207.10, 'in',
+   '2026-04-09 10:30:00+00', 'card', TRUE, FALSE,
+   'Payment for invoice ET-2026-0001'),
+
+  -- Expense: fresh produce delivery
+  ('00000000-0000-0000-0008-000000000002', '00000000-0000-0000-0000-000000000001',
+   NULL, 'inventory_purchase', 'produce', 342.00, 'out',
+   '2026-04-07 08:00:00+00', 'bank_transfer', TRUE, FALSE,
+   'Weekly fresh produce — Green City Market'),
+
+  -- Expense: wine inventory
+  ('00000000-0000-0000-0008-000000000003', '00000000-0000-0000-0000-000000000001',
+   NULL, 'inventory_purchase', 'beverage', 1280.00, 'out',
+   '2026-04-07 09:00:00+00', 'bank_transfer', TRUE, FALSE,
+   'Wine restocking — Sommelier Select'),
+
+  -- Fee: payment processing
+  ('00000000-0000-0000-0008-000000000004', '00000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0005-000000000001',
+   'fee', 'payment_processing', 6.21, 'out',
+   '2026-04-09 10:30:00+00', 'card', FALSE, FALSE,
+   'Square processing fee (3%) on ET-2026-0001'),
+
+  -- Expense: linen and table service
+  ('00000000-0000-0000-0008-000000000005', '00000000-0000-0000-0000-000000000001',
+   NULL, 'expense', 'operations', 185.00, 'out',
+   '2026-04-09 11:00:00+00', 'check', FALSE, FALSE,
+   'Linen cleaning and press service'),
+
+  -- Tax payment: Q1 estimated tax
+  ('00000000-0000-0000-0008-000000000006', '00000000-0000-0000-0000-000000000001',
+   NULL, 'tax_payment', 'federal_tax', 450.00, 'out',
+   '2026-04-01 12:00:00+00', 'bank_transfer', TRUE, FALSE,
+   'Q1 2026 estimated income tax payment'),
+
+  -- Revenue: older dining revenue (prior week, for trend comparison)
+  ('00000000-0000-0000-0008-000000000007', '00000000-0000-0000-0000-000000000001',
+   NULL, 'revenue', 'dining_revenue', 414.20, 'in',
+   '2026-04-05 21:00:00+00', 'card', TRUE, FALSE,
+   'Table 6 dinner service'),
+
+  ('00000000-0000-0000-0008-000000000008', '00000000-0000-0000-0000-000000000001',
+   NULL, 'revenue', 'dining_revenue', 316.10, 'in',
+   '2026-04-04 21:30:00+00', 'card', TRUE, FALSE,
+   'Table 3 dinner service')
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Integration Connectors (MCP bridge demo) ─────────────────────────────
+
+INSERT INTO integration_connectors (id, organization_id, provider, display_name, status, last_sync_at, last_error) VALUES
+  ('00000000-0000-0000-0009-000000000001', '00000000-0000-0000-0000-000000000001',
+   'opentable',     'OpenTable',     'connected', '2026-04-11 17:00:00+00', NULL),
+  ('00000000-0000-0000-0009-000000000002', '00000000-0000-0000-0000-000000000001',
+   'square',        'Square POS',    'connected', '2026-04-11 19:45:00+00', NULL),
+  ('00000000-0000-0000-0009-000000000003', '00000000-0000-0000-0000-000000000001',
+   'gmail',         'Gmail',         'connected', '2026-04-11 20:00:00+00', NULL),
+  ('00000000-0000-0000-0009-000000000004', '00000000-0000-0000-0000-000000000001',
+   'google_reviews','Google Reviews','error',     '2026-04-10 08:00:00+00', 'OAuth token expired. Re-authenticate to resume sync.')
+ON CONFLICT (id) DO NOTHING;

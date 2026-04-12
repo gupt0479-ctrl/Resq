@@ -22,6 +22,15 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname()
 
+  function navClass(href: string) {
+    const active = pathname === href || pathname.startsWith(`${href}/`)
+    return `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+      active
+        ? "bg-accent text-primary"
+        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+    }`
+  }
+
   return (
     <aside className="flex h-screen w-[220px] shrink-0 flex-col border-r border-border bg-sidebar">
       {/* Logo */}
@@ -36,27 +45,26 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 p-3 pt-4">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3 pt-4">
         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          Core
+        </p>
+        {coreItems.map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={href} className={navClass(href)}>
+            <Icon className="h-4 w-4 shrink-0" />
+            {label}
+          </Link>
+        ))}
+
+        <p className="mb-2 mt-5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           Operations
         </p>
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href)
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                active
-                  ? "bg-accent text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </Link>
-          )
-        })}
+        {opsItems.map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={href} className={navClass(href)}>
+            <Icon className="h-4 w-4 shrink-0" />
+            {label}
+          </Link>
+        ))}
       </nav>
 
       {/* Bottom */}

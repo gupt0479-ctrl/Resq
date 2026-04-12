@@ -1,18 +1,30 @@
-import { NextRequest, NextResponse } from "next/server"
-import { bookReservation, getReservations } from "@/lib/services/reservation.service"
+import { type NextRequest } from "next/server"
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { listAppointmentsQuery } from "@/lib/queries/appointments"
+import { APPOINTMENT_STATUS } from "@/lib/constants/enums"
+import type { AppointmentStatus } from "@/lib/constants/enums"
 
-export async function GET() {
-  const result = await getReservations()
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
-  return NextResponse.json({ reservations: result.data })
-}
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = request.nextUrl
+    const rawStatus = searchParams.get("status")
+    const limit     = Number(searchParams.get("limit") ?? "50")
+    const offset    = Number(searchParams.get("offset") ?? "0")
 
-export async function POST(req: NextRequest) {
-  const body = await req.json()
-  if (!body.customer_email || !body.starts_at || !body.ends_at) {
-    return NextResponse.json({ error: "customer_email, starts_at, ends_at required." }, { status: 400 })
+    const status: AppointmentStatus | undefined =
+      rawStatus && APPOINTMENT_STATUS.includes(rawStatus as AppointmentStatus)
+        ? (rawStatus as AppointmentStatus)
+        : undefined
+
+    const client = createServerSupabaseClient()
+    const appointments = await listAppointmentsQuery(client, DEMO_ORG_ID, {
+      status,
+      limit,
+      offset,
+    })
+    return Response.json({ data: appointments, count: appointments.length })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unexpected error"
+    return Response.json({ error: message }, { status: 500 })
   }
-  const result = await bookReservation(body)
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 409 })
-  return NextResponse.json({ reservation: result.data }, { status: 201 })
 }
