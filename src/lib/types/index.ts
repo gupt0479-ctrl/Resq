@@ -11,7 +11,6 @@ export type InventoryItem = {
   quantityOnHand: number
   reorderLevel: number
   unitCost: number
-  /** Previous price before the current rise or spike — only present when priceTrendStatus is "rising" or "spike" */
   previousUnitCost?: number
   expiresAt: string | null
   vendorName: string
@@ -37,45 +36,6 @@ export type AppointmentStatus =
   | "cancelled"
   | "no_show"
 
-export type InvoiceStatus = "draft" | "sent" | "pending" | "paid" | "overdue" | "void"
-
-export type WorkflowEventType =
-  | "appointment_completed"
-  | "invoice_generated"
-  | "invoice_sent"
-  | "feedback_requested"
-  | "finance_updated"
-  | "ai_summary_refreshed"
-
-export type Appointment = {
-  id: string
-  customerName: string
-  service: string
-  staff: string
-  startsAt: string
-  durationMin: number
-  status: AppointmentStatus
-  price: number
-}
-
-export type Invoice = {
-  id: string
-  customerName: string
-  items: string
-  total: number
-  dueAt: string
-  status: InvoiceStatus
-}
-
-export type WorkflowEvent = {
-  id: string
-  time: string
-  type: WorkflowEventType
-  title: string
-  detail: string
-  status: "completed" | "pending" | "failed"
-}
-
 export type FinanceTransaction = {
   id: string
   type: "revenue" | "expense" | "fee" | "inventory_purchase" | "writeoff" | "refund"
@@ -85,8 +45,6 @@ export type FinanceTransaction = {
   occurredAt: string
   taxRelevant: boolean
 }
-
-// ── Shipment types ───────────────────────────────────────────────────
 
 export type ShipmentStatus = "pending" | "confirmed" | "in_transit" | "delivered" | "cancelled"
 
@@ -103,9 +61,9 @@ export type Shipment = {
   id: string
   vendorName: string
   status: ShipmentStatus
-  expectedDeliveryDate: string   // YYYY-MM-DD
-  actualDeliveryDate: string | null // YYYY-MM-DD — null if not yet delivered
-  orderedAt: string              // ISO timestamp
+  expectedDeliveryDate: string
+  actualDeliveryDate: string | null
+  orderedAt: string
   trackingNumber: string | null
   trackingUrl: string | null
   lineItems: ShipmentLineItem[]
@@ -122,14 +80,12 @@ export type VendorPerformanceStat = {
   earlyCount: number
   lateCount: number
   onTimePct: number
-  avgDaysLate: number          // average days overdue for late deliveries only
-  maxDaysLate: number          // worst single delivery
-  totalSpend30d: number        // spend in last 30 days
-  hasPriceIncrease: boolean    // any items from this vendor with rising/spike status
+  avgDaysLate: number
+  maxDaysLate: number
+  totalSpend30d: number
+  hasPriceIncrease: boolean
   negotiationPriority: "high" | "medium" | "low"
 }
-
-// ── Predictive inventory types ──────────────────────────────────────
 
 export type MenuItem = {
   id: string
@@ -138,22 +94,19 @@ export type MenuItem = {
   price: number
 }
 
-/** How many units of an inventory item one dish order consumes */
 export type MenuItemInventoryUsage = {
   menuItemId: string
   itemId: string
   unitsUsedPerOrder: number
 }
 
-/** A single reservation/table booking with covers and ordered dishes */
-export type Reservation = {
+export type HistoricalReservation = {
   id: string
-  date: string          // YYYY-MM-DD
+  date: string
   covers: number
-  menuItemIds: string[] // dishes ordered
+  menuItemIds: string[]
 }
 
-/** Projected consumption per inventory item over a look-ahead window */
 export type DemandForecast = {
   itemId: string
   itemName: string
@@ -185,15 +138,20 @@ export type InventoryPrediction = {
   predictedDailyUsage: number
   safetyStock: number
   daysToStockout: number
-  /** YYYY-MM-DD — latest date to place the order before stockout */
   orderByDate: string | null
   recommendedReorderQty: number
-  /** % change in daily usage rate: last 7d vs last 30d average */
   demandTrendPct: number
   riskLevel: RiskLevel
   confidenceScore: number | null
   topDrivers: PredictionDriver[]
   explanationText: string | null
+}
+
+export type VendorInsight = {
+  vendorName: string
+  performanceSummary: string
+  negotiationSuggestion: string | null
+  priority: "high" | "medium" | "low"
 }
 
 export type AiInventoryReport = {
@@ -207,9 +165,108 @@ export type AiInventoryReport = {
   generatedAt: string
 }
 
-export type VendorInsight = {
-  vendorName: string
-  performanceSummary: string   // e.g. "2 of 8 deliveries were late (avg 2.5 days)"
-  negotiationSuggestion: string | null  // AI-generated — null for reliable vendors
-  priority: "high" | "medium" | "low"
+export type ReservationStatus = "confirmed" | "completed" | "cancelled" | "no_show"
+export type InvoiceStatus = "pending" | "paid" | "overdue"
+
+export interface Customer {
+  id: string
+  name: string
+  email: string
+  phone?: string | null
+  visit_count: number
+  created_at: string
+}
+
+export interface Reservation {
+  id: string
+  customer_id: string
+  customer?: Customer
+  party_size: number
+  starts_at: string
+  ends_at: string
+  status: ReservationStatus
+  notes?: string | null
+  occasion?: string | null
+  reminder_sent: boolean
+  follow_up_sent: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface InvoiceLineItem {
+  description: string
+  quantity: number
+  unit_price: number
+}
+
+export interface Invoice {
+  id: string
+  reservation_id: string
+  reservation?: Reservation
+  customer_id: string
+  customer?: Customer
+  line_items: InvoiceLineItem[]
+  subtotal: number
+  tax_rate: number
+  tax_amount: number
+  discount_amount: number
+  total: number
+  status: InvoiceStatus
+  due_at: string
+  paid_at?: string | null
+  reminder_count: number
+  last_reminded_at?: string | null
+  notes?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface FollowUp {
+  id: string
+  reservation_id: string
+  customer_id: string
+  message: string
+  sent_at?: string | null
+  created_at: string
+}
+
+export interface ServiceResult<T> {
+  data?: T
+  error?: string
+}
+
+export interface BookReservationRequest {
+  customer_name: string
+  customer_email: string
+  customer_phone?: string
+  party_size?: number
+  starts_at: string
+  ends_at: string
+  notes?: string
+  occasion?: string
+}
+
+export interface RescheduleReservationRequest {
+  starts_at: string
+  ends_at: string
+  notes?: string
+  occasion?: string
+  party_size?: number
+}
+
+export interface CreateInvoiceRequest {
+  reservation_id: string
+  line_items: InvoiceLineItem[]
+  tax_rate?: number
+  discount_amount?: number
+  due_days?: number
+}
+
+export interface ParsedReservationAction {
+  intent: "book" | "reschedule" | "cancel" | "query"
+  starts_at?: string | null
+  ends_at?: string | null
+  confidence: "high" | "medium" | "low"
+  clarification_needed?: string | null
+  raw_interpretation: string
 }
