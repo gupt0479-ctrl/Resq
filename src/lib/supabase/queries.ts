@@ -4,7 +4,7 @@ import type {
   InventoryItem,
   MenuItem,
   MenuItemInventoryUsage,
-  Reservation,
+  HistoricalReservation as Reservation,
   Shipment,
   ShipmentLineItem,
 } from "@/lib/types"
