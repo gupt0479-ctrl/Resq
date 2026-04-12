@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { Package, Truck, CalendarCheck, DollarSign } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShipmentTable } from "@/components/shipments/shipment-table"
@@ -37,7 +38,9 @@ function Metric({
   )
 }
 
-export default async function ShipmentsPage() {
+// ── Content: fetches and computes data inside Suspense ────────────────────────
+
+async function ShipmentsContent() {
   const shipments = await getShipments()
 
   const cutoff = new Date(TODAY)
@@ -50,26 +53,17 @@ export default async function ShipmentsPage() {
       s.status === "cancelled"
   )
 
-  const active           = weekShipments.filter((s) => s.status !== "cancelled")
-  const arrivingToday    = active.filter((s) => s.expectedDeliveryDate === TODAY && s.status !== "delivered")
-  const inTransit        = active.filter((s) => s.status === "in_transit")
-  const pending          = active.filter((s) => s.status === "pending")
-  const delivered        = active.filter((s) => s.status === "delivered")
-  const weekValue        = active.reduce((sum, s) => sum + s.totalCost, 0)
+  const active        = weekShipments.filter((s) => s.status !== "cancelled")
+  const arrivingToday = active.filter((s) => s.expectedDeliveryDate === TODAY && s.status !== "delivered")
+  const inTransit     = active.filter((s) => s.status === "in_transit")
+  const pending       = active.filter((s) => s.status === "pending")
+  const delivered     = active.filter((s) => s.status === "delivered")
+  const weekValue     = active.reduce((sum, s) => sum + s.totalCost, 0)
 
   return (
-    <div className="space-y-5 p-6">
-      {/* Page title */}
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Incoming Shipments</h1>
-        <p className="text-xs text-muted-foreground">
-          Purchase orders arriving this week · Bistro Nova
-        </p>
-      </div>
-
+    <>
       {/* KPI strip */}
       <div className="flex overflow-hidden rounded-xl bg-card shadow-sm">
-        {/* Shipment Status */}
         <div className="flex-1 border-r border-border px-6 py-4">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
             Shipment Status
@@ -94,7 +88,6 @@ export default async function ShipmentsPage() {
           />
         </div>
 
-        {/* Delivery */}
         <div className="flex-1 border-r border-border px-6 py-4">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
             This Week
@@ -113,7 +106,6 @@ export default async function ShipmentsPage() {
           />
         </div>
 
-        {/* Financial */}
         <div className="flex-1 px-6 py-4">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
             Financial
@@ -143,6 +135,36 @@ export default async function ShipmentsPage() {
           <ShipmentTable initialShipments={weekShipments} />
         </CardContent>
       </Card>
+    </>
+  )
+}
+
+// ── Skeleton fallback ────────────────────────────────────────────────────────
+
+function ShipmentsSkeleton() {
+  return (
+    <>
+      <div className="h-32 rounded-xl bg-muted animate-pulse" />
+      <div className="h-96 rounded-xl bg-muted animate-pulse" />
+    </>
+  )
+}
+
+// ── Page shell: synchronous, no runtime API access ───────────────────────────
+
+export default function ShipmentsPage() {
+  return (
+    <div className="space-y-5 p-6">
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">Incoming Shipments</h1>
+        <p className="text-xs text-muted-foreground">
+          Purchase orders arriving this week · Bistro Nova
+        </p>
+      </div>
+
+      <Suspense fallback={<ShipmentsSkeleton />}>
+        <ShipmentsContent />
+      </Suspense>
     </div>
   )
 }

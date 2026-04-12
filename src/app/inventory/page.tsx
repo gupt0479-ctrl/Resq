@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { InventoryTabs } from "@/components/inventory/inventory-tabs"
 import { AiAdvisorPanel } from "@/components/inventory/ai-advisor-panel"
@@ -42,11 +43,14 @@ function sortAlpha(items: InventoryItem[]): InventoryItem[] {
   return [...items].sort((a, b) => a.itemName.localeCompare(b.itemName))
 }
 
-export default async function InventoryPage({
+// ── Content: reads searchParams + fetches data (runs inside Suspense) ────────
+
+async function InventoryContent({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
+  // Await runtime API inside the Suspense boundary
   const { tab: rawTab } = await searchParams
   const activeTab = resolveTab(rawTab)
 
@@ -58,21 +62,19 @@ export default async function InventoryPage({
   const now = new Date(TODAY)
   const summary = getAlertSummary(inventoryItems, now)
 
-  const lowStockItems  = sortByQty(getLowStockItems(inventoryItems))
-  const expiringItems  = sortByExpiry(getExpiringItems(inventoryItems, 30, now))
-  const issueItems     = getIssueItems(inventoryItems)
-  const priceItems     = getPriceSpikeItems(inventoryItems)
-  const allItems       = sortAlpha(inventoryItems)
+  const lowStockItems = sortByQty(getLowStockItems(inventoryItems))
+  const expiringItems = sortByExpiry(getExpiringItems(inventoryItems, 30, now))
+  const issueItems    = getIssueItems(inventoryItems)
+  const priceItems    = getPriceSpikeItems(inventoryItems)
+  const allItems      = sortAlpha(inventoryItems)
 
-  // Shipment-derived KPI data
-  const todayStr      = TODAY
+  const todayStr           = TODAY
   const pendingCount       = shipments.filter((s) => s.status === "pending").length
   const inTransitCount     = shipments.filter((s) => s.status === "in_transit").length
   const arrivingTodayCount = shipments.filter(
     (s) => s.expectedDeliveryDate === todayStr && s.status !== "delivered" && s.status !== "cancelled"
   ).length
 
-  // Week incoming spend (next 7 days of non-cancelled shipments)
   const cutoff = new Date(TODAY)
   cutoff.setDate(cutoff.getDate() + 7)
   const cutoffStr = cutoff.toISOString().slice(0, 10)
@@ -85,10 +87,8 @@ export default async function InventoryPage({
     )
     .reduce((sum, s) => sum + s.totalCost, 0)
 
-  // Vendor performance
   const vendorStats = computeVendorPerformance(shipments, inventoryItems)
 
-  // Stock health breakdown for donut
   const lowStockSet  = new Set(lowStockItems.map((i) => i.id))
   const expiringSet  = new Set(expiringItems.map((i) => i.id))
   const issueSet     = new Set(issueItems.map((i) => i.id))
@@ -100,16 +100,7 @@ export default async function InventoryPage({
   ).length
 
   return (
-    <div className="space-y-5 p-6">
-      {/* Page title */}
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Inventory</h1>
-        <p className="text-xs text-muted-foreground">
-          Stock levels, alerts, and reorder signals · Bistro Nova
-        </p>
-      </div>
-
-      {/* KPI strip */}
+    <>
       <ReceivingStatusStrip
         pendingCount={pendingCount}
         inTransitCount={inTransitCount}
@@ -122,9 +113,7 @@ export default async function InventoryPage({
         weekIncomingSpend={weekIncomingSpend}
       />
 
-      {/* Middle row: 3 equal columns */}
       <div className="grid gap-5 lg:grid-cols-3">
-        {/* Stock Health donut */}
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -142,7 +131,6 @@ export default async function InventoryPage({
           </CardContent>
         </Card>
 
-        {/* Vendor Performance */}
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -154,11 +142,9 @@ export default async function InventoryPage({
           </CardContent>
         </Card>
 
-        {/* AI Advisor */}
         <AiAdvisorPanel />
       </div>
 
-      {/* Inventory table */}
       <Card className="overflow-visible">
         <CardHeader className="border-b border-border pb-0 pt-4">
           <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-0">
@@ -177,6 +163,45 @@ export default async function InventoryPage({
           />
         </CardContent>
       </Card>
+    </>
+  )
+}
+
+// ── Skeleton fallback ────────────────────────────────────────────────────────
+
+function InventorySkeleton() {
+  return (
+    <>
+      <div className="h-24 rounded-xl bg-muted animate-pulse" />
+      <div className="grid gap-5 lg:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-48 rounded-xl bg-muted animate-pulse" />
+        ))}
+      </div>
+      <div className="h-96 rounded-xl bg-muted animate-pulse" />
+    </>
+  )
+}
+
+// ── Page shell: does NOT await any runtime APIs ──────────────────────────────
+
+export default function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  return (
+    <div className="space-y-5 p-6">
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">Inventory</h1>
+        <p className="text-xs text-muted-foreground">
+          Stock levels, alerts, and reorder signals · Bistro Nova
+        </p>
+      </div>
+
+      <Suspense fallback={<InventorySkeleton />}>
+        <InventoryContent searchParams={searchParams} />
+      </Suspense>
     </div>
   )
 }
