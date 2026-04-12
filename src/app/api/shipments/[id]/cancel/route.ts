@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import { shipments } from "@/lib/data/shipments"
+import { getShipmentById, cancelShipment } from "@/lib/supabase/queries"
+import { supabase } from "@/lib/supabase/client"
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const shipment = shipments.find((s) => s.id === id)
+  const shipment = await getShipmentById(id)
   if (!shipment) return NextResponse.json({ error: "Not found" }, { status: 404 })
   if (shipment.status === "delivered") {
     return NextResponse.json({ error: "Cannot cancel a delivered shipment" }, { status: 422 })
   }
 
   const body = await req.json().catch(() => ({})) as { reason?: string }
-  shipment.status = "cancelled"
-  if (body.reason) shipment.notes = body.reason
+  await cancelShipment(id)
+  if (body.reason) {
+    await supabase.from("shipments").update({ notes: body.reason }).eq("id", id)
+  }
 
-  return NextResponse.json(shipment)
+  const updated = await getShipmentById(id)
+  return NextResponse.json(updated)
 }
+

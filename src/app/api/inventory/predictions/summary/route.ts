@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server"
 import { generatePredictions } from "@/lib/inventory/generate-predictions"
-import { inventoryItems } from "@/lib/data/inventory"
-import { menuInventoryUsage } from "@/lib/data/menu-inventory-usage"
-import { reservations } from "@/lib/data/reservations"
-import { shipments } from "@/lib/data/shipments"
+import { getInventoryItems, getMenuInventoryUsage, getReservations, getShipments } from "@/lib/supabase/queries"
 
 const AS_OF_DATE = "2026-04-11"
 
 export async function GET() {
+  const [items, usages, reservations, shipments] = await Promise.all([
+    getInventoryItems(),
+    getMenuInventoryUsage(),
+    getReservations(),
+    getShipments(),
+  ])
+
   const predictions = generatePredictions({
-    items: inventoryItems,
-    usages: menuInventoryUsage,
+    items,
+    usages,
     reservations,
     shipments,
     asOfDate: AS_OF_DATE,

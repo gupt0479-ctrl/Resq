@@ -1,17 +1,14 @@
 import { NextRequest } from "next/server"
 import { z } from "zod"
-import { inventoryItems } from "@/lib/data/inventory"
-import type { InventoryItem } from "@/lib/types"
-
-// In-memory store (replace with Supabase queries when DB is wired up)
-const store: InventoryItem[] = [...inventoryItems]
+import { getInventoryItems } from "@/lib/supabase/queries"
+import { supabase } from "@/lib/supabase/client"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const category = searchParams.get("category")
   const alert = searchParams.get("alert")
 
-  let results = store
+  let results = await getInventoryItems()
 
   if (category) {
     results = results.filter(
@@ -70,12 +67,24 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const newItem: InventoryItem = {
-    id: `inv-${Date.now()}`,
-    expiresAt: parsed.data.expiresAt ?? null,
-    ...parsed.data,
-  }
+  const newId = `inv-${Date.now()}`
+  const { data: inserted, error } = await supabase
+    .from("inventory_items")
+    .insert({
+      id: newId,
+      item_name: parsed.data.itemName,
+      category: parsed.data.category,
+      quantity_on_hand: parsed.data.quantityOnHand,
+      reorder_level: parsed.data.reorderLevel,
+      unit_cost: parsed.data.unitCost,
+      expires_at: parsed.data.expiresAt ?? null,
+      vendor_name: parsed.data.vendorName,
+      issue_status: parsed.data.issueStatus,
+      price_trend_status: parsed.data.priceTrendStatus,
+    })
+    .select()
+    .single()
 
-  store.push(newItem)
-  return Response.json({ data: newItem }, { status: 201 })
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return Response.json({ data: inserted }, { status: 201 })
 }

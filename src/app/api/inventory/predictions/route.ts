@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { generatePredictions } from "@/lib/inventory/generate-predictions"
-import { inventoryItems } from "@/lib/data/inventory"
-import { menuInventoryUsage } from "@/lib/data/menu-inventory-usage"
-import { reservations } from "@/lib/data/reservations"
-import { shipments } from "@/lib/data/shipments"
+import { getInventoryItems, getMenuInventoryUsage, getReservations, getShipments } from "@/lib/supabase/queries"
 import { z } from "zod"
 
 const querySchema = z.object({
@@ -22,9 +19,16 @@ export async function GET(req: NextRequest) {
 
   const { riskLevel, limit = 50, asOfDate = "2026-04-11" } = parsed.data
 
+  const [items, usages, reservations, shipments] = await Promise.all([
+    getInventoryItems(),
+    getMenuInventoryUsage(),
+    getReservations(),
+    getShipments(),
+  ])
+
   let predictions = generatePredictions({
-    items: inventoryItems,
-    usages: menuInventoryUsage,
+    items,
+    usages,
     reservations,
     shipments,
     asOfDate,

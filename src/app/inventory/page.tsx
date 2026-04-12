@@ -4,8 +4,7 @@ import { AiAdvisorPanel } from "@/components/inventory/ai-advisor-panel"
 import { ReceivingStatusStrip } from "@/components/inventory/receiving-status-strip"
 import { StockHealthChart } from "@/components/inventory/stock-health-chart"
 import { VendorPerformanceCard } from "@/components/inventory/vendor-performance-card"
-import { inventoryItems } from "@/lib/data/inventory"
-import { shipments } from "@/lib/data/shipments"
+import { getInventoryItems, getShipments } from "@/lib/supabase/queries"
 import { computeVendorPerformance } from "@/lib/inventory/vendor-performance"
 import {
   getAlertSummary,
@@ -50,6 +49,11 @@ export default async function InventoryPage({
 }) {
   const { tab: rawTab } = await searchParams
   const activeTab = resolveTab(rawTab)
+
+  const [inventoryItems, shipments] = await Promise.all([
+    getInventoryItems(),
+    getShipments(),
+  ])
 
   const now = new Date(TODAY)
   const summary = getAlertSummary(inventoryItems, now)

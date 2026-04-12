@@ -10,7 +10,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Pencil } from "lucide-react"
+import { EditItemDialog } from "./edit-item-dialog"
 import type { InventoryItem } from "@/lib/types"
 
 interface InventoryTableProps {
@@ -42,8 +45,10 @@ function isExpiringSoon(expiresAt: string | null): boolean {
   return daysUntil >= 0 && daysUntil <= 30
 }
 
-export function InventoryTable({ items }: InventoryTableProps) {
+export function InventoryTable({ items: initialItems }: InventoryTableProps) {
   const [search, setSearch] = useState("")
+  const [items, setItems] = useState<InventoryItem[]>(initialItems)
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
 
   const filtered = items.filter(
     (item) =>
@@ -51,6 +56,10 @@ export function InventoryTable({ items }: InventoryTableProps) {
       item.category.toLowerCase().includes(search.toLowerCase()) ||
       item.vendorName.toLowerCase().includes(search.toLowerCase())
   )
+
+  function handleSaved(updated: InventoryItem) {
+    setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+  }
 
   return (
     <div className="space-y-3">
@@ -72,13 +81,14 @@ export function InventoryTable({ items }: InventoryTableProps) {
               <TableHead>Expires</TableHead>
               <TableHead>Vendor</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="w-[52px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="py-8 text-center text-sm text-muted-foreground"
                 >
                   No items match your search
@@ -182,6 +192,17 @@ export function InventoryTable({ items }: InventoryTableProps) {
                         )}
                       </div>
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => setEditingItem(item)}
+                        aria-label={`Edit ${item.itemName}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 )
               })
@@ -192,6 +213,15 @@ export function InventoryTable({ items }: InventoryTableProps) {
       <p className="text-xs text-muted-foreground">
         {filtered.length} of {items.length} items
       </p>
+
+      {editingItem && (
+        <EditItemDialog
+          item={editingItem}
+          open={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          onSaved={handleSaved}
+        />
+      )}
     </div>
   )
 }

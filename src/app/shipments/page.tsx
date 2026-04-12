@@ -1,7 +1,7 @@
 import { Package, Truck, CalendarCheck, DollarSign } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShipmentTable } from "@/components/shipments/shipment-table"
-import { shipments } from "@/lib/data/shipments"
+import { getShipments } from "@/lib/supabase/queries"
 
 const TODAY = "2026-04-11"
 
@@ -37,7 +37,9 @@ function Metric({
   )
 }
 
-export default function ShipmentsPage() {
+export default async function ShipmentsPage() {
+  const shipments = await getShipments()
+
   const cutoff = new Date(TODAY)
   cutoff.setDate(cutoff.getDate() + 7)
   const cutoffStr = cutoff.toISOString().slice(0, 10)
