@@ -213,3 +213,46 @@ export type VendorInsight = {
   negotiationSuggestion: string | null  // AI-generated — null for reliable vendors
   priority: "high" | "medium" | "low"
 }
+
+// ── Gemini agent types ────────────────────────────────────────────────────────
+
+export type OrderInsight = {
+  itemName: string
+  vendorName: string
+  totalOrdered30d: number
+  orderCount: number
+  avgOrderSize: number
+  lastOrderDate: string
+  recommendedQty: number
+  rationale: string
+}
+
+export type SpoilageAlert = {
+  itemName: string
+  riskLevel: "high" | "medium" | "low"
+  expiresAt: string | null
+  totalOrdered30d: number
+  currentStock: number
+  recommendation: string
+  evidence: string
+}
+
+export type NegotiationOpportunity = {
+  vendorName: string
+  priority: "high" | "medium" | "low"
+  onTimePct: number
+  lateCount: number
+  totalDeliveries: number
+  hasPriceIncrease: boolean
+  totalSpend30d: number
+  tactics: string[]
+  evidence: string
+}
+
+export type AgentReport = {
+  summary: string
+  orderInsights: OrderInsight[]
+  spoilageAlerts: SpoilageAlert[]
+  negotiationOpportunities: NegotiationOpportunity[]
+  generatedAt: string
+}
