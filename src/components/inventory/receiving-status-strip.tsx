@@ -80,9 +80,9 @@ export function ReceivingStatusStrip({
   weekIncomingSpend,
 }: Props) {
   const fmtCurrency = (n: number) =>
-    new Intl.NumberFormat("en-AU", {
+    new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "AUD",
+      currency: "USD",
       minimumFractionDigits: 0,
     }).format(n)
 

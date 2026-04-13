@@ -179,7 +179,7 @@ const functionDeclarations: FunctionDeclaration[] = [
 
 // ── System instruction ────────────────────────────────────────────────────────
 
-const systemInstruction = `You are the head chef and operations manager at Bistro Nova, a busy restaurant.
+const systemInstruction = `You are the head chef and operations manager at Ember Table, a busy restaurant.
 Your task is to analyse our recent purchasing and delivery data to produce three actionable insights.
 
 REQUIRED: Call ALL THREE tools before writing any conclusions.
@@ -256,7 +256,7 @@ export async function runInventoryAgent(
 
   const chat = model.startChat()
   let result = await chat.sendMessage(
-    `Today is ${asOfDate}. Analyse Bistro Nova's inventory purchasing and shipment data.
+    `Today is ${asOfDate}. Analyse Ember Table's inventory purchasing and shipment data.
 Call all three tools to gather the data, then produce the JSON report.`
   )
 

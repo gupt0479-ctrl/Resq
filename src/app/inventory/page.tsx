@@ -52,7 +52,6 @@ async function InventoryContent({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  // Await runtime API inside the Suspense boundary
   const { tab: rawTab } = await searchParams
   const activeTab = resolveTab(rawTab)
 
@@ -81,11 +80,14 @@ async function InventoryContent({
   const cutoff = new Date(TODAY)
   cutoff.setDate(cutoff.getDate() + 7)
   const cutoffStr = cutoff.toISOString().slice(0, 10)
+  const windowStart = new Date(TODAY)
+  windowStart.setDate(windowStart.getDate() - 7)
+  const windowStartStr = windowStart.toISOString().slice(0, 10)
   const weekIncomingSpend = shipments
     .filter(
       (s) =>
         s.status !== "cancelled" &&
-        s.expectedDeliveryDate >= TODAY &&
+        s.expectedDeliveryDate >= windowStartStr &&
         s.expectedDeliveryDate <= cutoffStr
     )
     .reduce((sum, s) => sum + s.totalCost, 0)
@@ -198,7 +200,7 @@ function InventorySkeleton() {
   )
 }
 
-// ── Page shell: does NOT await any runtime APIs ──────────────────────────────
+// ── Page shell ───────────────────────────────────────────────────────────────
 
 export default function InventoryPage({
   searchParams,
@@ -210,7 +212,7 @@ export default function InventoryPage({
       <div>
         <h1 className="text-xl font-semibold text-foreground">Inventory</h1>
         <p className="text-xs text-muted-foreground">
-          Stock levels, alerts, and reorder signals · Bistro Nova
+          Stock levels, alerts, and reorder signals · Ember Table
         </p>
       </div>
 

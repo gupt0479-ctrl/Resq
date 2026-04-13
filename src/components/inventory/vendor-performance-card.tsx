@@ -29,9 +29,9 @@ const priorityLabel = {
 }
 
 function fmtCurrency(n: number) {
-  return new Intl.NumberFormat("en-AU", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "AUD",
+    currency: "USD",
     minimumFractionDigits: 0,
   }).format(n)
 }

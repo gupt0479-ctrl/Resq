@@ -1,5 +1,7 @@
-import { cacheLife } from "next/cache"
+import "server-only"
+
 import { supabase } from "./client"
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import type {
   InventoryItem,
   MenuItem,
@@ -7,10 +9,11 @@ import type {
   HistoricalReservation as Reservation,
   Shipment,
   ShipmentLineItem,
+  ShipmentStatus,
   FinanceTransaction,
 } from "@/lib/types"
 
-// ── helpers: map snake_case rows → camelCase types ───────────
+// ── helpers: map snake_case rows → camelCase types ───────────────────────────
 
 function mapInventoryItem(row: Record<string, unknown>): InventoryItem {
   return {
@@ -43,7 +46,7 @@ function mapShipment(row: Record<string, unknown>, lineItems: ShipmentLineItem[]
   return {
     id: row.id as string,
     vendorName: row.vendor_name as string,
-    status: row.status as Shipment["status"],
+    status: row.status as ShipmentStatus,
     expectedDeliveryDate: row.expected_delivery_date as string,
     actualDeliveryDate: row.actual_delivery_date as string | null,
     orderedAt: row.ordered_at as string,
@@ -55,18 +58,20 @@ function mapShipment(row: Record<string, unknown>, lineItems: ShipmentLineItem[]
   }
 }
 
-// ── public query functions ────────────────────────────────────
+function toISODateOnly(isoOrTimestamp: string): string {
+  return isoOrTimestamp.slice(0, 10)
+}
+
+// ── Inventory items ───────────────────────────────────────────────────────────
 
 export async function getInventoryItems(): Promise<InventoryItem[]> {
-  "use cache"
-  cacheLife("seconds") // revalidate every 30 s
   const { data, error } = await supabase
     .from("inventory_items")
     .select(
       "id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status"
     )
     .order("id")
-  if (error) throw new Error(error.message)
+  if (error) return []
   return (data ?? []).map((r) => mapInventoryItem(r as Record<string, unknown>))
 }
 
@@ -78,69 +83,66 @@ export async function getInventoryItemById(id: string): Promise<InventoryItem | 
     )
     .eq("id", id)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) return null
   if (!data) return null
   return mapInventoryItem(data as Record<string, unknown>)
 }
 
+// ── Menu catalog ──────────────────────────────────────────────────────────────
+
+/** Menu catalog in ledger = `services`. */
 export async function getMenuItems(): Promise<MenuItem[]> {
-  "use cache"
-  cacheLife("hours")
+  const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
-    .from("menu_items")
-    .select("id, name, category, price")
-    .order("id")
+    .from("services")
+    .select("id, name, category, price_per_person")
+    .eq("organization_id", DEMO_ORG_ID)
+    .eq("is_active", true)
+    .order("name")
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => ({
     id: r.id as string,
     name: r.name as string,
     category: r.category as string,
-    price: Number(r.price),
+    price: Number(r.price_per_person),
   }))
 }
 
+/** No usage bridge table in core ledger — empty until modeled. */
 export async function getMenuInventoryUsage(): Promise<MenuItemInventoryUsage[]> {
-  "use cache"
-  cacheLife("hours")
-  const { data, error } = await supabase
-    .from("menu_item_inventory_usage")
-    .select("menu_item_id, item_id, units_used_per_order")
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((r) => ({
-    menuItemId: r.menu_item_id as string,
-    itemId: r.item_id as string,
-    unitsUsedPerOrder: Number(r.units_used_per_order),
-  }))
+  return []
 }
 
+// ── Reservations ──────────────────────────────────────────────────────────────
+
+/** Demand history from `appointments` (replaces legacy `reservations`). */
 export async function getReservations(): Promise<Reservation[]> {
-  "use cache"
-  cacheLife("hours")
+  const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
-    .from("reservations")
-    .select("id, date, covers, menu_item_ids")
-    .order("date")
+    .from("appointments")
+    .select("id, starts_at, covers, service_id")
+    .eq("organization_id", DEMO_ORG_ID)
+    .order("starts_at")
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => ({
     id: r.id as string,
-    date: r.date as string,
+    date: toISODateOnly(r.starts_at as string),
     covers: Number(r.covers),
-    menuItemIds: r.menu_item_ids as string[],
+    menuItemIds: [r.service_id as string],
   }))
 }
 
+// ── Shipments ─────────────────────────────────────────────────────────────────
+
 /** Fetches all shipments with their line items in a single JOIN query */
 export async function getShipments(): Promise<Shipment[]> {
-  "use cache"
-  cacheLife("seconds")
   const { data, error } = await supabase
     .from("shipments")
     .select(
       "id, vendor_name, status, expected_delivery_date, actual_delivery_date, ordered_at, tracking_number, tracking_url, notes, total_cost, shipment_line_items ( id, item_id, item_name, quantity_ordered, unit_cost, total_cost )"
     )
     .order("ordered_at", { ascending: false })
-  if (error) throw new Error(error.message)
-
+  if (error) return []
   return (data ?? []).map((row) => {
     const lineItems = ((row.shipment_line_items as unknown[]) ?? []).map((li) =>
       mapLineItem(li as Record<string, unknown>)
@@ -157,18 +159,18 @@ export async function getShipmentById(id: string): Promise<Shipment | null> {
     )
     .eq("id", id)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) return null
   if (!row) return null
-
   const lineItems = ((row.shipment_line_items as unknown[]) ?? []).map((li) =>
     mapLineItem(li as Record<string, unknown>)
   )
   return mapShipment(row as Record<string, unknown>, lineItems)
 }
 
+// ── Finance transactions ──────────────────────────────────────────────────────
+
 export async function getFinanceTransactions(): Promise<FinanceTransaction[]> {
-  "use cache"
-  cacheLife("seconds")
+  const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
     .from("finance_transactions")
     .select("id, organization_id, invoice_id, type, direction, category, amount, occurred_at, payment_method, tax_relevant, writeoff_eligible, notes")
@@ -190,6 +192,8 @@ export async function getFinanceTransactions(): Promise<FinanceTransaction[]> {
   }))
 }
 
+// ── Mutations ─────────────────────────────────────────────────────────────────
+
 export async function cancelShipment(id: string): Promise<void> {
   const { error } = await supabase
     .from("shipments")
@@ -199,6 +203,7 @@ export async function cancelShipment(id: string): Promise<void> {
 }
 
 export async function updateAppointmentStatus(id: string, status: string): Promise<void> {
+  const supabase = createServerSupabaseClient()
   const { error } = await supabase
     .from("appointments")
     .update({ status })
@@ -207,6 +212,7 @@ export async function updateAppointmentStatus(id: string, status: string): Promi
 }
 
 export async function updateFollowUpStatus(id: string, followUpSent: boolean): Promise<void> {
+  const supabase = createServerSupabaseClient()
   const { error } = await supabase
     .from("appointments")
     .update({ follow_up_sent: followUpSent })

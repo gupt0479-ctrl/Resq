@@ -23,7 +23,7 @@ export default async function FinancePage() {
 
   const client = createServerSupabaseClient()
   const [summary, transactions] = await Promise.all([
-    getFinanceSummaryQuery(client, DEMO_ORG_ID).catch(() => null),
+    getFinanceSummaryQuery(client).catch(() => null),
     listTransactionsQuery(client, DEMO_ORG_ID, { limit: 20 }).catch(() => []),
   ])
 
