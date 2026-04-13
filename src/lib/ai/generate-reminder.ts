@@ -3,13 +3,54 @@ import type { Invoice } from "@/lib/types"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-export async function generateReminder(invoice: Invoice): Promise<{
+export async function generateReminder(
+  invoice: Invoice,
+  followUpType: "overdue" | "paid" = "overdue"
+): Promise<{
   subject: string
   message: string
   reminder_number: number
 }> {
   const name = invoice.customer?.name ?? "Guest"
   const reminderNumber = (invoice.reminder_count ?? 0) + 1
+
+  // ── Paid: thank-you / return-visit / feedback nudge ──────────────────────
+  if (followUpType === "paid") {
+    const prompt = `You are the manager of Ember Table, an upscale restaurant in Minneapolis.
+Guest: ${name}
+Invoice: $${invoice.total} — just paid.
+
+Write a warm, personal thank-you follow-up email. Include:
+- Genuine thanks for their visit and prompt payment
+- A subtle invitation to return or mention an upcoming seasonal menu if relevant
+- A gentle ask for feedback (Google review or direct reply)
+Keep it to 3-4 sentences. Friendly, not salesy.
+
+Return ONLY valid JSON, no other text:
+{
+  "subject": "<warm subject line>",
+  "message": "<3-4 sentence thank-you message>"
+}`
+
+    try {
+      const response = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+        messages: [{ role: "user", content: prompt }],
+      })
+      const text = response.content[0].type === "text" ? response.content[0].text : ""
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim())
+      return { subject: parsed.subject, message: parsed.message, reminder_number: reminderNumber }
+    } catch {
+      return {
+        subject: `Thank you for dining with us, ${name}!`,
+        message: `Dear ${name}, thank you so much for your recent visit to Ember Table and for settling your invoice promptly — it means a great deal to us. We hope you enjoyed every bite and that we'll have the pleasure of welcoming you back soon. If you have a moment, we'd love to hear your thoughts — a quick note or Google review goes a long way for our small team.`,
+        reminder_number: reminderNumber,
+      }
+    }
+  }
+
+  // ── Overdue: escalating payment reminder ─────────────────────────────────
   const daysOverdue = Math.max(
     0,
     Math.floor((Date.now() - new Date(invoice.due_at).getTime()) / (1000 * 60 * 60 * 24))
@@ -19,14 +60,7 @@ export async function generateReminder(invoice: Invoice): Promise<{
     reminderNumber === 2 ? "polite but firm" :
     "direct and urgent"
 
-  try {
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 300,
-      messages: [
-        {
-          role: "user",
-          content: `You are the manager of Ember Table restaurant sending a payment reminder.
+  const prompt = `You are the manager of Ember Table restaurant sending a payment reminder.
 Tone: ${tone}
 Guest: ${name}
 Amount due: $${invoice.total}
@@ -37,14 +71,16 @@ Return ONLY valid JSON, no other text:
 {
   "subject": "<email subject>",
   "message": "<3-4 sentence reminder message>"
-}`,
-        },
-      ],
-    })
+}`
 
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 300,
+      messages: [{ role: "user", content: prompt }],
+    })
     const text = response.content[0].type === "text" ? response.content[0].text : ""
-    const cleaned = text.replace(/```json|```/g, "").trim()
-    const parsed = JSON.parse(cleaned)
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim())
     return { subject: parsed.subject, message: parsed.message, reminder_number: reminderNumber }
   } catch {
     return {
