@@ -197,3 +197,19 @@ export async function cancelShipment(id: string): Promise<void> {
     .eq("id", id)
   if (error) throw new Error(error.message)
 }
+
+export async function updateAppointmentStatus(id: string, status: string): Promise<void> {
+  const { error } = await supabase
+    .from("appointments")
+    .update({ status })
+    .eq("id", id)
+  if (error) throw new Error(error.message)
+}
+
+export async function updateFollowUpStatus(id: string, followUpSent: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("appointments")
+    .update({ follow_up_sent: followUpSent })
+    .eq("id", id)
+  if (error) throw new Error(error.message)
+}

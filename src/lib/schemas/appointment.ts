@@ -44,6 +44,8 @@ export const AppointmentResponseSchema = z.object({
   bookingSource:   z.string().nullable(),
   notes:           z.string().nullable(),
   createdAt:       z.string(),
+  occasion:        z.string().nullable().default(null),
+  followUpSent:    z.boolean().default(false),
 })
 
 export type AppointmentResponse = z.infer<typeof AppointmentResponseSchema>
@@ -52,4 +54,25 @@ export type AppointmentResponse = z.infer<typeof AppointmentResponseSchema>
 
 export const CompleteAppointmentBodySchema = z.object({
   notes: z.string().optional(),
+})
+
+// ─── Create booking request ──────────────────────────────────────────────
+
+export const CreateBookingBodySchema = z.object({
+  customerName:  z.string().min(1),
+  customerEmail: z.string().email(),
+  customerPhone: z.string().optional(),
+  covers:        z.number().int().min(1).max(50).default(2),
+  startsAt:      z.string(),
+  occasion:      z.string().optional(),
+  notes:         z.string().optional(),
+})
+
+export type CreateBookingBody = z.infer<typeof CreateBookingBodySchema>
+
+// ─── Reschedule request ──────────────────────────────────────────────────
+
+export const RescheduleBodySchema = z.object({
+  startsAt: z.string(),
+  endsAt:   z.string(),
 })

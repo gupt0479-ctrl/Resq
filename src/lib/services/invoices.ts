@@ -220,7 +220,6 @@ export async function markInvoicePaid(
 
   // Create idempotent revenue transaction (unique index guards against duplication)
   await createRevenueTransaction(client, {
-    organizationId,
     invoiceId,
     amount:        amountPaid,
     paymentMethod: opts.paymentMethod,

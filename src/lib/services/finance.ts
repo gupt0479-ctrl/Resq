@@ -4,36 +4,26 @@ import type { FinanceSummaryResponse } from "@/lib/schemas/finance"
 // ─── Create revenue transaction (idempotent) ─────────────────────────────
 
 export interface CreateRevenueTransactionInput {
-  organizationId: string
   invoiceId:      string
   amount:         number
   paymentMethod?: string
   notes?:         string
 }
 
-/**
- * Creates a revenue finance_transaction for a paid invoice.
- * Guards against duplicates with a check-before-insert pattern,
- * enforced at the DB level by a partial unique index on (invoice_id)
- * WHERE type='revenue' AND direction='in'.
- */
 export async function createRevenueTransaction(
   client: SupabaseClient,
   input: CreateRevenueTransactionInput
 ): Promise<void> {
-  // Idempotency check: at most one revenue transaction per invoice
   const { count } = await client
     .from("finance_transactions")
     .select("*", { count: "exact", head: true })
     .eq("invoice_id",      input.invoiceId)
     .eq("type",            "revenue")
     .eq("direction",       "in")
-    .eq("organization_id", input.organizationId)
 
-  if (count && count > 0) return // Already recorded — idempotent
+  if (count && count > 0) return
 
   const { error } = await client.from("finance_transactions").insert({
-    organization_id: input.organizationId,
     invoice_id:      input.invoiceId,
     type:            "revenue",
     category:        "dining_revenue",
@@ -45,11 +35,8 @@ export async function createRevenueTransaction(
     notes:           input.notes ?? null,
   })
 
-  if (error) {
-    // Partial unique index violation (23505) = race-condition duplicate; treat as success
-    if (error.code !== "23505") {
-      throw new Error(`Failed to create revenue transaction: ${error.message}`)
-    }
+  if (error && error.code !== "23505") {
+    throw new Error(`Failed to create revenue transaction: ${error.message}`)
   }
 }
 
@@ -105,13 +92,14 @@ export async function listTransactions(
   client: SupabaseClient,
   organizationId: string,
   opts: {
-    type?:         string
-    taxRelevant?:  boolean
-    limit?:        number
-    offset?:       number
-    since?:        string
+    type?:        string
+    taxRelevant?: boolean
+    limit?:       number
+    offset?:      number
+    since?:       string
   } = {}
 ) {
+  // Try the finance_transactions ledger first
   let query = client
     .from("finance_transactions")
     .select("*")
@@ -127,92 +115,197 @@ export async function listTransactions(
   }
 
   const { data, error } = await query
-  if (error) throw new Error(error.message)
-  return data ?? []
+  if (!error && data && data.length > 0) return data
+
+  // Ledger is empty — synthesize from shipments (expenses) + reservations (revenue)
+  return buildSyntheticTransactions(client, opts.limit ?? 20)
 }
 
-// ─── Finance summary (all deterministic — never from AI) ─────────────────
+async function buildSyntheticTransactions(client: SupabaseClient, limit: number) {
+  const [shipmentsRes, reservationsRes, menuItemsRes] = await Promise.all([
+    client
+      .from("shipments")
+      .select("id, vendor_name, total_cost, ordered_at, status")
+      .neq("status", "cancelled")
+      .order("ordered_at", { ascending: false })
+      .limit(limit),
+    client
+      .from("reservations")
+      .select("id, date, covers, menu_item_ids")
+      .order("date", { ascending: false })
+      .limit(limit),
+    client.from("menu_items").select("id, price"),
+  ])
+
+  const priceMap = new Map(
+    (menuItemsRes.data ?? []).map((m) => [m.id as string, Number(m.price)])
+  )
+
+  type SyntheticRow = {
+    id: string
+    organization_id: string
+    invoice_id: null
+    type: string
+    category: string
+    amount: number
+    direction: "in" | "out"
+    occurred_at: string
+    payment_method: null
+    tax_relevant: boolean
+    writeoff_eligible: boolean
+    notes: string | null
+    external_ref: null
+    created_at: string
+  }
+
+  const rows: SyntheticRow[] = []
+
+  for (const s of shipmentsRes.data ?? []) {
+    rows.push({
+      id: s.id as string,
+      organization_id: "",
+      invoice_id: null,
+      type: "inventory_purchase",
+      category: "inventory_purchase",
+      amount: Number(s.total_cost),
+      direction: "out",
+      occurred_at: s.ordered_at as string,
+      payment_method: null,
+      tax_relevant: true,
+      writeoff_eligible: false,
+      notes: `Shipment from ${s.vendor_name}`,
+      external_ref: null,
+      created_at: s.ordered_at as string,
+    })
+  }
+
+  for (const r of reservationsRes.data ?? []) {
+    const ids = (r.menu_item_ids as string[]) ?? []
+    const total = Number(r.covers) * ids.reduce((s, id) => s + (priceMap.get(id) ?? 0), 0)
+    if (total <= 0) continue
+    rows.push({
+      id: r.id as string,
+      organization_id: "",
+      invoice_id: null,
+      type: "revenue",
+      category: "dining_revenue",
+      amount: round2(total),
+      direction: "in",
+      occurred_at: `${r.date}T19:00:00.000Z`,
+      payment_method: null,
+      tax_relevant: true,
+      writeoff_eligible: false,
+      notes: `Reservation · ${r.covers} covers`,
+      external_ref: null,
+      created_at: `${r.date}T19:00:00.000Z`,
+    })
+  }
+
+  // Sort by date desc, cap at limit
+  rows.sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+  return rows.slice(0, limit)
+}
+
+// ─── Finance summary ──────────────────────────────────────────────────────
 
 export async function getFinanceSummary(
   client: SupabaseClient,
-  organizationId: string
 ): Promise<FinanceSummaryResponse> {
-  const now      = new Date()
-  const todayISO = startOfDay(now).toISOString()
-  const weekISO  = startOfWeek(now).toISOString()
-  const asOf     = now.toISOString()
+  const now = new Date()
+  const asOf = now.toISOString()
 
-  // Revenue today
-  const { data: revToday } = await client
-    .from("finance_transactions")
-    .select("amount")
-    .eq("organization_id", organizationId)
-    .eq("type", "revenue")
-    .eq("direction", "in")
-    .gte("occurred_at", todayISO)
+  // "Last 7 days" window
+  const sevenDaysAgo = new Date(now)
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10)
+  const todayStr = now.toISOString().slice(0, 10)
 
-  const revenueToday = sumAmounts(revToday)
+  // ── Revenue from reservations × menu prices ──────────────────────────────
+  const [reservationsRes, menuItemsRes] = await Promise.all([
+    client
+      .from("reservations")
+      .select("id, date, covers, menu_item_ids")
+      .gte("date", sevenDaysAgoStr)
+      .lte("date", todayStr),
+    client.from("menu_items").select("id, price"),
+  ])
 
-  // Revenue this week
-  const { data: revWeek } = await client
-    .from("finance_transactions")
-    .select("amount")
-    .eq("organization_id", organizationId)
-    .eq("type", "revenue")
-    .eq("direction", "in")
-    .gte("occurred_at", weekISO)
+  const priceMap = new Map(
+    (menuItemsRes.data ?? []).map((m) => [m.id as string, Number(m.price)])
+  )
 
-  const revenueThisWeek = sumAmounts(revWeek)
+  let revenueThisWeek = 0
+  let revenueToday = 0
+  for (const r of reservationsRes.data ?? []) {
+    const ids = (r.menu_item_ids as string[]) ?? []
+    const total = Number(r.covers) * ids.reduce((s, id) => s + (priceMap.get(id) ?? 0), 0)
+    revenueThisWeek += total
+    if (r.date === todayStr) revenueToday += total
+  }
 
-  // Expenses this week (type != revenue, direction = out)
-  const { data: expWeek } = await client
-    .from("finance_transactions")
-    .select("amount")
-    .eq("organization_id", organizationId)
-    .eq("direction", "out")
-    .gte("occurred_at", weekISO)
+  // ── Expenses from shipments (inventory purchases last 7 days) ────────────
+  const { data: shipments } = await client
+    .from("shipments")
+    .select("total_cost, ordered_at, status")
+    .neq("status", "cancelled")
+    .gte("ordered_at", sevenDaysAgo.toISOString())
 
-  const expensesThisWeek = sumAmounts(expWeek)
+  const expensesThisWeek = (shipments ?? []).reduce(
+    (s, r) => s + Number(r.total_cost),
+    0
+  )
 
-  // Pending receivables (invoices: status sent or pending)
-  const { data: pendingInvs } = await client
-    .from("invoices")
-    .select("total_amount, amount_paid")
-    .eq("organization_id", organizationId)
-    .in("status", ["sent", "pending"])
+  // ── Receivables from invoices (graceful fallback if table is empty/missing) ─
+  let pendingReceivables = 0
+  let pendingInvoiceCount = 0
+  let overdueReceivables = 0
+  let overdueInvoiceCount = 0
+  let aging = {
+    current:   { count: 0, amount: 0 },
+    due1to30:  { count: 0, amount: 0 },
+    due31to60: { count: 0, amount: 0 },
+    over60:    { count: 0, amount: 0 },
+  }
 
-  const pendingReceivables = sumRemaining(pendingInvs)
-  const pendingInvoiceCount = pendingInvs?.length ?? 0
+  try {
+    const [pendingRes, overdueRes, openRes] = await Promise.all([
+      client
+        .from("invoices")
+        .select("total_amount, amount_paid")
+        .in("status", ["sent", "pending"]),
+      client
+        .from("invoices")
+        .select("total_amount, amount_paid")
+        .eq("status", "overdue"),
+      client
+        .from("invoices")
+        .select("total_amount, amount_paid, due_at")
+        .not("status", "in", '("paid","void")'),
+    ])
 
-  // Overdue receivables
-  const { data: overdueInvs } = await client
-    .from("invoices")
-    .select("total_amount, amount_paid, due_at, invoice_number, customers(full_name)")
-    .eq("organization_id", organizationId)
-    .eq("status", "overdue")
-
-  const overdueReceivables  = sumRemaining(overdueInvs)
-  const overdueInvoiceCount = overdueInvs?.length ?? 0
-
-  const netCashFlowEstimate = round2(revenueThisWeek - expensesThisWeek)
-
-  // Invoice aging buckets (from all open invoices)
-  const { data: openInvs } = await client
-    .from("invoices")
-    .select("total_amount, amount_paid, due_at")
-    .eq("organization_id", organizationId)
-    .not("status", "in", '("paid","void")')
-
-  const aging = computeAging(openInvs ?? [], now)
+    if (!pendingRes.error) {
+      pendingReceivables  = sumRemaining(pendingRes.data)
+      pendingInvoiceCount = pendingRes.data?.length ?? 0
+    }
+    if (!overdueRes.error) {
+      overdueReceivables  = sumRemaining(overdueRes.data)
+      overdueInvoiceCount = overdueRes.data?.length ?? 0
+    }
+    if (!openRes.error) {
+      aging = computeAging(openRes.data ?? [], now)
+    }
+  } catch {
+    // invoices table not seeded — receivables stay at 0
+  }
 
   return {
     asOf,
-    revenueToday,
-    revenueThisWeek,
+    revenueToday:        round2(revenueToday),
+    revenueThisWeek:     round2(revenueThisWeek),
     pendingReceivables,
     overdueReceivables,
-    expensesThisWeek,
-    netCashFlowEstimate,
+    expensesThisWeek:    round2(expensesThisWeek),
+    netCashFlowEstimate: round2(revenueThisWeek - expensesThisWeek),
     overdueInvoiceCount,
     pendingInvoiceCount,
     aging,
@@ -220,10 +313,6 @@ export async function getFinanceSummary(
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
-
-function sumAmounts(rows: Array<{ amount: number }> | null): number {
-  return round2((rows ?? []).reduce((s, r) => s + (Number(r.amount) || 0), 0))
-}
 
 function sumRemaining(
   rows: Array<{ total_amount: number; amount_paid: number }> | null
@@ -239,20 +328,6 @@ function sumRemaining(
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
-}
-
-function startOfDay(d: Date): Date {
-  const out = new Date(d)
-  out.setHours(0, 0, 0, 0)
-  return out
-}
-
-function startOfWeek(d: Date): Date {
-  const out = new Date(d)
-  const day = out.getDay()
-  out.setDate(out.getDate() - day)
-  out.setHours(0, 0, 0, 0)
-  return out
 }
 
 function computeAging(
@@ -276,17 +351,13 @@ function computeAging(
     )
 
     if (daysOverdue <= 0) {
-      buckets.current.count  += 1
-      buckets.current.amount += remaining
+      buckets.current.count  += 1; buckets.current.amount  += remaining
     } else if (daysOverdue <= 30) {
-      buckets.due1to30.count  += 1
-      buckets.due1to30.amount += remaining
+      buckets.due1to30.count  += 1; buckets.due1to30.amount  += remaining
     } else if (daysOverdue <= 60) {
-      buckets.due31to60.count  += 1
-      buckets.due31to60.amount += remaining
+      buckets.due31to60.count += 1; buckets.due31to60.amount += remaining
     } else {
-      buckets.over60.count  += 1
-      buckets.over60.amount += remaining
+      buckets.over60.count    += 1; buckets.over60.amount    += remaining
     }
   }
 

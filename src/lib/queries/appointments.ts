@@ -51,6 +51,7 @@ export async function getAppointmentDetailQuery(
 }
 
 function mapAppointmentRow(row: AppointmentJoinRow): AppointmentResponse {
+  const r = row as AppointmentJoinRow & { occasion?: string | null; follow_up_sent?: boolean }
   return {
     id: row.id,
     organizationId: row.organization_id,
@@ -67,5 +68,7 @@ function mapAppointmentRow(row: AppointmentJoinRow): AppointmentResponse {
     bookingSource: row.booking_source ?? null,
     notes: row.notes ?? null,
     createdAt: row.created_at,
+    occasion: r.occasion ?? null,
+    followUpSent: r.follow_up_sent ?? false,
   }
 }

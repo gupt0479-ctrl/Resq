@@ -133,6 +133,115 @@ export async function listAppointments(
   return data ?? []
 }
 
+// ─── Cancel appointment ───────────────────────────────────────────────────
+
+export async function cancelAppointment(
+  client: SupabaseClient,
+  appointmentId: string,
+  organizationId: string
+): Promise<void> {
+  const { error } = await client
+    .from("appointments")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", appointmentId)
+    .eq("organization_id", organizationId)
+    .not("status", "in", '("completed","cancelled")')
+  if (error) throw new Error(error.message)
+}
+
+// ─── Reschedule appointment ───────────────────────────────────────────────
+
+export async function rescheduleAppointment(
+  client: SupabaseClient,
+  appointmentId: string,
+  organizationId: string,
+  startsAt: string,
+  endsAt: string
+): Promise<void> {
+  const { error } = await client
+    .from("appointments")
+    .update({ status: "rescheduled", starts_at: startsAt, ends_at: endsAt, updated_at: new Date().toISOString() })
+    .eq("id", appointmentId)
+    .eq("organization_id", organizationId)
+  if (error) throw new Error(error.message)
+}
+
+// ─── Create appointment ───────────────────────────────────────────────────
+
+export async function createAppointment(
+  client: SupabaseClient,
+  organizationId: string,
+  opts: {
+    customerName:  string
+    customerEmail: string
+    customerPhone?: string
+    covers:        number
+    startsAt:      string
+    endsAt:        string
+    occasion?:     string
+    notes?:        string
+  }
+): Promise<string> {
+  // 1. Upsert customer by email
+  const { data: existing } = await client
+    .from("customers")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("email", opts.customerEmail)
+    .maybeSingle()
+
+  let customerId: string
+  if (existing) {
+    customerId = existing.id as string
+  } else {
+    const { data: created, error: custErr } = await client
+      .from("customers")
+      .insert({
+        organization_id: organizationId,
+        full_name: opts.customerName,
+        email: opts.customerEmail,
+        phone: opts.customerPhone ?? null,
+      })
+      .select("id")
+      .single()
+    if (custErr || !created) throw new Error(custErr?.message ?? "Failed to create customer")
+    customerId = created.id as string
+  }
+
+  // 2. Get first active service
+  const { data: service } = await client
+    .from("services")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .order("name")
+    .limit(1)
+    .maybeSingle()
+
+  if (!service) throw new Error("No active services found for this organisation")
+
+  // 3. Create appointment
+  const { data: appt, error: apptErr } = await client
+    .from("appointments")
+    .insert({
+      organization_id: organizationId,
+      customer_id:     customerId,
+      service_id:      service.id,
+      covers:          opts.covers,
+      starts_at:       opts.startsAt,
+      ends_at:         opts.endsAt,
+      status:          "confirmed",
+      booking_source:  "manual",
+      occasion:        opts.occasion ?? null,
+      notes:           opts.notes ?? null,
+    })
+    .select("id")
+    .single()
+
+  if (apptErr || !appt) throw new Error(apptErr?.message ?? "Failed to create appointment")
+  return appt.id as string
+}
+
 // ─── Get single appointment ───────────────────────────────────────────────
 
 export async function getAppointment(

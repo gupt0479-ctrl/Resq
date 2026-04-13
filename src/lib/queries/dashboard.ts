@@ -1,3 +1,4 @@
+import { connection } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { DashboardSummary } from "@/lib/schemas/dashboard"
 
@@ -5,6 +6,9 @@ export async function getDashboardSummary(
   client: SupabaseClient,
   organizationId: string
 ): Promise<DashboardSummary> {
+  // Opt into dynamic rendering before reading the clock
+  await connection()
+
   const now      = new Date()
   const todayStr = toDateString(now)
   const weekISO  = startOfWeek(now).toISOString()
