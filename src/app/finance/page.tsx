@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { connection } from "next/server"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import { getFinanceSummaryQuery, listTransactionsQuery } from "@/lib/queries/finance"
 import { isSupabaseConfigured } from "@/lib/env"
@@ -13,6 +14,8 @@ function fmt(n: number) {
 }
 
 export default async function FinancePage() {
+  await connection()
+
   if (!isSupabaseConfigured()) {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">

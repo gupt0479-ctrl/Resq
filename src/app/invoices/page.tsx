@@ -1,3 +1,4 @@
+import { connection } from "next/server"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import { listInvoicesQuery } from "@/lib/queries/invoices"
 import { isSupabaseConfigured } from "@/lib/env"
@@ -27,6 +28,8 @@ function daysOverdue(dueAt: string): number {
 }
 
 export default async function InvoicesPage() {
+  await connection()
+
   if (!isSupabaseConfigured()) {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">

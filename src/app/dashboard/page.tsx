@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { connection } from "next/server"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import { getDashboardSummary } from "@/lib/queries/dashboard"
 import { isSupabaseConfigured } from "@/lib/env"
@@ -31,6 +32,8 @@ function statusBadge(status: string) {
 }
 
 export default async function DashboardPage() {
+  await connection()
+
   if (!isSupabaseConfigured()) {
     return <UnconfiguredBanner />
   }
