@@ -5,8 +5,10 @@ import { AiAdvisorPanel } from "@/components/inventory/ai-advisor-panel"
 import { ReceivingStatusStrip } from "@/components/inventory/receiving-status-strip"
 import { StockHealthChart } from "@/components/inventory/stock-health-chart"
 import { VendorPerformanceCard } from "@/components/inventory/vendor-performance-card"
-import { getInventoryItems, getShipments } from "@/lib/supabase/queries"
+import { SpendTrendsCard } from "@/components/inventory/spend-trends-card"
+import { getInventoryItems, getShipments, getFinanceTransactions } from "@/lib/supabase/queries"
 import { computeVendorPerformance } from "@/lib/inventory/vendor-performance"
+import { computeSpendTrends } from "@/lib/inventory/spend-trends"
 import {
   getAlertSummary,
   getLowStockItems,
@@ -50,13 +52,13 @@ async function InventoryContent({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  // Await runtime API inside the Suspense boundary
   const { tab: rawTab } = await searchParams
   const activeTab = resolveTab(rawTab)
 
-  const [inventoryItems, shipments] = await Promise.all([
+  const [inventoryItems, shipments, transactions] = await Promise.all([
     getInventoryItems(),
     getShipments(),
+    getFinanceTransactions(),
   ])
 
   const now = new Date(TODAY)
@@ -78,16 +80,20 @@ async function InventoryContent({
   const cutoff = new Date(TODAY)
   cutoff.setDate(cutoff.getDate() + 7)
   const cutoffStr = cutoff.toISOString().slice(0, 10)
+  const windowStart = new Date(TODAY)
+  windowStart.setDate(windowStart.getDate() - 7)
+  const windowStartStr = windowStart.toISOString().slice(0, 10)
   const weekIncomingSpend = shipments
     .filter(
       (s) =>
         s.status !== "cancelled" &&
-        s.expectedDeliveryDate >= TODAY &&
+        s.expectedDeliveryDate >= windowStartStr &&
         s.expectedDeliveryDate <= cutoffStr
     )
     .reduce((sum, s) => sum + s.totalCost, 0)
 
-  const vendorStats = computeVendorPerformance(shipments, inventoryItems)
+  const vendorStats  = computeVendorPerformance(shipments, inventoryItems)
+  const spendTrends  = computeSpendTrends(shipments, transactions, TODAY)
 
   const lowStockSet  = new Set(lowStockItems.map((i) => i.id))
   const expiringSet  = new Set(expiringItems.map((i) => i.id))
@@ -113,7 +119,7 @@ async function InventoryContent({
         weekIncomingSpend={weekIncomingSpend}
       />
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -141,9 +147,20 @@ async function InventoryContent({
             <VendorPerformanceCard vendorStats={vendorStats} />
           </CardContent>
         </Card>
-
-        <AiAdvisorPanel />
       </div>
+
+      <AiAdvisorPanel />
+
+      <Card>
+        <CardHeader className="pb-1">
+          <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Spend Trends
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-5">
+          <SpendTrendsCard data={spendTrends} />
+        </CardContent>
+      </Card>
 
       <Card className="overflow-visible">
         <CardHeader className="border-b border-border pb-0 pt-4">
@@ -183,7 +200,7 @@ function InventorySkeleton() {
   )
 }
 
-// ── Page shell: does NOT await any runtime APIs ──────────────────────────────
+// ── Page shell ───────────────────────────────────────────────────────────────
 
 export default function InventoryPage({
   searchParams,
@@ -195,7 +212,7 @@ export default function InventoryPage({
       <div>
         <h1 className="text-xl font-semibold text-foreground">Inventory</h1>
         <p className="text-xs text-muted-foreground">
-          Stock levels, alerts, and reorder signals · Bistro Nova
+          Stock levels, alerts, and reorder signals · Ember Table
         </p>
       </div>
 

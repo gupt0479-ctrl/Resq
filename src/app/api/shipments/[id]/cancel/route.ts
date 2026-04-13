@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getShipmentById, cancelShipment } from "@/lib/supabase/queries"
-import { supabase } from "@/lib/supabase/client"
+import { getShipmentById } from "@/lib/supabase/queries"
 
 export async function POST(
   req: NextRequest,
@@ -13,13 +12,18 @@ export async function POST(
     return NextResponse.json({ error: "Cannot cancel a delivered shipment" }, { status: 422 })
   }
 
-  const body = await req.json().catch(() => ({})) as { reason?: string }
-  await cancelShipment(id)
-  if (body.reason) {
-    await supabase.from("shipments").update({ notes: body.reason }).eq("id", id)
+  await req.json().catch(() => ({}))
+
+  if (shipment.ledgerBacked) {
+    return NextResponse.json(
+      { error: "Ledger-backed procurement rows cannot be cancelled from this API." },
+      { status: 409 }
+    )
   }
 
-  const updated = await getShipmentById(id)
-  return NextResponse.json(updated)
+  return NextResponse.json(
+    { error: "Shipment cancel is not available without legacy shipment tables." },
+    { status: 501 }
+  )
 }
 

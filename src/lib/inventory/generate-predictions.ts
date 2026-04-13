@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import type { InventoryItem, InventoryPrediction, AiInventoryReport, VendorInsight } from "@/lib/types"
-import type { MenuItemInventoryUsage, Reservation, Shipment, VendorPerformanceStat } from "@/lib/types"
+import type { MenuItemInventoryUsage, HistoricalReservation as Reservation, Shipment, VendorPerformanceStat } from "@/lib/types"
 import { buildDemandFeatures } from "./feature-engineering"
 import { baselineForecast } from "./baseline-forecast"
 import {
@@ -25,7 +25,7 @@ function toISODate(d: Date): string {
 }
 
 function dayName(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString("en-AU", {
+  return new Date(isoDate).toLocaleDateString("en-US", {
     weekday: "long",
     month: "short",
     day: "numeric",
@@ -273,7 +273,7 @@ async function callClaudeForExplanations(
     .map((d) => `${d.dayLabel} (${d.covers} covers)`)
     .join(", ")
 
-  const systemPrompt = `You are the head chef and operations manager at Bistro Nova, a busy restaurant.
+  const systemPrompt = `You are the head chef and operations manager at Ember Table, a busy restaurant.
 You analyse kitchen inventory forecasts and write clear, specific, manager-ready reports.
 
 Your writing style:
@@ -287,7 +287,7 @@ Your writing style:
 - Vendor negotiation suggestions are 1–2 sentences: name the specific issue (late rate %, price spike), then a concrete action (e.g. request credit clause, benchmark alternatives, lock in pricing)`
 
   const userMessage = `Today: ${asOfDate} (${dayName(asOfDate)})
-Restaurant: Bistro Nova
+Restaurant: Ember Table
 
 === DEMAND CONTEXT ===
 Past 7 days: ${ctx.past7dReservations} reservations, ${ctx.past7dCovers} covers

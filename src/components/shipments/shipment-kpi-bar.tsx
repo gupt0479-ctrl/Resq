@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { Shipment } from "@/lib/types"
 
 function fmt(n: number) {
-  return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: 0 }).format(n)
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(n)
 }
 
 export function ShipmentKpiBar({ shipments, today }: { shipments: Shipment[]; today: string }) {

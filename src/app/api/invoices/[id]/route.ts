@@ -1,26 +1,20 @@
-import { NextRequest, NextResponse } from "next/server"
-import { getInvoice, markInvoicePaid } from "@/lib/services/invoice.service"
+import { type NextRequest } from "next/server"
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { getInvoiceDetailQuery } from "@/lib/queries/invoices"
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
-  const result = await getInvoice(id)
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 404 })
-  return NextResponse.json({ invoice: result.data })
-}
+  try {
+    const { id } = await ctx.params
+    const client  = createServerSupabaseClient()
+    const data    = await getInvoiceDetailQuery(client, id, DEMO_ORG_ID)
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params
-  const body = await req.json()
-  if (body.status === "paid") {
-    const result = await markInvoicePaid(id)
-    if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
-    return NextResponse.json({ invoice: result.data })
+    return Response.json({ data })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unexpected error"
+    const status  = message.includes("not found") ? 404 : 500
+    return Response.json({ error: message }, { status })
   }
-  return NextResponse.json({ error: "Only status: paid supported." }, { status: 400 })
 }
