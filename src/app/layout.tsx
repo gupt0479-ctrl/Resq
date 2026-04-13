@@ -29,7 +29,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex h-full overflow-hidden bg-background">
+      <body className="flex h-full overflow-hidden bg-background" suppressHydrationWarning>
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
