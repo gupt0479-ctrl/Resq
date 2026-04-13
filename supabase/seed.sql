@@ -1,14 +1,14 @@
--- Ember Table — deterministic seed data
+-- Ember Table â€” deterministic seed data
 -- Run after applying 0001_core_ledger.sql
 -- All dates relative to the demo anchor date: 2026-04-11
 
--- ─── Organisation ─────────────────────────────────────────────────────────
+-- â”€â”€â”€ Organisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO organizations (id, name, slug, timezone) VALUES
   ('00000000-0000-0000-0000-000000000001', 'Ember Table', 'ember-table', 'America/Chicago')
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Staff ────────────────────────────────────────────────────────────────
+-- â”€â”€â”€ Staff â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO staff (id, organization_id, full_name, role, email, is_active) VALUES
   ('00000000-0000-0000-0001-000000000001', '00000000-0000-0000-0000-000000000001', 'Sarah Chen',   'manager', 'sarah@embertable.com',  TRUE),
@@ -16,7 +16,7 @@ INSERT INTO staff (id, organization_id, full_name, role, email, is_active) VALUE
   ('00000000-0000-0000-0001-000000000003', '00000000-0000-0000-0000-000000000001', 'Mia Torres',   'server',  'mia@embertable.com',    TRUE)
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Services / Menu Catalog ──────────────────────────────────────────────
+-- â”€â”€â”€ Services / Menu Catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO services (id, organization_id, name, description, category, price_per_person, is_active) VALUES
   ('00000000-0000-0000-0002-000000000001', '00000000-0000-0000-0000-000000000001',
@@ -31,7 +31,7 @@ INSERT INTO services (id, organization_id, name, description, category, price_pe
    'Private Dining Experience','Exclusive room + personalised menu','experience', 200.00, TRUE)
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Customers / Guests ──────────────────────────────────────────────────
+-- â”€â”€â”€ Customers / Guests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO customers (id, organization_id, full_name, email, phone, preferred_contact_channel, last_visit_at, lifetime_value, avg_feedback_score, risk_status) VALUES
   ('00000000-0000-0000-0003-000000000001', '00000000-0000-0000-0000-000000000001',
@@ -52,24 +52,24 @@ INSERT INTO customers (id, organization_id, full_name, email, phone, preferred_c
    'Robert Walsh',    'r.walsh@example.com',   '+1-312-555-0108', 'email', NULL,                     0.00,    NULL,'none')
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Appointments / Reservations ─────────────────────────────────────────
+-- â”€â”€â”€ Appointments / Reservations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO appointments (id, organization_id, customer_id, staff_id, service_id, covers, starts_at, ends_at, status, booking_source, confirmation_sent_at, notes) VALUES
-  -- COMPLETED: Emily, Prix-Fixe, 2 covers — 3 days ago (has paid invoice)
+  -- COMPLETED: Emily, Prix-Fixe, 2 covers â€” 3 days ago (has paid invoice)
   ('00000000-0000-0000-0004-000000000001', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0003-000000000001', '00000000-0000-0000-0001-000000000002',
    '00000000-0000-0000-0002-000000000001', 2,
    '2026-04-08 19:00:00+00', '2026-04-08 21:00:00+00',
    'completed', 'opentable', '2026-04-06 10:00:00+00', 'Anniversary dinner'),
 
-  -- COMPLETED: Carlos, Seasonal Tasting, 4 covers — 11 days ago (invoice overdue)
+  -- COMPLETED: Carlos, Seasonal Tasting, 4 covers â€” 11 days ago (invoice overdue)
   ('00000000-0000-0000-0004-000000000002', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0003-000000000004', '00000000-0000-0000-0001-000000000003',
    '00000000-0000-0000-0002-000000000002', 4,
    '2026-03-31 19:00:00+00', '2026-03-31 22:00:00+00',
    'completed', 'manual', '2026-03-29 09:00:00+00', 'Group booking'),
 
-  -- COMPLETED: Jennifer, Private Dining, 6 covers — 2 days ago (invoice sent/pending)
+  -- COMPLETED: Jennifer, Private Dining, 6 covers â€” 2 days ago (invoice sent/pending)
   ('00000000-0000-0000-0004-000000000003', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0003-000000000005', '00000000-0000-0000-0001-000000000001',
    '00000000-0000-0000-0002-000000000005', 6,
@@ -133,7 +133,7 @@ INSERT INTO appointments (id, organization_id, customer_id, staff_id, service_id
    'no_show', 'manual', '2026-04-06 10:00:00+00', NULL)
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Appointment Events ───────────────────────────────────────────────────
+-- â”€â”€â”€ Appointment Events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO appointment_events (id, appointment_id, organization_id, event_type, from_status, to_status, notes) VALUES
   ('00000000-0000-0000-0006-000000000001', '00000000-0000-0000-0004-000000000001',
@@ -162,47 +162,47 @@ INSERT INTO appointment_events (id, appointment_id, organization_id, event_type,
    '00000000-0000-0000-0000-000000000001', 'invoice.generated', 'completed', 'completed', 'Invoice ET-2026-0004 generated')
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Invoices ─────────────────────────────────────────────────────────────
+-- â”€â”€â”€ Invoices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Prices: Prix-Fixe $95/person, Tasting $145/person, Private Dining $200/person
 -- Tax rate: 9%
 
 INSERT INTO invoices (id, organization_id, appointment_id, customer_id, invoice_number, currency, subtotal, tax_rate, tax_amount, discount_amount, total_amount, amount_paid, due_at, status, sent_at, paid_at) VALUES
-  -- ET-2026-0001: Emily, 2×$95 = $190 subtotal, $17.10 tax, $207.10 total — PAID
+  -- ET-2026-0001: Emily, 2Ã—$95 = $190 subtotal, $17.10 tax, $207.10 total â€” PAID
   ('00000000-0000-0000-0005-000000000001', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0004-000000000001', '00000000-0000-0000-0003-000000000001',
    'ET-2026-0001', 'USD', 190.00, 0.0900, 17.10, 0.00, 207.10, 207.10,
    '2026-04-22 23:59:59+00', 'paid',
    '2026-04-08 21:15:00+00', '2026-04-09 10:30:00+00'),
 
-  -- ET-2026-0002: Carlos, 4×$145 = $580 subtotal, $52.20 tax, $632.20 total — OVERDUE
+  -- ET-2026-0002: Carlos, 4Ã—$145 = $580 subtotal, $52.20 tax, $632.20 total â€” OVERDUE
   ('00000000-0000-0000-0005-000000000002', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0004-000000000002', '00000000-0000-0000-0003-000000000004',
    'ET-2026-0002', 'USD', 580.00, 0.0900, 52.20, 0.00, 632.20, 0.00,
    '2026-04-07 23:59:59+00', 'overdue',
    '2026-03-31 22:15:00+00', NULL),
 
-  -- ET-2026-0003: Jennifer, 6×$200 = $1200 subtotal, $108 tax, $1308 total — SENT/PENDING
+  -- ET-2026-0003: Jennifer, 6Ã—$200 = $1200 subtotal, $108 tax, $1308 total â€” SENT/PENDING
   ('00000000-0000-0000-0005-000000000003', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0004-000000000003', '00000000-0000-0000-0003-000000000005',
    'ET-2026-0003', 'USD', 1200.00, 0.0900, 108.00, 0.00, 1308.00, 0.00,
    '2026-04-23 23:59:59+00', 'sent',
    '2026-04-09 22:45:00+00', NULL),
 
-  -- ET-2026-0004: Michael, 2×$95 = $190 subtotal, $17.10 tax, $207.10 total — SENT (today)
+  -- ET-2026-0004: Michael, 2Ã—$95 = $190 subtotal, $17.10 tax, $207.10 total â€” SENT (today)
   ('00000000-0000-0000-0005-000000000004', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0004-000000000004', '00000000-0000-0000-0003-000000000002',
    'ET-2026-0004', 'USD', 190.00, 0.0900, 17.10, 0.00, 207.10, 0.00,
    '2026-04-25 23:59:59+00', 'sent',
    '2026-04-11 21:45:00+00', NULL),
 
-  -- ET-2026-0005: David, old invoice from March — OVERDUE (different org scenario)
+  -- ET-2026-0005: David, old invoice from March â€” OVERDUE (different org scenario)
   ('00000000-0000-0000-0005-000000000005', '00000000-0000-0000-0000-000000000001',
    NULL, '00000000-0000-0000-0003-000000000006',
    'ET-2026-0005', 'USD', 190.00, 0.0900, 17.10, 0.00, 207.10, 0.00,
    '2026-03-29 23:59:59+00', 'overdue',
    '2026-03-15 20:30:00+00', NULL),
 
-  -- ET-2026-0006: Aisha, manual follow-up invoice — PENDING
+  -- ET-2026-0006: Aisha, manual follow-up invoice â€” PENDING
   ('00000000-0000-0000-0005-000000000006', '00000000-0000-0000-0000-000000000001',
    NULL, '00000000-0000-0000-0003-000000000007',
    'ET-2026-0006', 'USD', 260.00, 0.0900, 23.40, 0.00, 283.40, 0.00,
@@ -210,41 +210,41 @@ INSERT INTO invoices (id, organization_id, appointment_id, customer_id, invoice_
    '2026-04-10 16:30:00+00', NULL)
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Invoice Line Items ───────────────────────────────────────────────────
+-- â”€â”€â”€ Invoice Line Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO invoice_items (id, invoice_id, organization_id, service_id, description, quantity, unit_price, amount) VALUES
-  -- Invoice 0001: Emily, Prix-Fixe × 2
+  -- Invoice 0001: Emily, Prix-Fixe Ã— 2
   ('00000000-0000-0000-0007-000000000001', '00000000-0000-0000-0005-000000000001',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000001',
-   'Prix-Fixe Dinner × 2 guests', 2, 95.00, 190.00),
+   'Prix-Fixe Dinner Ã— 2 guests', 2, 95.00, 190.00),
 
-  -- Invoice 0002: Carlos, Tasting Menu × 4
+  -- Invoice 0002: Carlos, Tasting Menu Ã— 4
   ('00000000-0000-0000-0007-000000000002', '00000000-0000-0000-0005-000000000002',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000002',
-   'Seasonal Tasting Menu × 4 guests', 4, 145.00, 580.00),
+   'Seasonal Tasting Menu Ã— 4 guests', 4, 145.00, 580.00),
 
-  -- Invoice 0003: Jennifer, Private Dining × 6
+  -- Invoice 0003: Jennifer, Private Dining Ã— 6
   ('00000000-0000-0000-0007-000000000003', '00000000-0000-0000-0005-000000000003',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000005',
-   'Private Dining Experience × 6 guests', 6, 200.00, 1200.00),
+   'Private Dining Experience Ã— 6 guests', 6, 200.00, 1200.00),
 
-  -- Invoice 0004: Michael, Prix-Fixe × 2
+  -- Invoice 0004: Michael, Prix-Fixe Ã— 2
   ('00000000-0000-0000-0007-000000000004', '00000000-0000-0000-0005-000000000004',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000001',
-   'Prix-Fixe Dinner × 2 guests', 2, 95.00, 190.00),
+   'Prix-Fixe Dinner Ã— 2 guests', 2, 95.00, 190.00),
 
-  -- Invoice 0005: David, Prix-Fixe × 2
+  -- Invoice 0005: David, Prix-Fixe Ã— 2
   ('00000000-0000-0000-0007-000000000005', '00000000-0000-0000-0005-000000000005',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000001',
-   'Prix-Fixe Dinner × 2 guests', 2, 95.00, 190.00),
+   'Prix-Fixe Dinner Ã— 2 guests', 2, 95.00, 190.00),
 
-  -- Invoice 0006: Aisha, Wine Pairing × 4
+  -- Invoice 0006: Aisha, Wine Pairing Ã— 4
   ('00000000-0000-0000-0007-000000000006', '00000000-0000-0000-0005-000000000006',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000003',
-   'Wine Pairing Experience × 4 guests', 4, 65.00, 260.00)
+   'Wine Pairing Experience Ã— 4 guests', 4, 65.00, 260.00)
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Finance Transactions (ledger) ───────────────────────────────────────
+-- â”€â”€â”€ Finance Transactions (ledger) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO finance_transactions (id, organization_id, invoice_id, type, category, amount, direction, occurred_at, payment_method, tax_relevant, writeoff_eligible, notes) VALUES
   -- Revenue: Emily's paid invoice
@@ -258,13 +258,13 @@ INSERT INTO finance_transactions (id, organization_id, invoice_id, type, categor
   ('00000000-0000-0000-0008-000000000002', '00000000-0000-0000-0000-000000000001',
    NULL, 'inventory_purchase', 'produce', 342.00, 'out',
    '2026-04-07 08:00:00+00', 'bank_transfer', TRUE, FALSE,
-   'Weekly fresh produce — Green City Market'),
+   'Weekly fresh produce â€” Green City Market'),
 
   -- Expense: wine inventory
   ('00000000-0000-0000-0008-000000000003', '00000000-0000-0000-0000-000000000001',
    NULL, 'inventory_purchase', 'beverage', 1280.00, 'out',
    '2026-04-07 09:00:00+00', 'bank_transfer', TRUE, FALSE,
-   'Wine restocking — Sommelier Select'),
+   'Wine restocking â€” Sommelier Select'),
 
   -- Fee: payment processing
   ('00000000-0000-0000-0008-000000000004', '00000000-0000-0000-0000-000000000001',
@@ -297,7 +297,7 @@ INSERT INTO finance_transactions (id, organization_id, invoice_id, type, categor
    'Table 3 dinner service')
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Integration Connectors (MCP bridge demo) ─────────────────────────────
+-- â”€â”€â”€ Integration Connectors (MCP bridge demo) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO integration_connectors (id, organization_id, provider, display_name, status, last_sync_at, last_error) VALUES
   ('00000000-0000-0000-0009-000000000001', '00000000-0000-0000-0000-000000000001',
@@ -310,7 +310,8 @@ INSERT INTO integration_connectors (id, organization_id, provider, display_name,
    'google_reviews','Google Reviews','error',     '2026-04-10 08:00:00+00', 'OAuth token expired. Re-authenticate to resume sync.')
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Feedback (Phase 3 demo — requires migration 004_feedback_domain.sql) ─
+-- â”€â”€â”€ Feedback (Phase 3 demo â€” requires migration 004_feedback_domain.sql) â”€
+-- To insert this block alone later: supabase/seed_feedback_addon.sql
 
 INSERT INTO feedback (
   id, organization_id, customer_id, appointment_id, source, guest_name_snapshot, score, comment,
@@ -318,14 +319,14 @@ INSERT INTO feedback (
   reply_draft, internal_note, manager_summary, analysis_json, analysis_source,
   external_review_id, external_source, received_at
 ) VALUES
-  -- Negative internal: Priya — allergy / safety (urgent)
+  -- Negative internal: Priya â€” allergy / safety (urgent)
   ('00000000-0000-0000-000a-000000000001', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0003-000000000003', '00000000-0000-0000-0004-000000000005',
    'internal', 'Priya Nair', 2,
-   'We had a wonderful tasting menu but I had a reaction — I mentioned my tree nut allergy and still found pistachio in the dessert.',
+   'We had a wonderful tasting menu but I had a reaction - I mentioned my tree nut allergy and still found pistachio in the dessert.',
    'negative', '["allergy_safety","food_quality"]'::jsonb, 5, TRUE, 'callback_needed', TRUE,
    NULL,
-   'Tree nut incident after allergy disclosed — kitchen/service handoff breakdown.',
+   'Tree nut incident after allergy disclosed - kitchen/service handoff breakdown.',
    'Priya Nair reported a tree nut allergy incident after dessert contained pistachio; urgency escalated for manager callback.',
    '{"churn_risk":"medium","recovery_action":{"type":"urgent_escalation","channel":"phone","priority":"urgent"}}'::jsonb,
    'rules_fallback', NULL, NULL, '2026-04-11 21:15:00+00'),
@@ -334,22 +335,22 @@ INSERT INTO feedback (
   ('00000000-0000-0000-000a-000000000002', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0003-000000000003', NULL,
    'google', 'Priya Nair', 1,
-   'Two stars — slow seating and cold bread.',
+   'Two stars â€” slow seating and cold bread.',
    'negative', '["service_speed","food_quality"]'::jsonb, 4, FALSE, 'callback_needed', TRUE,
-   'Thank you for taking the time to share this, Priya. I am sorry we missed the mark on pacing and bread service — that is not the Ember Table experience we strive for. I would welcome the chance to make this right personally; please reach out to our host stand.',
-   'Repeat Google complaint after internal allergy case — coordinate responses.',
+   'Thank you for taking the time to share this, Priya. I am sorry we missed the mark on pacing and bread service - that is not the Ember Table experience we strive for. I would welcome the chance to make this right personally; please reach out to our host stand.',
+   'Repeat Google complaint after internal allergy case â€” coordinate responses.',
    'Google review from Priya flags service speed and food temperature; public reply drafted.',
    '{"churn_risk":"high","recovery_action":{"type":"personal_call","channel":"phone","priority":"high"}}'::jsonb,
    'rules_fallback', 'rev-google-priya-001', 'google', '2026-04-12 14:00:00+00'),
 
-  -- Happy VIP internal (Jennifer — high LTV)
+  -- Happy VIP internal (Jennifer â€” high LTV)
   ('00000000-0000-0000-000a-000000000003', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0003-000000000005', '00000000-0000-0000-0004-000000000003',
    'internal', 'Jennifer Kim', 5,
-   'Corporate dinner was flawless — thank the team for the wine pairings.',
+   'Corporate dinner was flawless â€” thank the team for the wine pairings.',
    'positive', '["food_quality","ambiance"]'::jsonb, 1, FALSE, 'thankyou_sent', FALSE,
    NULL,
-   'VIP corporate host — reinforce relationship.',
+   'VIP corporate host â€” reinforce relationship.',
    'Jennifer Kim gave 5 stars after private dining; thank-you path selected.',
    '{"churn_risk":"low","recovery_action":{"type":"thank_you_email","channel":"email","priority":"low"}}'::jsonb,
    'rules_fallback', NULL, NULL, '2026-04-10 11:00:00+00'),
@@ -360,8 +361,8 @@ INSERT INTO feedback (
    'yelp', 'David Chen', 3,
    'Food was good but we waited 40 minutes past our reservation time.',
    'neutral', '["wait_time","food_quality"]'::jsonb, 2, FALSE, 'none', FALSE,
-   'David, thank you for your honest feedback — I am sorry for the long wait before your table was ready. We are tightening our pacing on busy nights and would love another chance to show you a smoother evening.',
-   'At-risk guest — wait time topic.',
+   'David, thank you for your honest feedback â€” I am sorry for the long wait before your table was ready. We are tightening our pacing on busy nights and would love another chance to show you a smoother evening.',
+   'At-risk guest - wait time topic.',
    'David Chen left 3 stars on Yelp citing wait time; neutral sentiment.',
    '{"churn_risk":"high","recovery_action":{"type":"comp_offer","channel":"email","priority":"normal"}}'::jsonb,
    'rules_fallback', 'rev-yelp-david-001', 'yelp', '2026-04-08 16:30:00+00')
@@ -382,11 +383,11 @@ INSERT INTO ai_actions (
 ) VALUES
   ('00000000-0000-0000-000c-000000000001', '00000000-0000-0000-0000-000000000001',
    'feedback', '00000000-0000-0000-000a-000000000001', 'feedback.received', 'customer_service.analyze_review',
-   'Priya Nair · score 2 · internal', '{"sentiment":"negative","urgency":5,"safety_flag":true}'::jsonb, 'executed', '2026-04-11 21:16:00+00'),
+   'Priya Nair - score 2 - internal', '{"sentiment":"negative","urgency":5,"safety_flag":true}'::jsonb, 'executed', '2026-04-11 21:16:00+00'),
   ('00000000-0000-0000-000c-000000000002', '00000000-0000-0000-0000-000000000001',
    'feedback', '00000000-0000-0000-000a-000000000002', 'feedback.received', 'customer_service.analyze_review',
-   'Priya Nair · score 1 · google', '{"sentiment":"negative","urgency":4}'::jsonb, 'executed', '2026-04-12 14:01:00+00'),
+   'Priya Nair - score 1 - google', '{"sentiment":"negative","urgency":4}'::jsonb, 'executed', '2026-04-12 14:01:00+00'),
   ('00000000-0000-0000-000c-000000000003', '00000000-0000-0000-0000-000000000001',
    'feedback', '00000000-0000-0000-000a-000000000003', 'feedback.received', 'customer_service.analyze_review',
-   'Jennifer Kim · score 5 · internal', '{"sentiment":"positive","urgency":1}'::jsonb, 'executed', '2026-04-10 11:02:00+00')
+   'Jennifer Kim - score 5 - internal', '{"sentiment":"positive","urgency":1}'::jsonb, 'executed', '2026-04-10 11:02:00+00')
 ON CONFLICT (id) DO NOTHING;

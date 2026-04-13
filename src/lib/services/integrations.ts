@@ -21,7 +21,7 @@ import {
 
 export { MUTATING_INTEGRATION_EVENTS, normalizeDomainEvent } from "@/lib/integrations/webhook-domain"
 
-// ─── List connectors ──────────────────────────────────────────────────────
+// â”€â”€â”€ List connectors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function listConnectors(
   client: SupabaseClient,
@@ -37,7 +37,7 @@ export async function listConnectors(
   return data ?? []
 }
 
-// ─── Get connector by provider ────────────────────────────────────────────
+// â”€â”€â”€ Get connector by provider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getConnectorByProvider(
   client: SupabaseClient,
@@ -55,7 +55,7 @@ export async function getConnectorByProvider(
   return data
 }
 
-// ─── Ingest webhook payload (MCP bridge) ─────────────────────────────────
+// â”€â”€â”€ Ingest webhook payload (MCP bridge) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface IngestWebhookResult {
   syncEventId:            string
@@ -129,8 +129,81 @@ export async function ingestWebhookPayload(
     .single()
 
   if (insertErr) {
-    // Unique constraint violation → duplicate event, skip silently
+    // Unique constraint violation â†’ duplicate event, skip silently
     if (insertErr.code === "23505") {
+      if (payload.externalEventId && connector) {
+        const { data: existing } = await client
+          .from("integration_sync_events")
+          .select("id, processing_status")
+          .eq("connector_id", connector.id)
+          .eq("external_event_id", payload.externalEventId)
+          .maybeSingle()
+
+        if (existing && (existing as { processing_status: string }).processing_status === "failed") {
+          const existingId = (existing as { id: string }).id
+          const tRetry = Date.now()
+          try {
+            await dispatchWebhookCommand(
+              client,
+              organizationId,
+              provider,
+              normalizedEvent,
+              payload,
+              existingId
+            )
+            await client
+              .from("integration_sync_events")
+              .update({
+                processing_status: "processed",
+                processed_at:        new Date().toISOString(),
+                error_message:       null,
+              })
+              .eq("id", existingId)
+            await client
+              .from("integration_connectors")
+              .update({
+                last_sync_at: new Date().toISOString(),
+                status:       "connected",
+                last_error:   null,
+              })
+              .eq("id", connector.id)
+            logWebhookProcessed({
+              provider,
+              normalizedEvent,
+              syncEventId: existingId,
+              skipped:     false,
+              durationMs:  Date.now() - tRetry,
+            })
+            return {
+              syncEventId:            existingId,
+              processing_status:      "processed",
+              normalized_domain_event: normalizedEvent,
+              skipped:                false,
+            }
+          } catch (retryErr) {
+            const msg =
+              retryErr instanceof Error ? retryErr.message : "Webhook dispatch failed on retry"
+            await client
+              .from("integration_sync_events")
+              .update({
+                processing_status: "failed",
+                processed_at:      new Date().toISOString(),
+                error_message:     msg.slice(0, 4000),
+              })
+              .eq("id", existingId)
+            await client
+              .from("integration_connectors")
+              .update({
+                status:     "error",
+                last_error: msg.slice(0, 2000),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", connector.id)
+            throw retryErr
+          }
+        }
+      }
+
       return {
         syncEventId:            "",
         processing_status:      "skipped",
@@ -198,7 +271,7 @@ export async function ingestWebhookPayload(
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function dispatchWebhookCommand(
   client: SupabaseClient,
@@ -304,7 +377,7 @@ async function dispatchWebhookCommand(
       null
     const externalSource = getString(data, "externalSource", "external_source") ?? provider
 
-    const { feedbackId, created } = await ingestFeedbackRow(client, {
+    const { feedbackId } = await ingestFeedbackRow(client, {
       organizationId,
       customerId,
       appointmentId:            getString(data, "appointmentId", "appointment_id") ?? null,
@@ -317,15 +390,13 @@ async function dispatchWebhookCommand(
       externalSource,
     })
 
-    if (created) {
-      await analyzeAndPersistFeedback(client, organizationId, feedbackId, {
-        guestName,
-        score,
-        comment,
-        source,
-        customerId,
-      })
-    }
+    await analyzeAndPersistFeedback(client, organizationId, feedbackId, {
+      guestName,
+      score,
+      comment,
+      source,
+      customerId,
+    }, { skipIfAlreadyAnalyzed: true })
   }
 }
 
@@ -342,4 +413,3 @@ function providerDisplayName(provider: string): string {
   }
   return names[provider] ?? provider
 }
-

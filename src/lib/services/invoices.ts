@@ -9,7 +9,7 @@ import { createRevenueTransaction } from "@/lib/services/finance"
 import { DOMAIN_EVENT } from "@/lib/constants/enums"
 import type { InvoiceStatus } from "@/lib/constants/enums"
 
-// ─── Types for internal use ───────────────────────────────────────────────
+// â”€â”€â”€ Types for internal use â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface AppointmentForInvoice {
   id:              string
@@ -20,7 +20,7 @@ interface AppointmentForInvoice {
   notes:           string | null
 }
 
-// ─── Generate invoice from completed appointment ──────────────────────────
+// â”€â”€â”€ Generate invoice from completed appointment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Creates an invoice deterministically from a completed appointment.
@@ -41,10 +41,10 @@ export async function generateInvoiceFromAppointment(
     .single()
 
   if (svcErr || !service) {
-    throw new Error(svcErr?.message ?? "Service not found — cannot price invoice")
+    throw new Error(svcErr?.message ?? "Service not found â€” cannot price invoice")
   }
 
-  // 2. Build line items from catalog price × covers
+  // 2. Build line items from catalog price Ã— covers
   const lines = buildServiceLines(service, appt.covers)
 
   // 3. Compute totals deterministically
@@ -119,7 +119,7 @@ export async function generateInvoiceFromAppointment(
   return invoice.id
 }
 
-// ─── Send invoice ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Send invoice â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function sendInvoice(
   client: SupabaseClient,
@@ -168,7 +168,7 @@ export async function sendInvoice(
   }
 }
 
-// ─── Mark invoice paid ────────────────────────────────────────────────────
+// â”€â”€â”€ Mark invoice paid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface MarkPaidOptions {
   paymentMethod?: string
@@ -220,6 +220,7 @@ export async function markInvoicePaid(
 
   // Create idempotent revenue transaction (unique index guards against duplication)
   await createRevenueTransaction(client, {
+    organizationId,
     invoiceId,
     amount:        amountPaid,
     paymentMethod: opts.paymentMethod,
@@ -239,7 +240,7 @@ export async function markInvoicePaid(
   }
 }
 
-// ─── List invoices ────────────────────────────────────────────────────────
+// â”€â”€â”€ List invoices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function listInvoices(
   client: SupabaseClient,
@@ -272,7 +273,7 @@ export async function listInvoices(
   return data ?? []
 }
 
-// ─── Get invoice detail (with line items) ────────────────────────────────
+// â”€â”€â”€ Get invoice detail (with line items) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getInvoiceDetail(
   client: SupabaseClient,
@@ -299,11 +300,11 @@ export async function getInvoiceDetail(
   return { ...invoice, invoice_items: items ?? [] }
 }
 
-// ─── Recompute overdue status (called by cron or scheduled job) ───────────
+// â”€â”€â”€ Recompute overdue status (called by cron or scheduled job) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * When an appointment is already completed, ensure a ledger invoice exists
- * (idempotent — returns existing invoice if already generated).
+ * (idempotent â€” returns existing invoice if already generated).
  */
 export async function ensureInvoiceForCompletedAppointment(
   client: SupabaseClient,
@@ -352,7 +353,7 @@ export async function ensureInvoiceForCompletedAppointment(
     return { invoiceId, created: true }
   } catch (err) {
     // A concurrent request may have inserted the invoice between our read and
-    // insert — re-fetch to handle the unique-violation case.
+    // insert â€” re-fetch to handle the unique-violation case.
     const { data: concurrentExisting, error: concurrentErr } = await client
       .from("invoices")
       .select("id")
@@ -419,7 +420,7 @@ export async function recordInvoiceReminderSent(
     }
 
     if (!updatedInv) {
-      // 0 rows matched — another concurrent update won the race; retry.
+      // Another concurrent update won the race â€” retry.
       continue
     }
 

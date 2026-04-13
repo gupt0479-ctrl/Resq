@@ -64,6 +64,18 @@ async function main() {
 
   const q5 = await client.from("ai_summaries").select("id").eq("organization_id", org).limit(1)
   console.log("ai_summaries:", q5.error?.message ?? "ok", "rows", q5.data?.length ?? 0)
+
+  const q6 = await client.from("feedback").select("*", { count: "exact", head: true })
+  const q7 = await client.from("feedback").select("*", { count: "exact", head: true }).eq("organization_id", org)
+  console.log(
+    "feedback rows (all orgs / this DEMO_ORG_ID):",
+    q6.error?.message ?? "ok",
+    q6.count ?? 0,
+    "/",
+    q7.error?.message ?? "ok",
+    q7.count ?? 0
+  )
+  console.log("Supabase host from .env.local:", new URL(url).hostname)
 }
 
 async function columns() {

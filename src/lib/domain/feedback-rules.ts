@@ -59,11 +59,20 @@ export function parseAndApplyReviewBusinessRules(
   }
 
   const src = ctx.source.toLowerCase()
+  if (ctx.score >= 5 && src === "internal" && recovery_action.type === "none") {
+    recovery_action = {
+      ...recovery_action,
+      type:          "thank_you_email",
+      channel:       recovery_action.channel === "none" ? "email" : recovery_action.channel,
+      priority:      "normal",
+      message_draft: base.manager_summary.slice(0, 2000),
+    }
+  }
   let reply_draft =
     base.reply_draft === undefined || base.reply_draft === null ? null : base.reply_draft
   if (src === "google" || src === "yelp") {
     if (!reply_draft || !reply_draft.trim()) {
-      reply_draft = `Thank you for your review. We are sorry your experience missed the mark and we would appreciate the chance to follow up — please contact Ember Table directly so we can make this right.`
+      reply_draft = `Thank you for your review. We are sorry your experience missed the mark and we would appreciate the chance to follow up - please contact Ember Table directly so we can make this right.`
     }
   }
 
@@ -87,7 +96,7 @@ export function parseAndApplyReviewBusinessRules(
   })
 }
 
-/** When Anthropic is unavailable or JSON is invalid — minimal deterministic classification. */
+/** When Anthropic is unavailable or JSON is invalid â€” minimal deterministic classification. */
 export function rulesOnlyReviewAnalysis(ctx: {
   guestName:    string
   score:        number
@@ -134,7 +143,7 @@ export function rulesOnlyReviewAnalysis(ctx: {
 
   const googleYelp = ctx.source === "google" || ctx.source === "yelp"
   const reply_draft = googleYelp
-    ? "Thank you for your feedback — we are reviewing your experience and will respond personally shortly."
+    ? "Thank you for your feedback - we are reviewing your experience and will respond personally shortly."
     : null
 
   return ReviewAnalysisSchema.parse({
@@ -165,6 +174,6 @@ export function rulesOnlyReviewAnalysis(ctx: {
       ctx.score >= 5 && ctx.source === "internal" ? "thankyou_sent" :
       ctx.score <= 2 ? "callback_needed" :
       "none",
-    manager_summary: `${ctx.guestName}: ${ctx.score}/5 from ${ctx.source}${safety ? " — safety follow-up required" : ""}.`,
+    manager_summary: `${ctx.guestName}: ${ctx.score}/5 from ${ctx.source}${safety ? " - safety follow-up required" : ""}.`,
   })
 }

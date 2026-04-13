@@ -18,6 +18,10 @@ export const FeedbackFlagBodySchema = z.object({
   flagged: z.boolean(),
 })
 
+export const FeedbackFollowUpDecisionBodySchema = z.object({
+  decision: z.enum(["approve", "dismiss"]),
+})
+
 export const FeedbackFollowUpBodySchema = z.object({
   actionType:    z.string().min(1).max(120),
   channel:       z.enum(["email", "sms", "phone", "none"]).default("email"),

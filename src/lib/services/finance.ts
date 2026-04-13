@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { FinanceSummaryResponse } from "@/lib/schemas/finance"
 
-// ─── Create revenue transaction (idempotent) ─────────────────────────────
+// â”€â”€â”€ Create revenue transaction (idempotent) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface CreateRevenueTransactionInput {
+  organizationId: string
   invoiceId:      string
   amount:         number
   paymentMethod?: string
@@ -17,6 +18,7 @@ export async function createRevenueTransaction(
   const { count } = await client
     .from("finance_transactions")
     .select("*", { count: "exact", head: true })
+    .eq("organization_id", input.organizationId)
     .eq("invoice_id",      input.invoiceId)
     .eq("type",            "revenue")
     .eq("direction",       "in")
@@ -24,6 +26,7 @@ export async function createRevenueTransaction(
   if (count && count > 0) return
 
   const { error } = await client.from("finance_transactions").insert({
+    organization_id: input.organizationId,
     invoice_id:      input.invoiceId,
     type:            "revenue",
     category:        "dining_revenue",
@@ -40,7 +43,7 @@ export async function createRevenueTransaction(
   }
 }
 
-// ─── Create arbitrary transaction ────────────────────────────────────────
+// â”€â”€â”€ Create arbitrary transaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface CreateTransactionInput {
   organizationId:  string
@@ -86,7 +89,7 @@ export async function createTransaction(
   return data.id
 }
 
-// ─── List transactions ────────────────────────────────────────────────────
+// â”€â”€â”€ List transactions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function listTransactions(
   client: SupabaseClient,
@@ -117,7 +120,7 @@ export async function listTransactions(
   const { data, error } = await query
   if (!error && data && data.length > 0) return data
 
-  // Ledger is empty — synthesize from shipments (expenses) + reservations (revenue)
+  // Ledger is empty â€” synthesize from shipments (expenses) + reservations (revenue)
   return buildSyntheticTransactions(client, opts.limit ?? 20)
 }
 
@@ -195,7 +198,7 @@ async function buildSyntheticTransactions(client: SupabaseClient, limit: number)
       payment_method: null,
       tax_relevant: true,
       writeoff_eligible: false,
-      notes: `Reservation · ${r.covers} covers`,
+      notes: `Reservation Â· ${r.covers} covers`,
       external_ref: null,
       created_at: `${r.date}T19:00:00.000Z`,
     })
@@ -206,7 +209,7 @@ async function buildSyntheticTransactions(client: SupabaseClient, limit: number)
   return rows.slice(0, limit)
 }
 
-// ─── Finance summary ──────────────────────────────────────────────────────
+// â”€â”€â”€ Finance summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getFinanceSummary(
   client: SupabaseClient,
@@ -254,7 +257,7 @@ export async function getFinanceSummary(
   }
 
   if (!usedLedgerForWeekly) {
-    // ── Revenue from reservations × menu prices (legacy / non-ledger demos) ─
+    // â”€â”€ Revenue from reservations Ã— menu prices (legacy / non-ledger demos) â”€
     const [reservationsRes, menuItemsRes] = await Promise.all([
       client
         .from("reservations")
@@ -275,7 +278,7 @@ export async function getFinanceSummary(
       if (r.date === todayStr) revenueToday += total
     }
 
-    // ── Expenses from shipments (inventory purchases last 7 days) ───────────
+    // â”€â”€ Expenses from shipments (inventory purchases last 7 days) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const { data: shipments } = await client
       .from("shipments")
       .select("total_cost, ordered_at, status")
@@ -288,7 +291,7 @@ export async function getFinanceSummary(
     )
   }
 
-  // ── Receivables from invoices (graceful fallback if table is empty/missing) ─
+  // â”€â”€ Receivables from invoices (graceful fallback if table is empty/missing) â”€
   let pendingReceivables = 0
   let pendingInvoiceCount = 0
   let overdueReceivables = 0
@@ -329,7 +332,7 @@ export async function getFinanceSummary(
       aging = computeAging(openRes.data ?? [], now)
     }
   } catch {
-    // invoices table not seeded — receivables stay at 0
+    // invoices table not seeded â€” receivables stay at 0
   }
 
   return {
@@ -346,7 +349,7 @@ export async function getFinanceSummary(
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function sumRemaining(
   rows: Array<{ total_amount: number; amount_paid: number }> | null

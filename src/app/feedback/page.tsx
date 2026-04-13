@@ -91,7 +91,7 @@ export default async function FeedbackPage() {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">
         <p className="font-semibold text-amber-800">
-          Supabase not configured — connect a project to see feedback data.
+          Supabase not configured - connect a project to see feedback data.
         </p>
       </div>
     )
@@ -117,12 +117,12 @@ export default async function FeedbackPage() {
     )
   }
 
-  const { stats, flagged, pendingActions, allFeedback } = pageData
+  const { stats, flagged, pendingActions, allFeedback, emptyContext, emptyDiagnostics } = pageData
 
   const statCards = [
     {
       label: "Avg rating this week",
-      value: stats.avgRatingWeek != null ? `${stats.avgRatingWeek} ★` : "—",
+      value: stats.avgRatingWeek != null ? String(stats.avgRatingWeek) + " / 5" : "--",
       color: "text-amber-600",
       bg: "bg-amber-50 border-amber-100",
     },
@@ -133,7 +133,7 @@ export default async function FeedbackPage() {
       bg: "bg-red-50 border-red-100",
     },
     {
-      label: "Pending approvals",
+      label: "Pending decisions",
       value: String(stats.pendingApprovals),
       color: "text-orange-600",
       bg: "bg-orange-50 border-orange-100",
@@ -151,9 +151,104 @@ export default async function FeedbackPage() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Customer Service</h1>
         <p className="text-xs text-muted-foreground">
-          AI-analyzed guest reviews · recovery drafts · follow-up tracking
+          AI-analyzed guest reviews, recovery drafts, and follow-up tracking
+        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Workflow approvals in this demo update OpsPilot state only. They do not send emails or post public replies automatically.
         </p>
       </div>
+
+      {emptyContext ? (
+        <div
+          className={`rounded-xl border p-4 text-sm ${
+            emptyContext.kind === "no_feedback_rows"
+              ? "border-amber-200 bg-amber-50 text-amber-950"
+              : "border-orange-200 bg-orange-50 text-orange-950"
+          }`}
+        >
+          <p className="font-semibold">
+            {emptyContext.kind === "no_feedback_rows"
+              ? "No feedback rows in Supabase yet"
+              : "No feedback for this organization ID"}
+          </p>
+          {emptyContext.kind === "no_feedback_rows" ? (
+            <p className="mt-2 text-xs leading-relaxed">
+              The linked database has no rows in the <code className="rounded bg-white/60 px-1">feedback</code> table.
+              Apply migration{" "}
+              <code className="rounded bg-white/60 px-1">supabase/migrations/004_feedback_domain.sql</code>, then either
+              run the full <code className="rounded bg-white/60 px-1">supabase/seed.sql</code> or, if the rest of the demo
+              data is already there, run only{" "}
+              <code className="rounded bg-white/60 px-1">supabase/seed_feedback_addon.sql</code> in the SQL editor. After
+              rows exist, reload this page.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs leading-relaxed">
+              Feedback exists for another <code className="rounded bg-white/60 px-1">organization_id</code>. Set{" "}
+              <code className="rounded bg-white/60 px-1">DEMO_ORG_ID</code> in{" "}
+              <code className="rounded bg-white/60 px-1">.env.local</code> to match your seed (default Ember Table org is{" "}
+              <code className="rounded bg-white/60 px-1">00000000-0000-0000-0000-000000000001</code>), then restart the
+              dev server.
+            </p>
+          )}
+          {emptyDiagnostics ? (
+            <div className="mt-3 rounded-md border border-black/10 bg-white/50 p-3 text-[11px] leading-relaxed">
+              <p className="font-semibold text-foreground">What this app sees (same keys as the server)</p>
+              <p className="mt-1 font-mono text-muted-foreground">
+                Supabase host: <span className="text-foreground">{emptyDiagnostics.supabaseHost}</span>
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Row counts - organizations:{" "}
+                <span className="font-mono text-foreground">{emptyDiagnostics.organizationsCount ?? "--"}</span>
+                {", customers (this org): "}
+                <span className="font-mono text-foreground">{emptyDiagnostics.customersForOrgCount ?? "--"}</span>
+                {", appointments (this org): "}
+                <span className="font-mono text-foreground">{emptyDiagnostics.appointmentsForOrgCount ?? "--"}</span>
+                {", feedback (all orgs): "}
+                <span className="font-mono text-foreground">{emptyDiagnostics.feedbackGlobalCount ?? "--"}</span>
+              </p>
+              <p className="mt-2 text-muted-foreground">
+                In the Supabase dashboard, open <strong>Settings &gt; API</strong> and confirm the <strong>Project URL</strong>{" "}
+                hostname matches the host above. If you ran SQL on a different project, the editor would succeed while
+                this app still shows zeros.
+              </p>
+              {(emptyDiagnostics.organizationsCount ?? 0) === 0 ? (
+                <p className="mt-2 text-muted-foreground">
+                  Organizations count is zero here - either the linked project is empty, or the URL in{" "}
+                  <code className="rounded bg-white/60 px-1">.env.local</code> does not match the project where you ran{" "}
+                  <code className="rounded bg-white/60 px-1">seed.sql</code>.
+                </p>
+              ) : null}
+              {(emptyDiagnostics.customersForOrgCount ?? 0) > 0 &&
+              (emptyDiagnostics.appointmentsForOrgCount ?? 0) === 0 &&
+              (emptyDiagnostics.feedbackGlobalCount ?? 0) === 0 ? (
+                <p className="mt-2 text-muted-foreground">
+                  You have customers but no appointments for this org. The demo <code className="rounded bg-white/60 px-1">INSERT INTO feedback</code>{" "}
+                  rows reference <code className="rounded bg-white/60 px-1">appointments</code>. Re-run the full{" "}
+                  <code className="rounded bg-white/60 px-1">supabase/seed.sql</code> from the top (after{" "}
+                  <code className="rounded bg-white/60 px-1">0001_core_ledger.sql</code>), not only the feedback section.
+                </p>
+              ) : null}
+              {(emptyDiagnostics.customersForOrgCount ?? 0) > 0 &&
+              (emptyDiagnostics.appointmentsForOrgCount ?? 0) > 0 &&
+              (emptyDiagnostics.feedbackGlobalCount ?? 0) === 0 ? (
+                <p className="mt-2 text-muted-foreground">
+                  Core tables are seeded but <code className="rounded bg-white/60 px-1">feedback</code> really is empty
+                  in Postgres (the SQL editor and this app use the same project when the host matches). The demo feedback
+                  block may never have run, or a reset script dropped those rows. In the SQL editor, run the file{" "}
+                  <code className="rounded bg-white/60 px-1">supabase/seed_feedback_addon.sql</code> from the repo, then
+                  run <code className="rounded bg-white/60 px-1">select count(*) from feedback;</code> again - you
+                  should see <strong>4</strong>. Reload this page.
+                </p>
+              ) : null}
+              {emptyDiagnostics.snapshotErrors.length > 0 ? (
+                <p className="mt-2 font-mono text-destructive text-[10px]">
+                  {emptyDiagnostics.snapshotErrors.join(" | ")}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {statCards.map(({ label, value, color, bg }) => (
@@ -167,7 +262,7 @@ export default async function FeedbackPage() {
       <Card>
         <CardHeader className="border-b border-border pb-3 pt-4">
           <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Flagged Reviews — Immediate Attention
+            Flagged Reviews - Immediate Attention
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 p-4">
@@ -182,7 +277,7 @@ export default async function FeedbackPage() {
                 {review.safetyFlag ? (
                   <div className="flex items-center gap-2 bg-red-600 px-4 py-1.5 text-xs font-semibold text-white">
                     <AlertTriangle className="h-3.5 w-3.5" />
-                    Safety flag — immediate attention required
+                    Safety flag - immediate attention required
                   </div>
                 ) : null}
                 <div className="p-4">
@@ -214,16 +309,30 @@ export default async function FeedbackPage() {
 
                   <div className="mt-3 rounded-lg border border-border bg-card p-3">
                     <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      AI-drafted reply
+                      {review.draftTitle}
                     </p>
                     <p className="text-xs text-foreground leading-relaxed">{review.replyDraft}</p>
                   </div>
-
                   <div className="mt-3">
-                    <ReviewActions approveLabel={review.approveLabel} />
+                    {review.canApproveReply ? (
+                      <>
+                        <ReviewActions feedbackId={review.id} approveLabel={review.approveLabel} />
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          Approving marks the draft reviewed inside OpsPilot. Posting still happens outside the app.
+                        </p>
+                      </>
+                    ) : review.pendingActionId ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        This review has a manager follow-up plan below. Approve or dismiss that plan in Pending Manager Decisions.
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">
+                        This card is advisory only in the current demo workflow.
+                      </p>
+                    )}
+                  </div>
                   </div>
                 </div>
-              </div>
             ))
           )}
         </CardContent>
@@ -232,7 +341,7 @@ export default async function FeedbackPage() {
       <Card>
         <CardHeader className="border-b border-border pb-3 pt-4">
           <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Pending Approvals
+            Pending Manager Decisions
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 p-4">
@@ -253,7 +362,7 @@ export default async function FeedbackPage() {
                   </p>
                 ) : null}
                 <div className="mt-3">
-                  <DismissActions approveLabel="Approve & Send" />
+                  <DismissActions followUpActionId={item.id} approveLabel="Approve Plan" />
                 </div>
               </div>
             ))
@@ -264,7 +373,7 @@ export default async function FeedbackPage() {
       <Card>
         <CardHeader className="border-b border-border pb-3 pt-4">
           <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            All Feedback — {allFeedback.length} reviews
+            All Feedback - {allFeedback.length} reviews
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">

@@ -1,6 +1,6 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { ReviewAnalysis } from "@/lib/schemas/feedback-ai"
+import { ReviewAnalysisSchema, type ReviewAnalysis } from "@/lib/schemas/feedback-ai"
 import {
   parseAndApplyReviewBusinessRules,
   rulesOnlyReviewAnalysis,
@@ -88,12 +88,40 @@ export async function ingestFeedbackRow(
     if (existing) return { feedbackId: existing, created: false }
   }
 
+  const customerId = input.customerId ?? null
+  const appointmentId = input.appointmentId ?? null
+
+  if (customerId) {
+    const { data: custRow, error: custErr } = await client
+      .from("customers")
+      .select("id")
+      .eq("id", customerId)
+      .eq("organization_id", input.organizationId)
+      .maybeSingle()
+    if (custErr) throw new Error(custErr.message)
+    if (!custRow) {
+      throw new Error("customer_id does not belong to this organization")
+    }
+  }
+  if (appointmentId) {
+    const { data: apptRow, error: apptErr } = await client
+      .from("appointments")
+      .select("id")
+      .eq("id", appointmentId)
+      .eq("organization_id", input.organizationId)
+      .maybeSingle()
+    if (apptErr) throw new Error(apptErr.message)
+    if (!apptRow) {
+      throw new Error("appointment_id does not belong to this organization")
+    }
+  }
+
   const { data, error } = await client
     .from("feedback")
     .insert({
       organization_id:            input.organizationId,
-      customer_id:                input.customerId ?? null,
-      appointment_id:             input.appointmentId ?? null,
+      customer_id:                customerId,
+      appointment_id:             appointmentId,
       integration_sync_event_id:  input.integrationSyncEventId ?? null,
       source:                       input.source,
       guest_name_snapshot:          input.guestName,
@@ -155,13 +183,25 @@ async function maybeInsertFollowUp(
   const t = analysis.recovery_action.type
   if (t === "none" || t === "thank_you_email") return
 
+  const { data: existingRows, error: existingErr } = await client
+    .from("follow_up_actions")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("feedback_id", feedbackId)
+    .eq("action_type", t)
+    .order("created_at", { ascending: false })
+    .limit(1)
+
+  if (existingErr) throw new Error(existingErr.message)
+  if ((existingRows ?? []).length > 0) return
+
   const { error } = await client.from("follow_up_actions").insert({
     organization_id: organizationId,
     feedback_id:     feedbackId,
-    action_type:       t,
-    status:            "pending",
-    channel:           analysis.recovery_action.channel,
-    priority:          analysis.recovery_action.priority,
+    action_type:     t,
+    status:          "pending",
+    channel:         analysis.recovery_action.channel,
+    priority:        analysis.recovery_action.priority,
     message_draft:
       analysis.recovery_action.message_draft ??
       analysis.recovery_action.subject ??
@@ -186,6 +226,72 @@ export async function patchCustomerRiskOnly(
   if (error) throw new Error(error.message)
 }
 
+async function readStoredAnalysis(
+  client: SupabaseClient,
+  organizationId: string,
+  feedbackId: string
+): Promise<{
+  analysis: ReviewAnalysis
+  analysisSource: "model" | "rules_fallback" | "invalid_model"
+} | null> {
+  const { data, error } = await client
+    .from("feedback")
+    .select("analysis_source, analysis_json")
+    .eq("id", feedbackId)
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error("Feedback not found")
+
+  const row = data as {
+    analysis_source?: string | null
+    analysis_json?: unknown
+  }
+  if (!row.analysis_source || row.analysis_source === "none") return null
+
+  const parsed = ReviewAnalysisSchema.safeParse(row.analysis_json)
+  if (!parsed.success) return null
+
+  const analysisSource =
+    row.analysis_source === "model"
+      ? "model"
+      : row.analysis_source === "invalid_model"
+        ? "invalid_model"
+        : "rules_fallback"
+
+  return {
+    analysis: parsed.data,
+    analysisSource,
+  }
+}
+
+async function readCurrentFeedbackState(
+  client: SupabaseClient,
+  organizationId: string,
+  feedbackId: string
+): Promise<{ followUpStatus: string; flagged: boolean }> {
+  const { data, error } = await client
+    .from("feedback")
+    .select("follow_up_status, flagged")
+    .eq("id", feedbackId)
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error("Feedback not found")
+
+  const row = data as {
+    follow_up_status?: string | null
+    flagged?: boolean | null
+  }
+
+  return {
+    followUpStatus: row.follow_up_status ?? "none",
+    flagged: Boolean(row.flagged),
+  }
+}
+
 /**
  * Runs model (if key present) + deterministic rules, persists analysis, ai_action, optional follow_up.
  */
@@ -203,27 +309,28 @@ export async function analyzeAndPersistFeedback(
   opts?: { skipIfAlreadyAnalyzed?: boolean }
 ) {
   const t0 = Date.now()
-  if (opts?.skipIfAlreadyAnalyzed) {
-    const { data: row } = await client
-      .from("feedback")
-      .select("analysis_source")
-      .eq("id", feedbackId)
-      .eq("organization_id", organizationId)
-      .maybeSingle()
-    if (row && (row as { analysis_source?: string }).analysis_source && (row as { analysis_source: string }).analysis_source !== "none") {
-      return
-    }
-  }
 
   let guestHistory: GuestHistoryInput = null
   if (ctx.customerId) {
     guestHistory = await buildGuestHistory(client, organizationId, ctx.customerId)
   }
 
+  let stored = null as {
+    analysis: ReviewAnalysis
+    analysisSource: "model" | "rules_fallback" | "invalid_model"
+  } | null
+
+  if (opts?.skipIfAlreadyAnalyzed) {
+    stored = await readStoredAnalysis(client, organizationId, feedbackId)
+  }
+
   let analysis: ReviewAnalysis
   let analysisSource: "model" | "rules_fallback" | "invalid_model" = "rules_fallback"
 
-  if (process.env.ANTHROPIC_API_KEY) {
+  if (stored) {
+    analysis = stored.analysis
+    analysisSource = stored.analysisSource
+  } else if (process.env.ANTHROPIC_API_KEY) {
     try {
       const analyzeReview = await importAnalyzeReview()
       const raw = await analyzeReview({
@@ -271,6 +378,18 @@ export async function analyzeAndPersistFeedback(
   }
 
   const flagged = analysis.safety_flag || analysis.urgency >= 4 || analysis.sentiment === "negative"
+  const currentState = await readCurrentFeedbackState(client, organizationId, feedbackId)
+
+  let persistedFollowUpStatus = analysis.follow_up_status
+  let persistedFlagged = flagged
+
+  if (
+    currentState.followUpStatus === "resolved" ||
+    currentState.followUpStatus === "thankyou_sent"
+  ) {
+    persistedFollowUpStatus = currentState.followUpStatus as "resolved" | "thankyou_sent"
+    persistedFlagged = false
+  }
 
   const { error: upErr } = await client
     .from("feedback")
@@ -279,8 +398,8 @@ export async function analyzeAndPersistFeedback(
       topics:             analysis.topics,
       urgency:            analysis.urgency,
       safety_flag:        analysis.safety_flag,
-      follow_up_status:   analysis.follow_up_status,
-      flagged,
+      follow_up_status:   persistedFollowUpStatus,
+      flagged:            persistedFlagged,
       reply_draft:        analysis.reply_draft ?? null,
       internal_note:      analysis.internal_note,
       manager_summary:    analysis.manager_summary,
@@ -305,7 +424,7 @@ export async function analyzeAndPersistFeedback(
     entityId:      feedbackId,
     triggerType:   "feedback.received",
     actionType:    "customer_service.analyze_review",
-    inputSummary:  `${ctx.guestName} · score ${ctx.score} · ${ctx.source}`,
+    inputSummary:  `${ctx.guestName} - score ${ctx.score} - ${ctx.source}`,
     outputPayload: {
       sentiment:   analysis.sentiment,
       urgency:     analysis.urgency,
@@ -316,12 +435,112 @@ export async function analyzeAndPersistFeedback(
   })
 }
 
+export async function markFeedbackReplyApproved(
+  client: SupabaseClient,
+  organizationId: string,
+  feedbackId: string
+) {
+  const { data, error } = await client
+    .from("feedback")
+    .select("id, source, reply_draft")
+    .eq("id", feedbackId)
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error("Feedback not found")
+
+  const row = data as { source?: string | null; reply_draft?: string | null }
+  if (row.source !== "google" && row.source !== "yelp") {
+    throw new Error("Only public Google or Yelp reviews can be approved from this card.")
+  }
+  if (!row.reply_draft?.trim()) {
+    throw new Error("No public reply draft is available for this review.")
+  }
+
+  const { count: pendingCount, error: pendingErr } = await client
+    .from("follow_up_actions")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("feedback_id", feedbackId)
+    .eq("status", "pending")
+
+  if (pendingErr) throw new Error(pendingErr.message)
+  if ((pendingCount ?? 0) > 0) {
+    throw new Error("This review already has a pending follow-up plan. Approve or dismiss that plan below instead.")
+  }
+
+  const { error: updateErr } = await client
+    .from("feedback")
+    .update({
+      flagged:          false,
+      follow_up_status: "resolved",
+      updated_at:       new Date().toISOString(),
+    })
+    .eq("id", feedbackId)
+    .eq("organization_id", organizationId)
+
+  if (updateErr) throw new Error(updateErr.message)
+}
+
+export async function setFollowUpActionDecision(
+  client: SupabaseClient,
+  organizationId: string,
+  actionId: string,
+  decision: "approve" | "dismiss"
+) {
+  const { data: actionRow, error: actionErr } = await client
+    .from("follow_up_actions")
+    .select("id, feedback_id")
+    .eq("id", actionId)
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+
+  if (actionErr) throw new Error(actionErr.message)
+  if (!actionRow) throw new Error("Follow-up action not found")
+
+  const status = decision === "approve" ? "approved" : "dismissed"
+  const { error } = await client
+    .from("follow_up_actions")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", actionId)
+    .eq("organization_id", organizationId)
+
+  if (error) throw new Error(error.message)
+
+  const feedbackId = (actionRow as { feedback_id: string }).feedback_id
+  const { count: pendingCount, error: pendingErr } = await client
+    .from("follow_up_actions")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("feedback_id", feedbackId)
+    .eq("status", "pending")
+
+  if (pendingErr) throw new Error(pendingErr.message)
+
+  if ((pendingCount ?? 0) === 0) {
+    const { error: feedbackErr } = await client
+      .from("feedback")
+      .update({
+        flagged:          false,
+        follow_up_status: "resolved",
+        updated_at:       new Date().toISOString(),
+      })
+      .eq("id", feedbackId)
+      .eq("organization_id", organizationId)
+
+    if (feedbackErr) throw new Error(feedbackErr.message)
+  }
+}
+
 export async function setFeedbackFlagged(
   client: SupabaseClient,
   organizationId: string,
   feedbackId: string,
   flagged: boolean
 ) {
+  await readCurrentFeedbackState(client, organizationId, feedbackId)
+
   const { error } = await client
     .from("feedback")
     .update({ flagged, updated_at: new Date().toISOString() })
@@ -337,16 +556,43 @@ export async function enqueueFollowUpFromBody(
   feedbackId: string,
   body: { actionType: string; channel: string; priority: string; messageDraft?: string }
 ) {
-  const { error } = await client.from("follow_up_actions").insert({
-    organization_id: organizationId,
-    feedback_id:     feedbackId,
-    action_type:       body.actionType,
-    status:            "pending",
-    channel:           body.channel,
-    priority:          body.priority,
-    message_draft:     body.messageDraft ?? null,
-  })
-  if (error) throw new Error(error.message)
+  await readCurrentFeedbackState(client, organizationId, feedbackId)
+
+  const { data: existingRows, error: existingErr } = await client
+    .from("follow_up_actions")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("feedback_id", feedbackId)
+    .eq("action_type", body.actionType)
+    .eq("status", "pending")
+    .limit(1)
+
+  if (existingErr) throw new Error(existingErr.message)
+
+  if ((existingRows ?? []).length === 0) {
+    const { error } = await client.from("follow_up_actions").insert({
+      organization_id: organizationId,
+      feedback_id:     feedbackId,
+      action_type:     body.actionType,
+      status:          "pending",
+      channel:         body.channel,
+      priority:        body.priority,
+      message_draft:   body.messageDraft ?? null,
+    })
+    if (error) throw new Error(error.message)
+  }
+
+  const { error: feedbackErr } = await client
+    .from("feedback")
+    .update({
+      flagged:          true,
+      follow_up_status: "callback_needed",
+      updated_at:       new Date().toISOString(),
+    })
+    .eq("id", feedbackId)
+    .eq("organization_id", organizationId)
+
+  if (feedbackErr) throw new Error(feedbackErr.message)
 }
 
 export async function resolveCustomerIdByEmail(
