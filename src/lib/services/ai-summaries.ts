@@ -12,7 +12,7 @@ export async function buildFinanceSummaryFacts(
   client: SupabaseClient,
   organizationId: string
 ): Promise<FinanceSummaryFacts> {
-  const summary = await getFinanceSummary(client, organizationId)
+  const summary = await getFinanceSummary(client)
 
   const { data: overdueRows, error } = await client
     .from("invoices")

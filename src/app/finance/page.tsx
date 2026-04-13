@@ -33,7 +33,7 @@ export default async function FinancePage() {
   }
 
   const [summaryResult, transactions] = await Promise.all([
-    getFinanceSummaryQuery(client, DEMO_ORG_ID)
+    getFinanceSummaryQuery(client)
       .then((data) => ({ summary: data, error: null as string | null }))
       .catch((err: unknown) => ({
         summary: null,

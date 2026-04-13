@@ -1,56 +1,14 @@
 "use client"
 
-import { useEffect, useRef } from "react"
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 
 export function VantaHero() {
-  const vantaRef = useRef<HTMLElement>(null)
-  const vantaEffect = useRef<unknown>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function init() {
-      const [THREE, VANTA] = await Promise.all([
-        import("three"),
-        import("vanta/dist/vanta.waves.min.js"),
-      ])
-
-      if (cancelled || !vantaRef.current) return
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vantaEffect.current = (VANTA as any).default({
-        el: vantaRef.current,
-        THREE,
-        mouseControls: true,
-        touchControls: true,
-        gyroControls: false,
-        color: 0x7a2f08,
-        shininess: 40,
-        waveHeight: 20,
-        waveSpeed: 0.55,
-        zoom: 0.9,
-      })
-    }
-
-    init()
-
-    return () => {
-      cancelled = true
-      if (vantaEffect.current) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(vantaEffect.current as any).destroy()
-      }
-    }
-  }, [])
-
   return (
-    <section
-      ref={vantaRef}
-      className="relative flex min-h-screen items-center justify-center bg-[#0e0a07]"
-    >
-      <div className="absolute inset-0 bg-black/45" />
+    <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0e0a07]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.25),_transparent_35%),linear-gradient(135deg,_rgba(120,53,15,0.9),_rgba(14,10,7,0.98)_45%,_rgba(10,10,10,1))]" />
+      <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:56px_56px]" />
+      <div className="absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-500/10 blur-3xl" />
       <div className="relative z-10 mx-auto max-w-3xl px-6 text-center text-white">
         <p className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-white/70">
           Ember Table · Minneapolis
