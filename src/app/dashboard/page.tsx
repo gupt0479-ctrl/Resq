@@ -93,11 +93,13 @@ const MOCK_INVENTORY_ALERTS = [
     return <LedgerSchemaBanner message={schema.message} />
   }
 
-  let loadError: string | null = null
-  const summary = await getDashboardSummary(client, DEMO_ORG_ID).catch((err: unknown) => {
-    loadError = err instanceof Error ? err.message : String(err)
-    return null
-  })
+  const summaryResult = await getDashboardSummary(client, DEMO_ORG_ID)
+    .then((data) => ({ summary: data, error: null as string | null }))
+    .catch((err: unknown) => ({
+      summary: null,
+      error: err instanceof Error ? err.message : String(err),
+    }))
+  const { summary, error: loadError } = summaryResult
 
   if (!summary) {
     return (

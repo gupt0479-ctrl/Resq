@@ -32,14 +32,16 @@ export default async function FinancePage() {
     return <LedgerSchemaBanner message={schema.message} />
   }
 
-  let financeLoadError: string | null = null
-  const [summary, transactions] = await Promise.all([
-    getFinanceSummaryQuery(client, DEMO_ORG_ID).catch((err: unknown) => {
-      financeLoadError = err instanceof Error ? err.message : String(err)
-      return null
-    }),
+  const [summaryResult, transactions] = await Promise.all([
+    getFinanceSummaryQuery(client, DEMO_ORG_ID)
+      .then((data) => ({ summary: data, error: null as string | null }))
+      .catch((err: unknown) => ({
+        summary: null,
+        error: err instanceof Error ? err.message : String(err),
+      })),
     listTransactionsQuery(client, DEMO_ORG_ID, { limit: 20 }).catch(() => []),
   ])
+  const { summary, error: financeLoadError } = summaryResult
 
   return (
     <div className="p-6 space-y-6">
