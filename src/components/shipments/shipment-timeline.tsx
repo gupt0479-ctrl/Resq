@@ -11,7 +11,7 @@ function dateLabel(isoDate: string): string {
   const tomorrow = new Date(TODAY)
   tomorrow.setDate(tomorrow.getDate() + 1)
   if (isoDate === tomorrow.toISOString().slice(0, 10)) return "Tomorrow"
-  return new Date(isoDate).toLocaleDateString("en-AU", {
+  return new Date(isoDate).toLocaleDateString("en-US", {
     weekday: "long", day: "numeric", month: "short",
   })
 }
@@ -51,7 +51,7 @@ export function ShipmentTimeline({ initialShipments }: { initialShipments: Shipm
               {dateLabel(date)}
             </h2>
             <span className="text-xs text-muted-foreground">
-              {new Date(date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })}
+              {new Date(date).toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" })}
             </span>
             <div className="flex-1 h-px bg-border" />
             <span className="text-xs text-muted-foreground">

@@ -1,4 +1,6 @@
-import { supabase } from "./client"
+import "server-only"
+
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import type {
   InventoryItem,
   MenuItem,
@@ -6,158 +8,150 @@ import type {
   HistoricalReservation as Reservation,
   Shipment,
   ShipmentLineItem,
+  ShipmentStatus,
 } from "@/lib/types"
 
-// ── helpers: map snake_case rows → camelCase types ───────────
+// ── Ledger-aligned reads (0001_core_ledger.sql) ─────────────────────────────
+// Legacy tables (`inventory_items`, `shipments`, `reservations`, …) are not in
+// this schema. Procurement is represented by `finance_transactions` rows
+// with type = inventory_purchase.
 
-function mapInventoryItem(row: Record<string, unknown>): InventoryItem {
+function toISODateOnly(isoOrTimestamp: string): string {
+  return isoOrTimestamp.slice(0, 10)
+}
+
+function deriveVendorName(notes: string | null, category: string): string {
+  if (notes) {
+    const parts = notes.split(/[—–\-]/).map((s) => s.trim())
+    if (parts.length >= 2 && parts[parts.length - 1]) return parts[parts.length - 1]!
+    return notes.length > 48 ? `${notes.slice(0, 45)}…` : notes
+  }
+  return category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function deriveLineLabel(notes: string | null, category: string): string {
+  if (notes) {
+    const first = notes.split(/[—–\-]/)[0]?.trim()
+    if (first) return first
+  }
+  return deriveVendorName(notes, category)
+}
+
+type FinancePurchaseRow = {
+  id: string
+  category: string
+  amount: string | number
+  direction: string
+  occurred_at: string
+  notes: string | null
+  external_ref: string | null
+}
+
+function mapFinanceRowToShipment(row: FinancePurchaseRow): Shipment {
+  const amount = Math.abs(Number(row.amount))
+  const occurredDate = toISODateOnly(row.occurred_at)
+  const vendorName = deriveVendorName(row.notes, row.category)
+  const lineLabel = deriveLineLabel(row.notes, row.category)
+  const status: ShipmentStatus = "delivered"
+
+  const lineItem: ShipmentLineItem = {
+    id: `${row.id}-line`,
+    itemId: row.category,
+    itemName: lineLabel,
+    quantityOrdered: 1,
+    unitCost: amount,
+    totalCost: amount,
+  }
+
   return {
-    id: row.id as string,
-    itemName: row.item_name as string,
-    category: row.category as string,
-    quantityOnHand: Number(row.quantity_on_hand),
-    reorderLevel: Number(row.reorder_level),
-    unitCost: Number(row.unit_cost),
-    previousUnitCost: row.previous_unit_cost != null ? Number(row.previous_unit_cost) : undefined,
-    expiresAt: row.expires_at as string | null,
-    vendorName: row.vendor_name as string,
-    issueStatus: row.issue_status as InventoryItem["issueStatus"],
-    priceTrendStatus: row.price_trend_status as InventoryItem["priceTrendStatus"],
+    id: row.id,
+    vendorName,
+    status,
+    expectedDeliveryDate: occurredDate,
+    actualDeliveryDate: occurredDate,
+    orderedAt: row.occurred_at,
+    trackingNumber: row.external_ref,
+    trackingUrl: null,
+    notes: row.notes,
+    totalCost: amount,
+    lineItems: [lineItem],
+    ledgerBacked: true,
   }
 }
 
-function mapLineItem(row: Record<string, unknown>): ShipmentLineItem {
-  return {
-    id: row.id as string,
-    itemId: row.item_id as string,
-    itemName: row.item_name as string,
-    quantityOrdered: Number(row.quantity_ordered),
-    unitCost: Number(row.unit_cost),
-    totalCost: Number(row.total_cost),
-  }
-}
-
-function mapShipment(row: Record<string, unknown>, lineItems: ShipmentLineItem[]): Shipment {
-  return {
-    id: row.id as string,
-    vendorName: row.vendor_name as string,
-    status: row.status as Shipment["status"],
-    expectedDeliveryDate: row.expected_delivery_date as string,
-    actualDeliveryDate: row.actual_delivery_date as string | null,
-    orderedAt: row.ordered_at as string,
-    trackingNumber: row.tracking_number as string | null,
-    trackingUrl: row.tracking_url as string | null,
-    notes: row.notes as string | null,
-    totalCost: Number(row.total_cost),
-    lineItems,
-  }
-}
-
-// ── public query functions ────────────────────────────────────
-
+/** No `inventory_items` table in core ledger — returns an empty list until a stock model exists. */
 export async function getInventoryItems(): Promise<InventoryItem[]> {
-  const { data, error } = await supabase
-    .from("inventory_items")
-    .select(
-      "id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status"
-    )
-    .order("id")
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((r) => mapInventoryItem(r as Record<string, unknown>))
+  return []
 }
 
 export async function getInventoryItemById(id: string): Promise<InventoryItem | null> {
-  const { data, error } = await supabase
-    .from("inventory_items")
-    .select(
-      "id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status"
-    )
-    .eq("id", id)
-    .maybeSingle()
-  if (error) throw new Error(error.message)
-  if (!data) return null
-  return mapInventoryItem(data as Record<string, unknown>)
+  void id
+  return null
 }
 
+/** Menu catalog in ledger = `services`. */
 export async function getMenuItems(): Promise<MenuItem[]> {
+  const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
-    .from("menu_items")
-    .select("id, name, category, price")
-    .order("id")
+    .from("services")
+    .select("id, name, category, price_per_person")
+    .eq("organization_id", DEMO_ORG_ID)
+    .eq("is_active", true)
+    .order("name")
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => ({
     id: r.id as string,
     name: r.name as string,
     category: r.category as string,
-    price: Number(r.price),
+    price: Number(r.price_per_person),
   }))
 }
 
+/** No usage bridge table in core ledger — empty until modeled. */
 export async function getMenuInventoryUsage(): Promise<MenuItemInventoryUsage[]> {
-  const { data, error } = await supabase
-    .from("menu_item_inventory_usage")
-    .select("menu_item_id, item_id, units_used_per_order")
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((r) => ({
-    menuItemId: r.menu_item_id as string,
-    itemId: r.item_id as string,
-    unitsUsedPerOrder: Number(r.units_used_per_order),
-  }))
+  return []
 }
 
+/** Demand history from `appointments` (replaces legacy `reservations`). */
 export async function getReservations(): Promise<Reservation[]> {
+  const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
-    .from("reservations")
-    .select("id, date, covers, menu_item_ids")
-    .order("date")
+    .from("appointments")
+    .select("id, starts_at, covers, service_id")
+    .eq("organization_id", DEMO_ORG_ID)
+    .order("starts_at")
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => ({
     id: r.id as string,
-    date: r.date as string,
+    date: toISODateOnly(r.starts_at as string),
     covers: Number(r.covers),
-    menuItemIds: r.menu_item_ids as string[],
+    menuItemIds: [r.service_id as string],
   }))
 }
 
-/** Fetches all shipments with their line items in a single JOIN query */
+/** Procurement / vendor spend from ledger (`inventory_purchase` outflows). */
 export async function getShipments(): Promise<Shipment[]> {
+  const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
-    .from("shipments")
-    .select(
-      "id, vendor_name, status, expected_delivery_date, actual_delivery_date, ordered_at, tracking_number, tracking_url, notes, total_cost, shipment_line_items ( id, item_id, item_name, quantity_ordered, unit_cost, total_cost )"
-    )
-    .order("ordered_at", { ascending: false })
+    .from("finance_transactions")
+    .select("id, category, amount, direction, occurred_at, notes, external_ref")
+    .eq("organization_id", DEMO_ORG_ID)
+    .eq("type", "inventory_purchase")
+    .order("occurred_at", { ascending: false })
   if (error) throw new Error(error.message)
-
-  return (data ?? []).map((row) => {
-    const lineItems = ((row.shipment_line_items as unknown[]) ?? []).map((li) =>
-      mapLineItem(li as Record<string, unknown>)
-    )
-    return mapShipment(row as Record<string, unknown>, lineItems)
-  })
+  return (data ?? []).map((r) => mapFinanceRowToShipment(r as FinancePurchaseRow))
 }
 
 export async function getShipmentById(id: string): Promise<Shipment | null> {
-  const { data: row, error } = await supabase
-    .from("shipments")
-    .select(
-      "id, vendor_name, status, expected_delivery_date, actual_delivery_date, ordered_at, tracking_number, tracking_url, notes, total_cost, shipment_line_items ( id, item_id, item_name, quantity_ordered, unit_cost, total_cost )"
-    )
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from("finance_transactions")
+    .select("id, category, amount, direction, occurred_at, notes, external_ref")
+    .eq("organization_id", DEMO_ORG_ID)
+    .eq("type", "inventory_purchase")
     .eq("id", id)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  if (!row) return null
-
-  const lineItems = ((row.shipment_line_items as unknown[]) ?? []).map((li) =>
-    mapLineItem(li as Record<string, unknown>)
-  )
-  return mapShipment(row as Record<string, unknown>, lineItems)
-}
-
-export async function cancelShipment(id: string): Promise<void> {
-  const { error } = await supabase
-    .from("shipments")
-    .update({ status: "cancelled" })
-    .eq("id", id)
-  if (error) throw new Error(error.message)
+  if (!data) return null
+  return mapFinanceRowToShipment(data as FinancePurchaseRow)
 }

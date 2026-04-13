@@ -8,9 +8,9 @@ import { getShipments } from "@/lib/supabase/queries"
 const TODAY = "2026-04-11"
 
 function fmt(n: number) {
-  return new Intl.NumberFormat("en-AU", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "AUD",
+    currency: "USD",
     minimumFractionDigits: 0,
   }).format(n)
 }
@@ -48,9 +48,13 @@ async function ShipmentsContent() {
   cutoff.setDate(cutoff.getDate() + 7)
   const cutoffStr = cutoff.toISOString().slice(0, 10)
 
+  const windowStart = new Date(TODAY)
+  windowStart.setDate(windowStart.getDate() - 7)
+  const windowStartStr = windowStart.toISOString().slice(0, 10)
+
   const weekShipments = shipments.filter(
     (s) =>
-      (s.expectedDeliveryDate >= TODAY && s.expectedDeliveryDate <= cutoffStr) ||
+      (s.expectedDeliveryDate >= windowStartStr && s.expectedDeliveryDate <= cutoffStr) ||
       s.status === "cancelled"
   )
 
@@ -159,9 +163,9 @@ export default async function ShipmentsPage() {
   return (
     <div className="space-y-5 p-6">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Incoming Shipments</h1>
+        <h1 className="text-xl font-semibold text-foreground">Procurement</h1>
         <p className="text-xs text-muted-foreground">
-          Purchase orders arriving this week · Bistro Nova
+          Ledger inventory purchases (last 7 days through next 7) · Ember Table
         </p>
       </div>
 
