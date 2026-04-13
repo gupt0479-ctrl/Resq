@@ -309,3 +309,19 @@ INSERT INTO integration_connectors (id, organization_id, provider, display_name,
   ('00000000-0000-0000-0009-000000000004', '00000000-0000-0000-0000-000000000001',
    'google_reviews','Google Reviews','error',     '2026-04-10 08:00:00+00', 'OAuth token expired. Re-authenticate to resume sync.')
 ON CONFLICT (id) DO NOTHING;
+
+
+-- ─── Occasion & follow-up data for appointments ───────────────────────────
+-- Run after 0002_appointments_extras.sql migration
+
+UPDATE appointments SET occasion = 'anniversary', follow_up_sent = TRUE
+  WHERE id = '00000000-0000-0000-0004-000000000001';
+
+UPDATE appointments SET follow_up_sent = TRUE
+  WHERE id = '00000000-0000-0000-0004-000000000004';
+
+UPDATE appointments SET occasion = 'birthday'
+  WHERE id IN (
+    '00000000-0000-0000-0004-000000000007',
+    '00000000-0000-0000-0004-000000000011'
+  );
