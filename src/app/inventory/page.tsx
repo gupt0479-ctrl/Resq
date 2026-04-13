@@ -50,7 +50,6 @@ async function InventoryContent({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  // Await runtime API inside the Suspense boundary
   const { tab: rawTab } = await searchParams
   const activeTab = resolveTab(rawTab)
 
@@ -183,7 +182,7 @@ function InventorySkeleton() {
   )
 }
 
-// ── Page shell: does NOT await any runtime APIs ──────────────────────────────
+// ── Page shell ───────────────────────────────────────────────────────────────
 
 export default function InventoryPage({
   searchParams,

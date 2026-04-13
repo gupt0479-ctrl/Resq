@@ -3,29 +3,20 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  LayoutDashboard,
-  CalendarDays,
-  FileText,
-  DollarSign,
-  MessageSquare,
-  Plug,
-  Package,
-  Truck,
   Flame,
+  LayoutDashboard,
+  GitBranch,
+  MessageSquare,
+  FileText,
+  Package,
 } from "lucide-react"
 
-const coreItems = [
-  { href: "/dashboard",     label: "Dashboard",     icon: LayoutDashboard },
-  { href: "/appointments",  label: "Reservations",  icon: CalendarDays },
-  { href: "/invoices",      label: "Invoices",      icon: FileText },
-  { href: "/finance",       label: "Finance",       icon: DollarSign },
-  { href: "/feedback",      label: "Feedback",      icon: MessageSquare },
-  { href: "/integrations",  label: "Integrations",  icon: Plug },
-]
-
-const opsItems = [
-  { href: "/inventory",  label: "Inventory",  icon: Package },
-  { href: "/shipments",  label: "Shipments",  icon: Truck },
+const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/workflow", label: "Workflow", icon: GitBranch },
+  { href: "/feedback", label: "Customer Service", icon: MessageSquare },
+  { href: "/invoices", label: "Invoices", icon: FileText },
+  { href: "/inventory", label: "Inventory", icon: Package },
 ]
 
 export function Sidebar() {
@@ -76,9 +67,9 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Bottom info */}
+      {/* Bottom */}
       <div className="border-t border-border p-4">
-        <p className="text-[10px] text-muted-foreground">v0.1.0 · Demo</p>
+        <p className="text-[10px] text-muted-foreground">Powered by Claude AI</p>
       </div>
     </aside>
   )
