@@ -232,7 +232,6 @@ export async function createAppointment(
       ends_at:         opts.endsAt,
       status:          "confirmed",
       booking_source:  "manual",
-      occasion:        opts.occasion ?? null,
       notes:           opts.notes ?? null,
     })
     .select("id")
