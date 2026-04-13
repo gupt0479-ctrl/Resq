@@ -34,6 +34,15 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim()
+
+  // Always require a secret in production; reject when none is configured.
+  if (!secret && process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "CRON_SECRET must be set in production." },
+      { status: 503 }
+    )
+  }
+
   if (secret) {
     const auth = request.headers.get("authorization")?.trim()
     if (auth !== `Bearer ${secret}`) {

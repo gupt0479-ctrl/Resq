@@ -2,7 +2,8 @@
 -- Use when `invoices` is a legacy/hybrid shape (e.g. columns like `total`, `line_items`)
 -- so `CREATE TABLE IF NOT EXISTS invoices` in 0001 never ran.
 --
--- WARNING: Deletes all rows in these tables. For dev / hackathon / empty projects.
+-- WARNING: Drops these tables entirely (and any dependent objects via CASCADE).
+-- For dev / hackathon / empty projects only.
 -- After running this file in the Supabase SQL Editor, run IN ORDER:
 --   1) supabase/migrations/0001_core_ledger.sql  (full file — idempotent for other tables)
 --   2) supabase/migrations/002_invoice_reminders.sql

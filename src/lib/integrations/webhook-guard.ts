@@ -49,6 +49,7 @@ export function integrationWebhookAuthError(request: NextRequest): NextResponse 
 
 const WINDOW_MS = 60_000
 const MAX_PER_WINDOW = 80
+const MAX_TRACKED_IPS = 10_000
 const hits = new Map<string, number[]>()
 
 function prune(ip: string, now: number): number[] {
@@ -66,8 +67,20 @@ export function integrationWebhookRateLimitError(
     "unknown"
   const now = Date.now()
   const recent = prune(ip, now)
+
+  // Clean up stale entry before re-adding so the old array reference is GC'd.
+  if (recent.length === 0) {
+    hits.delete(ip)
+  }
+
   recent.push(now)
+
+  // Evict the oldest tracked IP when we hit the cap (new IP only).
+  if (!hits.has(ip) && hits.size >= MAX_TRACKED_IPS) {
+    hits.delete(hits.keys().next().value as string)
+  }
   hits.set(ip, recent)
+
   if (recent.length > MAX_PER_WINDOW) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 })
   }

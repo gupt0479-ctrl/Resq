@@ -20,9 +20,11 @@ export async function POST(
     const cust = invoice.customers as { full_name?: string } | null | undefined
     const customerName = cust?.full_name ?? "Guest"
 
+    const totalDue = Math.max(0, (Number(invoice.total_amount) || 0) - (Number(invoice.amount_paid) || 0))
+
     const reminder = await generateReminder({
       customerName,
-      totalDue:      Number(invoice.total_amount) || 0,
+      totalDue,
       dueAt:         invoice.due_at,
       reminderCount: Number(invoice.reminder_count) || 0,
       invoiceNumber: invoice.invoice_number,
@@ -35,7 +37,7 @@ export async function POST(
       message:         reminder.message,
       reminder_number: reminderNumber,
       customer_name:   customerName,
-      invoice_total:   Number(invoice.total_amount) || 0,
+      invoice_total:   totalDue,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error"

@@ -339,16 +339,37 @@ export async function ensureInvoiceForCompletedAppointment(
     return { invoiceId: existing.id, created: false }
   }
 
-  const invoiceId = await generateInvoiceFromAppointment(client, {
-    id:              appt.id as string,
-    organization_id: appt.organization_id as string,
-    customer_id:     appt.customer_id as string,
-    service_id:      appt.service_id as string,
-    covers:          appt.covers as number,
-    notes:           (appt.notes as string | null) ?? null,
-  })
+  try {
+    const invoiceId = await generateInvoiceFromAppointment(client, {
+      id:              appt.id as string,
+      organization_id: appt.organization_id as string,
+      customer_id:     appt.customer_id as string,
+      service_id:      appt.service_id as string,
+      covers:          appt.covers as number,
+      notes:           (appt.notes as string | null) ?? null,
+    })
 
-  return { invoiceId, created: true }
+    return { invoiceId, created: true }
+  } catch (err) {
+    // A concurrent request may have inserted the invoice between our read and
+    // insert — re-fetch to handle the unique-violation case.
+    const { data: concurrentExisting, error: concurrentErr } = await client
+      .from("invoices")
+      .select("id")
+      .eq("appointment_id", appointmentId)
+      .eq("organization_id", organizationId)
+      .maybeSingle()
+
+    if (concurrentErr) {
+      throw err
+    }
+
+    if (concurrentExisting?.id) {
+      return { invoiceId: concurrentExisting.id, created: false }
+    }
+
+    throw err
+  }
 }
 
 /** Record that a payment reminder was drafted/sent (increments reminder_count). */
@@ -357,45 +378,65 @@ export async function recordInvoiceReminderSent(
   invoiceId: string,
   organizationId: string
 ): Promise<number> {
-  const { data: inv, error: fetchErr } = await client
-    .from("invoices")
-    .select("id, appointment_id, reminder_count, invoice_number")
-    .eq("id", invoiceId)
-    .eq("organization_id", organizationId)
-    .single()
-
-  if (fetchErr || !inv) {
-    throw new Error(fetchErr?.message ?? "Invoice not found")
-  }
-
-  const next = (Number(inv.reminder_count) || 0) + 1
   const now = new Date().toISOString()
+  const maxAttempts = 5
 
-  const { error: updateErr } = await client
-    .from("invoices")
-    .update({
-      reminder_count:   next,
-      last_reminded_at: now,
-      updated_at:       now,
-    })
-    .eq("id", invoiceId)
-    .eq("organization_id", organizationId)
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const { data: inv, error: fetchErr } = await client
+      .from("invoices")
+      .select("id, appointment_id, reminder_count, invoice_number")
+      .eq("id", invoiceId)
+      .eq("organization_id", organizationId)
+      .single()
 
-  if (updateErr) throw new Error(updateErr.message)
+    if (fetchErr || !inv) {
+      throw new Error(fetchErr?.message ?? "Invoice not found")
+    }
 
-  if (inv.appointment_id) {
-    await client.from("appointment_events").insert({
-      appointment_id:  inv.appointment_id as string,
-      organization_id: organizationId,
-      event_type:      DOMAIN_EVENT.INVOICE_REMINDER_SENT,
-      from_status:     null,
-      to_status:       null,
-      notes:           `Payment reminder #${next} for invoice ${inv.invoice_number as string}`,
-      metadata:        { invoice_id: invoiceId, reminder_count: next },
-    })
+    const current = Number(inv.reminder_count) || 0
+    const next = current + 1
+
+    // CAS-style update: only commit if reminder_count hasn't changed since we read it.
+    const { data: updatedInv, error: updateErr } = await client
+      .from("invoices")
+      .update({
+        reminder_count:   next,
+        last_reminded_at: now,
+        updated_at:       now,
+      })
+      .eq("id", invoiceId)
+      .eq("organization_id", organizationId)
+      .eq("reminder_count", current)
+      .select("reminder_count")
+      .single()
+
+    if (updateErr) {
+      throw new Error(updateErr.message)
+    }
+
+    if (!updatedInv) {
+      // Another concurrent update won the race — retry.
+      continue
+    }
+
+    const finalCount = Number(updatedInv.reminder_count) || next
+
+    if (inv.appointment_id) {
+      await client.from("appointment_events").insert({
+        appointment_id:  inv.appointment_id as string,
+        organization_id: organizationId,
+        event_type:      DOMAIN_EVENT.INVOICE_REMINDER_SENT,
+        from_status:     null,
+        to_status:       null,
+        notes:           `Payment reminder #${finalCount} for invoice ${inv.invoice_number as string}`,
+        metadata:        { invoice_id: invoiceId, reminder_count: finalCount },
+      })
+    }
+
+    return finalCount
   }
 
-  return next
+  throw new Error("Failed to record invoice reminder after concurrent updates")
 }
 
 export async function markOverdueInvoices(
