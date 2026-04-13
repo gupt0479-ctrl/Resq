@@ -1,3 +1,4 @@
+import { connection } from "next/server"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import { listAppointmentsQuery } from "@/lib/queries/appointments"
 import { isSupabaseConfigured } from "@/lib/env"
@@ -20,6 +21,8 @@ function statusColor(status: AppointmentStatus) {
 }
 
 export default async function AppointmentsPage() {
+  await connection()
+
   if (!isSupabaseConfigured()) {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">

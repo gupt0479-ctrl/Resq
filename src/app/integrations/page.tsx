@@ -1,3 +1,4 @@
+import { connection } from "next/server"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import { listConnectors } from "@/lib/services/integrations"
 import { isSupabaseConfigured } from "@/lib/env"
@@ -56,6 +57,8 @@ function ConnectorCard({ connector }: { connector: Record<string, unknown> }) {
 }
 
 export default async function IntegrationsPage() {
+  await connection()
+
   let connectors: Record<string, unknown>[] = []
 
   if (isSupabaseConfigured()) {
