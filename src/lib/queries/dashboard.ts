@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { DashboardSummary } from "@/lib/schemas/dashboard"
+import { listConnectors } from "@/lib/services/integrations"
+import { getManagerSummaryForDashboard } from "@/lib/services/ai-summaries"
 
 export async function getDashboardSummary(
   client: SupabaseClient,
@@ -106,6 +108,17 @@ export async function getDashboardSummary(
   const weeklyExpenses = sumAmounts(expWeek)
   const netCashFlow    = round2(weeklyRevenue - weeklyExpenses)
 
+  const connectorsRaw = await listConnectors(client, organizationId).catch(() => [])
+  const integrationConnectors = connectorsRaw.map((c: Record<string, unknown>) => ({
+    provider:    String(c.provider ?? ""),
+    displayName: String(c.display_name ?? c.provider ?? ""),
+    status:      String(c.status ?? "disabled"),
+    lastSyncAt:  (c.last_sync_at as string | null) ?? null,
+    lastError:   (c.last_error as string | null) ?? null,
+  }))
+
+  const managerSummary = await getManagerSummaryForDashboard(client, organizationId)
+
   return {
     kpis: {
       todayReservationCount,
@@ -119,6 +132,14 @@ export async function getDashboardSummary(
     },
     recentReservations,
     financeSnapshot: { weeklyRevenue, weeklyExpenses, netCashFlow },
+    integrationConnectors,
+    managerSummary: {
+      source:      managerSummary.source,
+      headline:    managerSummary.headline,
+      bullets:     managerSummary.bullets,
+      riskNote:    managerSummary.riskNote,
+      generatedAt: managerSummary.generatedAt,
+    },
   }
 }
 

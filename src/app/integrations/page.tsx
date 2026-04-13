@@ -1,11 +1,15 @@
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { listConnectors } from "@/lib/services/integrations"
 import { isSupabaseConfigured } from "@/lib/env"
+import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CONNECTOR_STATUS_LABEL } from "@/lib/constants/enums"
 import type { ConnectorStatus } from "@/lib/constants/enums"
 import { CheckCircle2, XCircle, MinusCircle, Plug } from "lucide-react"
 import { Fragment } from "react"
+
+export const dynamic = "force-dynamic"
 
 function statusIcon(status: ConnectorStatus) {
   if (status === "connected") return <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -57,10 +61,19 @@ function ConnectorCard({ connector }: { connector: Record<string, unknown> }) {
 
 export default async function IntegrationsPage() {
   let connectors: Record<string, unknown>[] = []
+  let connectorsLoadError: string | null = null
 
   if (isSupabaseConfigured()) {
     const client = createServerSupabaseClient()
-    connectors   = await listConnectors(client, DEMO_ORG_ID).catch(() => []) as Record<string, unknown>[]
+    const schema = await getLedgerSchemaHealth(client)
+    if (!schema.ok) {
+      return <LedgerSchemaBanner message={schema.message} />
+    }
+    try {
+      connectors = (await listConnectors(client, DEMO_ORG_ID)) as Record<string, unknown>[]
+    } catch (err: unknown) {
+      connectorsLoadError = err instanceof Error ? err.message : String(err)
+    }
   }
 
   return (
@@ -81,6 +94,12 @@ export default async function IntegrationsPage() {
             <code className="font-mono text-xs bg-muted px-1 rounded">POST /api/integrations/webhooks/:provider</code>.
             OpsPilot validates, normalises, and routes each event through the same
             deterministic service layer used by the UI — never bypassing invoice or finance truth.
+            Mutating events (<code className="font-mono text-xs">reservation.completed</code>,{" "}
+            <code className="font-mono text-xs">invoice.sent</code>,{" "}
+            <code className="font-mono text-xs">invoice.paid</code>) require{" "}
+            <code className="font-mono text-xs">externalEventId</code> for deduplication. Configure{" "}
+            <code className="font-mono text-xs">INTEGRATIONS_WEBHOOK_SECRET</code> (or{" "}
+            <code className="font-mono text-xs">INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED=true</code> locally).
           </p>
         </CardContent>
       </Card>
@@ -94,10 +113,14 @@ export default async function IntegrationsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {connectors.length === 0 ? (
+          {connectorsLoadError ? (
+            <p className="text-xs font-mono text-red-800 whitespace-pre-wrap rounded-md border border-red-200 bg-red-50/50 p-3">
+              {connectorsLoadError}
+            </p>
+          ) : connectors.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {isSupabaseConfigured()
-                ? "No connectors found. Run the seed to populate demo connectors."
+                ? "No connectors found for this organization. Run supabase/seed.sql (demo org) or register connectors via webhooks."
                 : "Supabase not configured — connect a project to see connectors."}
             </p>
           ) : (

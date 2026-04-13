@@ -1,23 +1,43 @@
 import Anthropic from "@anthropic-ai/sdk"
-import type { Invoice } from "@/lib/types"
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+/** Facts only — amounts come from the invoice row, never from model inference. */
+export type InvoiceReminderFacts = {
+  customerName:   string
+  totalDue:       number
+  dueAt:          string
+  reminderCount:  number
+  invoiceNumber:  string
+}
 
-export async function generateReminder(invoice: Invoice): Promise<{
-  subject: string
-  message: string
-  reminder_number: number
-}> {
-  const name = invoice.customer?.name ?? "Guest"
-  const reminderNumber = (invoice.reminder_count ?? 0) + 1
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? "" })
+
+export async function generateReminder(
+  facts: InvoiceReminderFacts
+): Promise<{ subject: string; message: string; reminder_number: number }> {
+  const name = facts.customerName || "Guest"
+  const reminderNumber = facts.reminderCount + 1
   const daysOverdue = Math.max(
     0,
-    Math.floor((Date.now() - new Date(invoice.due_at).getTime()) / (1000 * 60 * 60 * 24))
+    Math.floor((Date.now() - new Date(facts.dueAt).getTime()) / (1000 * 60 * 60 * 24))
   )
   const tone =
     reminderNumber === 1 ? "gentle and friendly" :
     reminderNumber === 2 ? "polite but firm" :
     "direct and urgent"
+
+  const totalStr = facts.totalDue.toFixed(2)
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      subject: `Payment reminder — Invoice ${facts.invoiceNumber}`,
+      message:
+        `Dear ${name}, this is reminder #${reminderNumber} regarding invoice ${facts.invoiceNumber} for $${totalStr}.` +
+        (daysOverdue > 0
+          ? ` The balance was due ${daysOverdue} day(s) ago. Please arrange payment at your earliest convenience.`
+          : " Please arrange payment by the due date. Thank you for dining with us at Ember Table."),
+      reminder_number: reminderNumber,
+    }
+  }
 
   try {
     const response = await anthropic.messages.create({
@@ -29,7 +49,8 @@ export async function generateReminder(invoice: Invoice): Promise<{
           content: `You are the manager of Ember Table restaurant sending a payment reminder.
 Tone: ${tone}
 Guest: ${name}
-Amount due: $${invoice.total}
+Invoice: ${facts.invoiceNumber}
+Amount due (do not change this number): $${totalStr}
 Days overdue: ${daysOverdue}
 Reminder number: ${reminderNumber}
 
@@ -44,12 +65,19 @@ Return ONLY valid JSON, no other text:
 
     const text = response.content[0].type === "text" ? response.content[0].text : ""
     const cleaned = text.replace(/```json|```/g, "").trim()
-    const parsed = JSON.parse(cleaned)
-    return { subject: parsed.subject, message: parsed.message, reminder_number: reminderNumber }
+    const parsed = JSON.parse(cleaned) as { subject?: string; message?: string }
+    return {
+      subject:         typeof parsed.subject === "string" ? parsed.subject : `Payment reminder — Ember Table`,
+      message:         typeof parsed.message === "string" ? parsed.message : `Dear ${name}, please remit $${totalStr} for invoice ${facts.invoiceNumber}.`,
+      reminder_number: reminderNumber,
+    }
   } catch {
     return {
       subject: `Payment reminder — Ember Table`,
-      message: `Dear ${name}, this is a reminder that your invoice of $${invoice.total} is overdue by ${daysOverdue} days. Please arrange payment at your earliest convenience. Thank you for dining with us at Ember Table.`,
+      message:
+        `Dear ${name}, this is a reminder that invoice ${facts.invoiceNumber} for $${totalStr} is` +
+        (daysOverdue > 0 ? ` overdue by ${daysOverdue} days` : " coming due") +
+        ". Please arrange payment at your earliest convenience. Thank you for dining with us at Ember Table.",
       reminder_number: reminderNumber,
     }
   }

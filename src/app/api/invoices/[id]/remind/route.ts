@@ -1,30 +1,45 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getInvoice, recordReminderSent } from "@/lib/services/invoice.service"
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { getInvoiceDetail, recordInvoiceReminderSent } from "@/lib/services/invoices"
 import { generateReminder } from "@/lib/ai/generate-reminder"
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
-  const result = await getInvoice(id)
-  if (result.error || !result.data) {
-    return NextResponse.json({ error: "Invoice not found." }, { status: 404 })
+  const { id } = await ctx.params
+
+  try {
+    const client = createServerSupabaseClient()
+    const invoice = await getInvoiceDetail(client, id, DEMO_ORG_ID)
+
+    if (invoice.status === "paid" || invoice.status === "void") {
+      return NextResponse.json({ error: "Invoice is not eligible for reminders." }, { status: 400 })
+    }
+
+    const cust = invoice.customers as { full_name?: string } | null | undefined
+    const customerName = cust?.full_name ?? "Guest"
+
+    const reminder = await generateReminder({
+      customerName,
+      totalDue:      Number(invoice.total_amount) || 0,
+      dueAt:         invoice.due_at,
+      reminderCount: Number(invoice.reminder_count) || 0,
+      invoiceNumber: invoice.invoice_number,
+    })
+
+    const reminderNumber = await recordInvoiceReminderSent(client, id, DEMO_ORG_ID)
+
+    return NextResponse.json({
+      subject:         reminder.subject,
+      message:         reminder.message,
+      reminder_number: reminderNumber,
+      customer_name:   customerName,
+      invoice_total:   Number(invoice.total_amount) || 0,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unexpected error"
+    const status = message.toLowerCase().includes("not found") ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
   }
-
-  const invoice = result.data
-  if (invoice.status === "paid") {
-    return NextResponse.json({ error: "Invoice already paid." }, { status: 400 })
-  }
-
-  const reminder = await generateReminder(invoice)
-  await recordReminderSent(id)
-
-  return NextResponse.json({
-    subject: reminder.subject,
-    message: reminder.message,
-    reminder_number: reminder.reminder_number,
-    customer_name: invoice.customer?.name ?? "Guest",
-    invoice_total: invoice.total,
-  })
 }

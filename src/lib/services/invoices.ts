@@ -302,6 +302,103 @@ export async function getInvoiceDetail(
 
 // ─── Recompute overdue status (called by cron or scheduled job) ───────────
 
+/**
+ * When an appointment is already completed, ensure a ledger invoice exists
+ * (idempotent — returns existing invoice if already generated).
+ */
+export async function ensureInvoiceForCompletedAppointment(
+  client: SupabaseClient,
+  appointmentId: string,
+  organizationId: string
+): Promise<{ invoiceId: string; created: boolean }> {
+  const { data: appt, error: fetchErr } = await client
+    .from("appointments")
+    .select("*")
+    .eq("id", appointmentId)
+    .eq("organization_id", organizationId)
+    .single()
+
+  if (fetchErr || !appt) {
+    throw new Error(fetchErr?.message ?? "Appointment not found")
+  }
+
+  if (appt.status !== "completed") {
+    throw new Error(
+      `Cannot create invoice: appointment status is '${appt.status}'. Only completed appointments can have invoices.`
+    )
+  }
+
+  const { data: existing, error: exErr } = await client
+    .from("invoices")
+    .select("id")
+    .eq("appointment_id", appointmentId)
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+
+  if (exErr) throw new Error(exErr.message)
+  if (existing?.id) {
+    return { invoiceId: existing.id, created: false }
+  }
+
+  const invoiceId = await generateInvoiceFromAppointment(client, {
+    id:              appt.id as string,
+    organization_id: appt.organization_id as string,
+    customer_id:     appt.customer_id as string,
+    service_id:      appt.service_id as string,
+    covers:          appt.covers as number,
+    notes:           (appt.notes as string | null) ?? null,
+  })
+
+  return { invoiceId, created: true }
+}
+
+/** Record that a payment reminder was drafted/sent (increments reminder_count). */
+export async function recordInvoiceReminderSent(
+  client: SupabaseClient,
+  invoiceId: string,
+  organizationId: string
+): Promise<number> {
+  const { data: inv, error: fetchErr } = await client
+    .from("invoices")
+    .select("id, appointment_id, reminder_count, invoice_number")
+    .eq("id", invoiceId)
+    .eq("organization_id", organizationId)
+    .single()
+
+  if (fetchErr || !inv) {
+    throw new Error(fetchErr?.message ?? "Invoice not found")
+  }
+
+  const next = (Number(inv.reminder_count) || 0) + 1
+  const now = new Date().toISOString()
+
+  const { error: updateErr } = await client
+    .from("invoices")
+    .update({
+      reminder_count:   next,
+      last_reminded_at: now,
+      updated_at:       now,
+    })
+    .eq("id", invoiceId)
+    .eq("organization_id", organizationId)
+
+  if (updateErr) throw new Error(updateErr.message)
+
+  if (inv.appointment_id) {
+    await client.from("appointment_events").insert({
+      appointment_id:  inv.appointment_id as string,
+      organization_id: organizationId,
+      event_type:      DOMAIN_EVENT.INVOICE_REMINDER_SENT,
+      from_status:     null,
+      to_status:       null,
+      notes:           `Payment reminder #${next} for invoice ${inv.invoice_number as string}`,
+      metadata:        { invoice_id: invoiceId, reminder_count: next },
+    })
+  }
+
+  return next
+}
+
 export async function markOverdueInvoices(
   client: SupabaseClient,
   organizationId: string

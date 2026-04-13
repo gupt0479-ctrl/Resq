@@ -1,7 +1,9 @@
 import type { ReactNode } from "react"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { getDashboardSummary } from "@/lib/queries/dashboard"
 import { isSupabaseConfigured } from "@/lib/env"
+import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -13,6 +15,8 @@ import {
   TrendingDown,
   Minus,
 } from "lucide-react"
+
+export const dynamic = "force-dynamic"
 
 function fmt(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
@@ -36,17 +40,34 @@ export default async function DashboardPage() {
   }
 
   const client = createServerSupabaseClient()
-  const summary = await getDashboardSummary(client, DEMO_ORG_ID).catch(() => null)
+
+  const schema = await getLedgerSchemaHealth(client)
+  if (!schema.ok) {
+    return <LedgerSchemaBanner message={schema.message} />
+  }
+
+  let loadError: string | null = null
+  const summary = await getDashboardSummary(client, DEMO_ORG_ID).catch((err: unknown) => {
+    loadError = err instanceof Error ? err.message : String(err)
+    return null
+  })
 
   if (!summary) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        Failed to load dashboard data. Check your Supabase connection and run the seed.
+      <div className="p-8 max-w-2xl mx-auto space-y-3 text-center">
+        <p className="text-muted-foreground">
+          Failed to load dashboard data. Check your Supabase connection and run the seed.
+        </p>
+        {loadError ? (
+          <p className="text-left text-xs font-mono rounded-lg border border-border bg-muted/40 p-3 text-red-800 whitespace-pre-wrap">
+            {loadError}
+          </p>
+        ) : null}
       </div>
     )
   }
 
-  const { kpis, recentReservations, financeSnapshot } = summary
+  const { kpis, recentReservations, financeSnapshot, integrationConnectors, managerSummary } = summary
   const cashTrend = financeSnapshot.netCashFlow > 0
     ? "positive"
     : financeSnapshot.netCashFlow < 0
@@ -75,7 +96,7 @@ export default async function DashboardPage() {
         <KpiCard
           title="Today's Revenue"
           value={fmt(kpis.todayRevenue)}
-          sub="from paid invoices"
+          sub="from finance_transactions (ledger)"
           icon={<DollarSign className="h-4 w-4" />}
           color="green"
         />
@@ -157,16 +178,48 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* AI summary stub */}
-          <Card className="mt-4 border-dashed">
-            <CardContent className="pt-4">
-              <p className="text-xs text-muted-foreground font-medium mb-1">AI Manager Summary</p>
-              <p className="text-xs text-muted-foreground italic">
-                {kpis.overdueInvoiceCount > 0
-                  ? `${kpis.overdueInvoiceCount} overdue invoice${kpis.overdueInvoiceCount > 1 ? "s" : ""} need attention — ${fmt(kpis.overdueInvoiceAmount)} at risk.`
-                  : "All invoices are current. Great cash position this week."}
-              </p>
-              <Badge variant="outline" className="mt-2 text-[10px]">AI summary — coming in milestone 2</Badge>
+          <Card className="mt-4">
+            <CardContent className="pt-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground font-medium">Manager summary</p>
+                <Badge variant="outline" className="text-[10px] shrink-0">
+                  {managerSummary.source === "ai" ? "AI (persisted)" : "Deterministic fallback"}
+                </Badge>
+              </div>
+              <p className="text-sm font-medium text-foreground">{managerSummary.headline}</p>
+              <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1">
+                {managerSummary.bullets.map((b, i) => (
+                  <li key={i}>{b}</li>
+                ))}
+              </ul>
+              {managerSummary.riskNote ? (
+                <p className="text-[11px] text-amber-800 bg-amber-50 rounded-md px-2 py-1.5">{managerSummary.riskNote}</p>
+              ) : null}
+              {managerSummary.generatedAt ? (
+                <p className="text-[10px] text-muted-foreground">
+                  Generated {new Date(managerSummary.generatedAt).toLocaleString()}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">Integrations</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {integrationConnectors.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No connectors in Supabase.</p>
+              ) : (
+                integrationConnectors.map((c) => (
+                  <div key={c.provider} className="flex justify-between text-xs gap-2">
+                    <span className="font-medium text-foreground">{c.displayName}</span>
+                    <span className={c.status === "connected" ? "text-green-600" : c.status === "error" ? "text-red-600" : "text-muted-foreground"}>
+                      {c.status}
+                    </span>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>

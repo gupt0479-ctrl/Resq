@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase"
+import "server-only"
 import type {
   BookReservationRequest,
   Customer,
@@ -7,6 +7,11 @@ import type {
   RescheduleReservationRequest,
   ServiceResult,
 } from "@/lib/types"
+import { createServerSupabaseClient } from "@/lib/db/supabase-server"
+
+function admin() {
+  return createServerSupabaseClient()
+}
 
 function isValidTimeRange(startsAt: string, endsAt: string): boolean {
   return new Date(startsAt).getTime() < new Date(endsAt).getTime()
@@ -21,7 +26,7 @@ export async function checkConflict(
     return { error: "End time must be after start time." }
   }
 
-  let query = supabaseAdmin
+  let query = admin()
     .from("reservations")
     .select("*, customer:customers(*)")
     .in("status", ["confirmed", "completed"])
@@ -38,7 +43,7 @@ export async function checkConflict(
 async function findOrCreateCustomer(
   req: BookReservationRequest
 ): Promise<ServiceResult<Customer>> {
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await admin()
     .from("customers")
     .select("*")
     .eq("email", req.customer_email)
@@ -46,7 +51,7 @@ async function findOrCreateCustomer(
 
   if (existing) return { data: existing as Customer }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await admin()
     .from("customers")
     .insert({
       name: req.customer_name,
@@ -78,7 +83,7 @@ export async function bookReservation(
     return { error: customerResult.error ?? "Could not create customer." }
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await admin()
     .from("reservations")
     .insert({
       customer_id: customerResult.data.id,
@@ -99,7 +104,7 @@ export async function bookReservation(
 }
 
 export async function getReservations(): Promise<ServiceResult<Reservation[]>> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await admin()
     .from("reservations")
     .select("*, customer:customers(*)")
     .order("starts_at", { ascending: true })
@@ -109,7 +114,7 @@ export async function getReservations(): Promise<ServiceResult<Reservation[]>> {
 }
 
 export async function getReservation(id: string): Promise<ServiceResult<Reservation>> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await admin()
     .from("reservations")
     .select("*, customer:customers(*)")
     .eq("id", id)
@@ -136,7 +141,7 @@ export async function rescheduleReservation(
     return { error: "This time slot overlaps with an existing reservation." }
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await admin()
     .from("reservations")
     .update({
       starts_at: req.starts_at,
@@ -154,7 +159,7 @@ export async function rescheduleReservation(
 }
 
 export async function cancelReservation(id: string): Promise<ServiceResult<Reservation>> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await admin()
     .from("reservations")
     .update({ status: "cancelled" })
     .eq("id", id)
@@ -173,7 +178,7 @@ export async function completeReservation(id: string): Promise<ServiceResult<Res
     return { error: "Cancelled reservations cannot be completed." }
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await admin()
     .from("reservations")
     .update({ status: "completed" })
     .eq("id", id)
@@ -183,7 +188,7 @@ export async function completeReservation(id: string): Promise<ServiceResult<Res
   if (error) return { error: error.message }
 
   const visits = existing.data.customer?.visit_count ?? 0
-  await supabaseAdmin
+  await admin()
     .from("customers")
     .update({ visit_count: visits + 1 })
     .eq("id", existing.data.customer_id)
@@ -192,14 +197,14 @@ export async function completeReservation(id: string): Promise<ServiceResult<Res
 }
 
 export async function markReminderSent(id: string): Promise<void> {
-  await supabaseAdmin
+  await admin()
     .from("reservations")
     .update({ reminder_sent: true })
     .eq("id", id)
 }
 
 export async function markFollowUpSent(id: string): Promise<void> {
-  await supabaseAdmin
+  await admin()
     .from("reservations")
     .update({ follow_up_sent: true })
     .eq("id", id)
@@ -210,7 +215,7 @@ export async function createFollowUpRecord(
   customerId: string,
   message: string
 ): Promise<ServiceResult<FollowUp>> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await admin()
     .from("follow_ups")
     .insert({
       reservation_id: reservationId,
@@ -229,7 +234,7 @@ export async function getReservationsNeedingReminder(): Promise<Reservation[]> {
   const from = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
   const to = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
-  const { data } = await supabaseAdmin
+  const { data } = await admin()
     .from("reservations")
     .select("*, customer:customers(*)")
     .eq("status", "confirmed")
@@ -241,7 +246,7 @@ export async function getReservationsNeedingReminder(): Promise<Reservation[]> {
 }
 
 export async function getReservationsNeedingFollowUp(): Promise<Reservation[]> {
-  const { data } = await supabaseAdmin
+  const { data } = await admin()
     .from("reservations")
     .select("*, customer:customers(*)")
     .eq("status", "completed")

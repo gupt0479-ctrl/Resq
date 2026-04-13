@@ -48,6 +48,7 @@ export type WorkflowEventType =
   | "invoice.generated"
   | "invoice.sent"
   | "invoice.paid"
+  | "invoice.reminder_sent"
   | "invoice.overdue"
   | "feedback.received"
   | "feedback.flagged"

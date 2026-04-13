@@ -1,3 +1,7 @@
+-- ARCHIVED: superseded by migrations/0001_core_ledger.sql.
+-- Former path: supabase/migrations/001_scheduling_invoices.sql
+-- Do not re-apply; kept for historical reference only.
+
 -- ============================================================
 -- CUSTOMERS
 -- ============================================================
@@ -73,61 +77,4 @@ create table if not exists follow_ups (
   created_at timestamptz not null default now()
 );
 
--- ============================================================
--- SEED DATA — Ember Table restaurant demo
--- ============================================================
-insert into customers (id, name, email, phone, visit_count) values
-  ('a1000000-0000-0000-0000-000000000001', 'James Okafor', 'james@example.com', '555-0101', 3),
-  ('a1000000-0000-0000-0000-000000000002', 'Priya Menon', 'priya@example.com', '555-0102', 1),
-  ('a1000000-0000-0000-0000-000000000003', 'Lena Kovacs', 'lena@example.com', '555-0103', 5)
-on conflict do nothing;
-
-insert into appointments (id, customer_id, party_size, starts_at, ends_at, status, occasion) values
-  (
-    'b1000000-0000-0000-0000-000000000001',
-    'a1000000-0000-0000-0000-000000000001',
-    4,
-    now() - interval '2 hours',
-    now() - interval '30 minutes',
-    'completed',
-    'anniversary'
-  ),
-  (
-    'b1000000-0000-0000-0000-000000000002',
-    'a1000000-0000-0000-0000-000000000002',
-    2,
-    now() + interval '2 hours',
-    now() + interval '4 hours',
-    'confirmed',
-    null
-  ),
-  (
-    'b1000000-0000-0000-0000-000000000003',
-    'a1000000-0000-0000-0000-000000000003',
-    6,
-    now() - interval '5 days',
-    now() - interval '5 days' + interval '2 hours',
-    'completed',
-    'birthday'
-  )
-on conflict do nothing;
-
-insert into invoices (
-  appointment_id, customer_id, line_items,
-  subtotal, tax_rate, tax_amount, discount_amount, total,
-  status, due_at, reminder_count
-) values
-  (
-    'b1000000-0000-0000-0000-000000000003',
-    'a1000000-0000-0000-0000-000000000003',
-    '[
-      {"description":"Tasting Menu x6","quantity":6,"unit_price":95},
-      {"description":"Wine Pairing x6","quantity":6,"unit_price":55},
-      {"description":"Birthday Cake","quantity":1,"unit_price":45}
-    ]',
-    762.00, 0.08, 60.96, 0, 822.96,
-    'overdue',
-    now() - interval '3 days',
-    2
-  )
-on conflict do nothing;
+-- (seed inserts omitted in archive — use git history if needed)
