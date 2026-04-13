@@ -9,22 +9,25 @@ export type InvoiceReminderFacts = {
   invoiceNumber:  string
 }
 
+const anthropic = new Anthropic()
+
 export async function generateReminder(
-  invoice: Invoice,
+  facts: InvoiceReminderFacts,
   followUpType: "overdue" | "paid" = "overdue"
 ): Promise<{
   subject: string
   message: string
   reminder_number: number
 }> {
-  const name = invoice.customer?.name ?? "Guest"
-  const reminderNumber = (invoice.reminder_count ?? 0) + 1
+  const name = facts.customerName
+  const reminderNumber = facts.reminderCount + 1
+  const totalStr = facts.totalDue.toFixed(2)
 
   // ── Paid: thank-you / return-visit / feedback nudge ──────────────────────
   if (followUpType === "paid") {
     const prompt = `You are the manager of Ember Table, an upscale restaurant in Minneapolis.
 Guest: ${name}
-Invoice: $${invoice.total} — just paid.
+Invoice: $${totalStr} — just paid.
 
 Write a warm, personal thank-you follow-up email. Include:
 - Genuine thanks for their visit and prompt payment
