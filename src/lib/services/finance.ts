@@ -210,6 +210,7 @@ async function buildSyntheticTransactions(client: SupabaseClient, limit: number)
 
 export async function getFinanceSummary(
   client: SupabaseClient,
+  organizationId?: string,
 ): Promise<FinanceSummaryResponse> {
   const now = new Date()
   const asOf = now.toISOString()
@@ -268,19 +269,21 @@ export async function getFinanceSummary(
   }
 
   try {
+    // Build base queries — scope to org when provided.
+    const pendingBase = organizationId
+      ? client.from("invoices").select("total_amount, amount_paid").eq("organization_id", organizationId)
+      : client.from("invoices").select("total_amount, amount_paid")
+    const overdueBase = organizationId
+      ? client.from("invoices").select("total_amount, amount_paid").eq("organization_id", organizationId)
+      : client.from("invoices").select("total_amount, amount_paid")
+    const openBase = organizationId
+      ? client.from("invoices").select("total_amount, amount_paid, due_at").eq("organization_id", organizationId)
+      : client.from("invoices").select("total_amount, amount_paid, due_at")
+
     const [pendingRes, overdueRes, openRes] = await Promise.all([
-      client
-        .from("invoices")
-        .select("total_amount, amount_paid")
-        .in("status", ["sent", "pending"]),
-      client
-        .from("invoices")
-        .select("total_amount, amount_paid")
-        .eq("status", "overdue"),
-      client
-        .from("invoices")
-        .select("total_amount, amount_paid, due_at")
-        .not("status", "in", '("paid","void")'),
+      pendingBase.in("status", ["sent", "pending"]),
+      overdueBase.eq("status", "overdue"),
+      openBase.not("status", "in", '("paid","void")'),
     ])
 
     if (!pendingRes.error) {

@@ -46,6 +46,7 @@ At least one visible page or card must always demonstrate each core workflow sta
 
 Examples:
 
+- **dashboard** -> KPIs, AI briefing, **MCP bridge & connectors** card, **Feedback & recovery** spotlight, finance snapshot where applicable (PRD §1.2)
 - reservations page -> status progression
 - invoices page -> sent, pending, overdue, paid
 - finance page -> ledger and receivables
