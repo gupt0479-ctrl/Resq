@@ -8,7 +8,7 @@ import type {
   HistoricalReservation as Reservation,
   Shipment,
   ShipmentLineItem,
-  ShipmentStatus,
+  FinanceTransaction,
 } from "@/lib/types"
 
 // ── Ledger-aligned reads (0001_core_ledger.sql) ─────────────────────────────
@@ -152,6 +152,37 @@ export async function getShipmentById(id: string): Promise<Shipment | null> {
     .eq("id", id)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  if (!data) return null
-  return mapFinanceRowToShipment(data as FinancePurchaseRow)
+  if (!row) return null
+
+  const lineItems = ((row.shipment_line_items as unknown[]) ?? []).map((li) =>
+    mapLineItem(li as Record<string, unknown>)
+  )
+  return mapShipment(row as Record<string, unknown>, lineItems)
+}
+
+export async function getFinanceTransactions(): Promise<FinanceTransaction[]> {
+  "use cache"
+  cacheLife("seconds")
+  const { data, error } = await supabase
+    .from("finance_transactions")
+    .select("id, type, direction, category, amount, occurred_at, tax_relevant")
+    .order("occurred_at", { ascending: false })
+  if (error) return []
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    type: r.type as FinanceTransaction["type"],
+    direction: r.direction as FinanceTransaction["direction"],
+    category: r.category as string,
+    amount: Number(r.amount),
+    occurredAt: r.occurred_at as string,
+    taxRelevant: Boolean(r.tax_relevant),
+  }))
+}
+
+export async function cancelShipment(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("shipments")
+    .update({ status: "cancelled" })
+    .eq("id", id)
+  if (error) throw new Error(error.message)
 }
