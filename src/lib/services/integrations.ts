@@ -1,14 +1,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { WebhookPayload } from "@/lib/schemas/integrations"
-import { completeAppointment } from "@/lib/services/appointments"
+import {
+  cancelAppointment,
+  completeAppointment,
+  rescheduleAppointment,
+} from "@/lib/services/appointments"
 import { sendInvoice, markInvoicePaid } from "@/lib/services/invoices"
+import {
+  analyzeAndPersistFeedback,
+  ingestFeedbackRow,
+  resolveCustomerIdByEmail,
+} from "@/lib/services/feedback"
+import { logWebhookProcessed } from "@/lib/logging/server-log"
+import {
+  MUTATING_INTEGRATION_EVENTS,
+  normalizeDomainEvent,
+  getString,
+  getNumber,
+} from "@/lib/integrations/webhook-domain"
 
-/** Domain events that mutate finance or reservations — require `externalEventId` for dedupe + replay safety. */
-export const MUTATING_INTEGRATION_EVENTS = [
-  "reservation.completed",
-  "invoice.sent",
-  "invoice.paid",
-] as const
+export { MUTATING_INTEGRATION_EVENTS, normalizeDomainEvent } from "@/lib/integrations/webhook-domain"
 
 // ─── List connectors ──────────────────────────────────────────────────────
 
@@ -96,7 +107,8 @@ export async function ingestWebhookPayload(
     !payload.externalEventId
   ) {
     throw new Error(
-      "externalEventId is required for reservation.completed, invoice.sent, and invoice.paid webhooks (deduplication)."
+      "externalEventId is required for mutating integration webhooks (deduplication): " +
+        MUTATING_INTEGRATION_EVENTS.join(", ")
     )
   }
 
@@ -135,8 +147,16 @@ export async function ingestWebhookPayload(
     .update({ last_sync_at: new Date().toISOString(), status: "connected", last_error: null })
     .eq("id", connector.id)
 
+  const t0 = Date.now()
   try {
-    await dispatchWebhookCommand(client, organizationId, provider, normalizedEvent, payload)
+    await dispatchWebhookCommand(
+      client,
+      organizationId,
+      provider,
+      normalizedEvent,
+      payload,
+      syncEvent.id as string
+    )
     await client
       .from("integration_sync_events")
       .update({ processing_status: "processed", processed_at: new Date().toISOString() })
@@ -162,6 +182,14 @@ export async function ingestWebhookPayload(
     throw error
   }
 
+  logWebhookProcessed({
+    provider,
+    normalizedEvent,
+    syncEventId: syncEvent.id as string,
+    skipped:     false,
+    durationMs:  Date.now() - t0,
+  })
+
   return {
     syncEventId:            syncEvent.id,
     processing_status:      "processed",
@@ -177,12 +205,28 @@ async function dispatchWebhookCommand(
   organizationId: string,
   provider: string,
   normalizedEvent: string | null,
-  payload: WebhookPayload
+  payload: WebhookPayload,
+  syncEventId: string
 ) {
   if (!normalizedEvent) return
 
   const invoiceId = getString(payload.data, "invoiceId", "invoice_id")
   const appointmentId = getString(payload.data, "appointmentId", "appointment_id")
+
+  if (normalizedEvent === "reservation.cancelled" && appointmentId) {
+    await cancelAppointment(client, appointmentId, organizationId)
+    return
+  }
+
+  if (normalizedEvent === "reservation.rescheduled" && appointmentId) {
+    const startsAt = getString(payload.data, "startsAt", "starts_at", "startAt")
+    const endsAt = getString(payload.data, "endsAt", "ends_at", "endAt")
+    if (!startsAt || !endsAt) {
+      throw new Error("reservation.rescheduled requires startsAt and endsAt in webhook data.")
+    }
+    await rescheduleAppointment(client, appointmentId, organizationId, startsAt, endsAt)
+    return
+  }
 
   if (normalizedEvent === "reservation.completed" && appointmentId) {
     await completeAppointment(
@@ -218,32 +262,71 @@ async function dispatchWebhookCommand(
       amountPaid:    amountPaid ?? undefined,
       notes:         `Paid by ${provider} webhook`,
     })
-  }
-}
-
-export function normalizeDomainEvent(
-  provider: string,
-  externalEventType?: string
-): string | null {
-  if (!externalEventType) return null
-
-  const et = externalEventType.toLowerCase()
-
-  if (et === "reservation.completed" || et === "invoice.sent" || et === "invoice.paid") {
-    return et
+    return
   }
 
-  // Simple normalization map — extend per provider as integrations grow
-  if (et.includes("reservation") && et.includes("creat")) return "reservation.created"
-  if (et.includes("reservation") && et.includes("complet")) return "reservation.completed"
-  if (et.includes("invoice") && et.includes("sent")) return "invoice.sent"
-  if (et.includes("payment") && (et.includes("success") || et.includes("complete"))) {
-    return "invoice.paid"
-  }
-  if (et.includes("payment") && et.includes("fail")) return "invoice.overdue"
-  if (et.includes("review") || et.includes("feedback")) return "feedback.received"
+  if (normalizedEvent === "feedback.received") {
+    const data = payload.data
+    const score = getNumber(data, "score", "rating", "stars")
+    if (score == null || score < 1 || score > 5) {
+      throw new Error("feedback.received requires numeric score between 1 and 5.")
+    }
+    let guestName =
+      getString(data, "guestName", "guest_name", "reviewerName", "reviewer_name") ?? ""
+    const comment = getString(data, "comment", "text", "body") ?? ""
+    let customerId = getString(data, "customerId", "customer_id") ?? null
+    const email = getString(data, "guestEmail", "guest_email", "email")
+    if (!customerId && email) {
+      customerId = await resolveCustomerIdByEmail(client, organizationId, email)
+    }
+    if (!guestName && customerId) {
+      const { data: cust } = await client
+        .from("customers")
+        .select("full_name")
+        .eq("id", customerId)
+        .eq("organization_id", organizationId)
+        .maybeSingle()
+      guestName = (cust as { full_name?: string } | null)?.full_name ?? "Guest"
+    }
+    if (!guestName) guestName = "Guest"
 
-  return `${provider}.${externalEventType}`
+    const sourceRaw =
+      getString(data, "source", "review_source", "channel")?.toLowerCase() ?? provider
+    const source =
+      sourceRaw.includes("yelp") ? "yelp" :
+      sourceRaw.includes("google") ? "google" :
+      sourceRaw.includes("opentable") ? "opentable" :
+      "internal"
+
+    const externalReviewId =
+      getString(data, "externalReviewId", "external_review_id", "reviewId", "review_id") ??
+      payload.externalEventId ??
+      null
+    const externalSource = getString(data, "externalSource", "external_source") ?? provider
+
+    const { feedbackId, created } = await ingestFeedbackRow(client, {
+      organizationId,
+      customerId,
+      appointmentId:            getString(data, "appointmentId", "appointment_id") ?? null,
+      integrationSyncEventId:   syncEventId,
+      guestName,
+      score,
+      comment,
+      source,
+      externalReviewId,
+      externalSource,
+    })
+
+    if (created) {
+      await analyzeAndPersistFeedback(client, organizationId, feedbackId, {
+        guestName,
+        score,
+        comment,
+        source,
+        customerId,
+      })
+    }
+  }
 }
 
 function providerDisplayName(provider: string): string {
@@ -260,32 +343,3 @@ function providerDisplayName(provider: string): string {
   return names[provider] ?? provider
 }
 
-function getString(
-  data: Record<string, unknown>,
-  ...keys: string[]
-): string | undefined {
-  for (const key of keys) {
-    const value = data[key]
-    if (typeof value === "string" && value.length > 0) {
-      return value
-    }
-  }
-}
-
-function getNumber(
-  data: Record<string, unknown>,
-  ...keys: string[]
-): number | undefined {
-  for (const key of keys) {
-    const value = data[key]
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value
-    }
-    if (typeof value === "string" && value.trim().length > 0) {
-      const parsed = Number(value)
-      if (Number.isFinite(parsed)) {
-        return parsed
-      }
-    }
-  }
-}

@@ -6,6 +6,7 @@ import {
   integrationWebhookAuthError,
   integrationWebhookRateLimitError,
 } from "@/lib/integrations/webhook-guard"
+import { logWebhookProcessed } from "@/lib/logging/server-log"
 
 /**
  * MCP bridge ingress endpoint.
@@ -56,6 +57,14 @@ export async function POST(
       payload,
       body as Record<string, unknown>
     )
+
+    if (result.skipped) {
+      logWebhookProcessed({
+        provider,
+        normalizedEvent: result.normalized_domain_event,
+        skipped:         true,
+      })
+    }
 
     return Response.json(
       {

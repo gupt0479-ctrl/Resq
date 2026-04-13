@@ -220,41 +220,73 @@ export async function getFinanceSummary(
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10)
   const todayStr = now.toISOString().slice(0, 10)
-
-  // ── Revenue from reservations × menu prices ──────────────────────────────
-  const [reservationsRes, menuItemsRes] = await Promise.all([
-    client
-      .from("reservations")
-      .select("id, date, covers, menu_item_ids")
-      .gte("date", sevenDaysAgoStr)
-      .lte("date", todayStr),
-    client.from("menu_items").select("id, price"),
-  ])
-
-  const priceMap = new Map(
-    (menuItemsRes.data ?? []).map((m) => [m.id as string, Number(m.price)])
-  )
+  const sinceIso = sevenDaysAgo.toISOString()
 
   let revenueThisWeek = 0
   let revenueToday = 0
-  for (const r of reservationsRes.data ?? []) {
-    const ids = (r.menu_item_ids as string[]) ?? []
-    const total = Number(r.covers) * ids.reduce((s, id) => s + (priceMap.get(id) ?? 0), 0)
-    revenueThisWeek += total
-    if (r.date === todayStr) revenueToday += total
+  let expensesThisWeek = 0
+  let usedLedgerForWeekly = false
+
+  if (organizationId) {
+    const { data: ledgerRows, error: ledgerErr } = await client
+      .from("finance_transactions")
+      .select("amount, direction, type, occurred_at")
+      .eq("organization_id", organizationId)
+      .gte("occurred_at", sinceIso)
+
+    if (!ledgerErr && ledgerRows && ledgerRows.length > 0) {
+      usedLedgerForWeekly = true
+      const todayPrefix = `${todayStr}T`
+      for (const r of ledgerRows) {
+        const amt = Number(r.amount) || 0
+        if (r.direction === "in" && r.type === "revenue") {
+          revenueThisWeek += amt
+          const oc = r.occurred_at as string
+          if (oc.startsWith(todayPrefix) || oc.slice(0, 10) === todayStr) {
+            revenueToday += amt
+          }
+        }
+        if (r.direction === "out") {
+          expensesThisWeek += amt
+        }
+      }
+    }
   }
 
-  // ── Expenses from shipments (inventory purchases last 7 days) ────────────
-  const { data: shipments } = await client
-    .from("shipments")
-    .select("total_cost, ordered_at, status")
-    .neq("status", "cancelled")
-    .gte("ordered_at", sevenDaysAgo.toISOString())
+  if (!usedLedgerForWeekly) {
+    // ── Revenue from reservations × menu prices (legacy / non-ledger demos) ─
+    const [reservationsRes, menuItemsRes] = await Promise.all([
+      client
+        .from("reservations")
+        .select("id, date, covers, menu_item_ids")
+        .gte("date", sevenDaysAgoStr)
+        .lte("date", todayStr),
+      client.from("menu_items").select("id, price"),
+    ])
 
-  const expensesThisWeek = (shipments ?? []).reduce(
-    (s, r) => s + Number(r.total_cost),
-    0
-  )
+    const priceMap = new Map(
+      (menuItemsRes.data ?? []).map((m) => [m.id as string, Number(m.price)])
+    )
+
+    for (const r of reservationsRes.data ?? []) {
+      const ids = (r.menu_item_ids as string[]) ?? []
+      const total = Number(r.covers) * ids.reduce((s, id) => s + (priceMap.get(id) ?? 0), 0)
+      revenueThisWeek += total
+      if (r.date === todayStr) revenueToday += total
+    }
+
+    // ── Expenses from shipments (inventory purchases last 7 days) ───────────
+    const { data: shipments } = await client
+      .from("shipments")
+      .select("total_cost, ordered_at, status")
+      .neq("status", "cancelled")
+      .gte("ordered_at", sinceIso)
+
+    expensesThisWeek = (shipments ?? []).reduce(
+      (s, r) => s + Number(r.total_cost),
+      0
+    )
+  }
 
   // ── Receivables from invoices (graceful fallback if table is empty/missing) ─
   let pendingReceivables = 0
@@ -269,21 +301,20 @@ export async function getFinanceSummary(
   }
 
   try {
-    // Build base queries — scope to org when provided.
-    const pendingBase = organizationId
-      ? client.from("invoices").select("total_amount, amount_paid").eq("organization_id", organizationId)
-      : client.from("invoices").select("total_amount, amount_paid")
-    const overdueBase = organizationId
-      ? client.from("invoices").select("total_amount, amount_paid").eq("organization_id", organizationId)
-      : client.from("invoices").select("total_amount, amount_paid")
-    const openBase = organizationId
-      ? client.from("invoices").select("total_amount, amount_paid, due_at").eq("organization_id", organizationId)
-      : client.from("invoices").select("total_amount, amount_paid, due_at")
+    const pendingQ = client
+      .from("invoices")
+      .select("total_amount, amount_paid")
+      .in("status", ["sent", "pending"])
+    const overdueQ = client.from("invoices").select("total_amount, amount_paid").eq("status", "overdue")
+    const openQ = client
+      .from("invoices")
+      .select("total_amount, amount_paid, due_at")
+      .not("status", "in", '("paid","void")')
 
     const [pendingRes, overdueRes, openRes] = await Promise.all([
-      pendingBase.in("status", ["sent", "pending"]),
-      overdueBase.eq("status", "overdue"),
-      openBase.not("status", "in", '("paid","void")'),
+      organizationId ? pendingQ.eq("organization_id", organizationId) : pendingQ,
+      organizationId ? overdueQ.eq("organization_id", organizationId) : overdueQ,
+      organizationId ? openQ.eq("organization_id", organizationId) : openQ,
     ])
 
     if (!pendingRes.error) {

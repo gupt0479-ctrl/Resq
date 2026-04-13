@@ -84,6 +84,9 @@ export const FinanceSummaryFactsSchema = z.object({
   largestOverdueInvoices: z.array(
     z.object({ invoiceNumber: z.string(), amount: z.number(), customerName: z.string() })
   ),
+  /** Deterministic feedback signals (Phase 4 grounding). */
+  urgentFeedbackCount:  z.number(),
+  flaggedFeedbackCount: z.number(),
 })
 
 export type FinanceSummaryFacts = z.infer<typeof FinanceSummaryFactsSchema>
