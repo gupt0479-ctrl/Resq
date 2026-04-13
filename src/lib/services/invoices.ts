@@ -361,7 +361,10 @@ export async function ensureInvoiceForCompletedAppointment(
       .maybeSingle()
 
     if (concurrentErr) {
-      throw err
+      // Wrap both errors for full context.
+      throw new Error(
+        `Invoice insert failed (${(err as Error).message}); re-fetch also failed: ${concurrentErr.message}`
+      )
     }
 
     if (concurrentExisting?.id) {
