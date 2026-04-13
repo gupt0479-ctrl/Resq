@@ -8,9 +8,8 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react"
+import { VantaHero } from "@/components/landing/vanta-hero"
 
-const HERO_IMAGE =
-  "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1920&q=80"
 
 const BEFORE = [
   "Spreadsheet for inventory — updated manually",
@@ -59,38 +58,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-foreground">
       {/* ── Hero ─────────────────────────────────────────── */}
-      <section
-        className="relative flex min-h-screen items-center justify-center bg-cover bg-center"
-        style={{ backgroundImage: `url('${HERO_IMAGE}')` }}
-      >
-        <div className="absolute inset-0 bg-black/62" />
-        <div className="relative z-10 mx-auto max-w-3xl px-6 text-center text-white">
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-white/70">
-            Ember Table · Minneapolis
-          </p>
-          <h1 className="mb-5 text-5xl font-bold leading-tight tracking-tight sm:text-6xl">
-            Run your restaurant.<br />Not your inbox.
-          </h1>
-          <p className="mb-10 text-lg text-white/80 sm:text-xl">
-            AI that handles reviews, guests, inventory, and daily briefings —
-            so you can focus on the food.
-          </p>
-          <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            >
-              Open Dashboard <ArrowRight className="h-4 w-4" />
-            </Link>
-            <a
-              href="#demo"
-              className="inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
-            >
-              See it live
-            </a>
-          </div>
-        </div>
-      </section>
+      <VantaHero />
 
       {/* ── Before / After ───────────────────────────────── */}
       <section id="demo" className="bg-gray-50 px-6 py-20">

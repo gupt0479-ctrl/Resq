@@ -165,7 +165,7 @@ export default function FeedbackPage() {
 
                 {/* Comment */}
                 <blockquote className="mt-3 rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground italic">
-                  "{review.comment}"
+                  &ldquo;{review.comment}&rdquo;
                 </blockquote>
 
                 {/* Sentiment */}
@@ -212,7 +212,7 @@ export default function FeedbackPage() {
                 </Badge>
               </div>
               <p className="mt-2 text-xs text-foreground leading-relaxed">
-                "{item.message}"
+                &ldquo;{item.message}&rdquo;
               </p>
               <div className="mt-3">
                 <DismissActions approveLabel="Approve & Send" />

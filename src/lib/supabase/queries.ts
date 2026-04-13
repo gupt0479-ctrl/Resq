@@ -1,4 +1,3 @@
-import { cacheLife } from "next/cache"
 import { supabase } from "./client"
 import type {
   InventoryItem,
@@ -57,8 +56,6 @@ function mapShipment(row: Record<string, unknown>, lineItems: ShipmentLineItem[]
 // ── public query functions ────────────────────────────────────
 
 export async function getInventoryItems(): Promise<InventoryItem[]> {
-  "use cache"
-  cacheLife("seconds") // revalidate every 30 s
   const { data, error } = await supabase
     .from("inventory_items")
     .select(
@@ -83,8 +80,6 @@ export async function getInventoryItemById(id: string): Promise<InventoryItem | 
 }
 
 export async function getMenuItems(): Promise<MenuItem[]> {
-  "use cache"
-  cacheLife("hours")
   const { data, error } = await supabase
     .from("menu_items")
     .select("id, name, category, price")
@@ -99,8 +94,6 @@ export async function getMenuItems(): Promise<MenuItem[]> {
 }
 
 export async function getMenuInventoryUsage(): Promise<MenuItemInventoryUsage[]> {
-  "use cache"
-  cacheLife("hours")
   const { data, error } = await supabase
     .from("menu_item_inventory_usage")
     .select("menu_item_id, item_id, units_used_per_order")
@@ -113,8 +106,6 @@ export async function getMenuInventoryUsage(): Promise<MenuItemInventoryUsage[]>
 }
 
 export async function getReservations(): Promise<Reservation[]> {
-  "use cache"
-  cacheLife("hours")
   const { data, error } = await supabase
     .from("reservations")
     .select("id, date, covers, menu_item_ids")
@@ -130,8 +121,6 @@ export async function getReservations(): Promise<Reservation[]> {
 
 /** Fetches all shipments with their line items in a single JOIN query */
 export async function getShipments(): Promise<Shipment[]> {
-  "use cache"
-  cacheLife("seconds")
   const { data, error } = await supabase
     .from("shipments")
     .select(

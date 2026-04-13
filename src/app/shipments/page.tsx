@@ -1,4 +1,5 @@
 import { Suspense } from "react"
+import { connection } from "next/server"
 import { Package, Truck, CalendarCheck, DollarSign } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShipmentTable } from "@/components/shipments/shipment-table"
@@ -152,7 +153,9 @@ function ShipmentsSkeleton() {
 
 // ── Page shell: synchronous, no runtime API access ───────────────────────────
 
-export default function ShipmentsPage() {
+export default async function ShipmentsPage() {
+  await connection()
+
   return (
     <div className="space-y-5 p-6">
       <div>
