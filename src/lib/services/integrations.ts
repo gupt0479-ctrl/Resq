@@ -3,6 +3,13 @@ import type { WebhookPayload } from "@/lib/schemas/integrations"
 import { completeAppointment } from "@/lib/services/appointments"
 import { sendInvoice, markInvoicePaid } from "@/lib/services/invoices"
 
+/** Domain events that mutate finance or reservations — require `externalEventId` for dedupe + replay safety. */
+export const MUTATING_INTEGRATION_EVENTS = [
+  "reservation.completed",
+  "invoice.sent",
+  "invoice.paid",
+] as const
+
 // ─── List connectors ──────────────────────────────────────────────────────
 
 export async function listConnectors(
@@ -81,9 +88,19 @@ export async function ingestWebhookPayload(
     connector = newConn
   }
 
-  // 2. Attempt to insert the sync event (unique index handles dedupe)
   const normalizedEvent = normalizeDomainEvent(provider, payload.eventType)
 
+  if (
+    normalizedEvent &&
+    (MUTATING_INTEGRATION_EVENTS as readonly string[]).includes(normalizedEvent) &&
+    !payload.externalEventId
+  ) {
+    throw new Error(
+      "externalEventId is required for reservation.completed, invoice.sent, and invoice.paid webhooks (deduplication)."
+    )
+  }
+
+  // 2. Attempt to insert the sync event (unique index handles dedupe)
   const { data: syncEvent, error: insertErr } = await client
     .from("integration_sync_events")
     .insert({
@@ -131,9 +148,17 @@ export async function ingestWebhookPayload(
       .update({
         processing_status: "failed",
         processed_at: new Date().toISOString(),
-        error_message: message,
+        error_message: message.slice(0, 4000),
       })
       .eq("id", syncEvent.id)
+    await client
+      .from("integration_connectors")
+      .update({
+        status:     "error",
+        last_error: message.slice(0, 2000),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", connector.id)
     throw error
   }
 
@@ -175,15 +200,28 @@ async function dispatchWebhookCommand(
   }
 
   if (normalizedEvent === "invoice.paid" && invoiceId) {
+    let amountPaid = getNumber(payload.data, "amountPaid", "amount_paid", "amount")
+    const { data: inv } = await client
+      .from("invoices")
+      .select("total_amount")
+      .eq("id", invoiceId)
+      .eq("organization_id", organizationId)
+      .maybeSingle()
+
+    if (inv && amountPaid != null) {
+      const cap = Number(inv.total_amount) || 0
+      if (amountPaid > cap) amountPaid = cap
+    }
+
     await markInvoicePaid(client, invoiceId, organizationId, {
       paymentMethod: getString(payload.data, "paymentMethod", "payment_method") ?? "card",
-      amountPaid: getNumber(payload.data, "amountPaid", "amount_paid", "amount") ?? undefined,
-      notes: `Paid by ${provider} webhook`,
+      amountPaid:    amountPaid ?? undefined,
+      notes:         `Paid by ${provider} webhook`,
     })
   }
 }
 
-function normalizeDomainEvent(
+export function normalizeDomainEvent(
   provider: string,
   externalEventType?: string
 ): string | null {

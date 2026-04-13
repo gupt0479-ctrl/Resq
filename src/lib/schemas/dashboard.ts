@@ -20,6 +20,22 @@ export const RecentReservationSchema = z.object({
   status: z.string(),
 })
 
+export const DashboardConnectorHealthSchema = z.object({
+  provider:    z.string(),
+  displayName: z.string(),
+  status:      z.string(),
+  lastSyncAt:  z.string().nullable(),
+  lastError:   z.string().nullable(),
+})
+
+export const DashboardManagerSummarySchema = z.object({
+  source:      z.enum(["ai", "fallback"]),
+  headline:    z.string(),
+  bullets:     z.array(z.string()),
+  riskNote:    z.string().optional(),
+  generatedAt: z.string().optional(),
+})
+
 export const DashboardSummarySchema = z.object({
   kpis: DashboardKpisSchema,
   recentReservations: z.array(RecentReservationSchema),
@@ -28,6 +44,8 @@ export const DashboardSummarySchema = z.object({
     weeklyExpenses: z.number(),
     netCashFlow: z.number(),
   }),
+  integrationConnectors: z.array(DashboardConnectorHealthSchema),
+  managerSummary:          DashboardManagerSummarySchema,
 })
 
 export type DashboardSummary = z.infer<typeof DashboardSummarySchema>

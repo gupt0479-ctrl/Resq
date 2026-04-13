@@ -12,6 +12,7 @@ import {
   CalendarDays,
   DollarSign,
   Truck,
+  Plug,
 } from "lucide-react"
 
 const coreItems = [
@@ -21,11 +22,16 @@ const coreItems = [
 ]
 
 const opsItems = [
-  { href: "/feedback", label: "Customer Service", icon: MessageSquare },
   { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/finance", label: "Finance", icon: DollarSign },
   { href: "/inventory", label: "Inventory", icon: Package },
   { href: "/shipments", label: "Shipments", icon: Truck },
+]
+
+/** Phase 3: MCP bridge + feedback must stay visible in IA (PRD §4.3, §12.1). */
+const supportItems = [
+  { href: "/feedback", label: "Feedback", icon: MessageSquare },
+  { href: "/integrations", label: "Integrations", icon: Plug },
 ]
 
 export function Sidebar() {
@@ -69,6 +75,16 @@ export function Sidebar() {
           Operations
         </p>
         {opsItems.map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={href} className={navClass(href)}>
+            <Icon className="h-4 w-4 shrink-0" />
+            {label}
+          </Link>
+        ))}
+
+        <p className="mb-2 mt-5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          Support
+        </p>
+        {supportItems.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className={navClass(href)}>
             <Icon className="h-4 w-4 shrink-0" />
             {label}

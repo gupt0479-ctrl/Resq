@@ -5,6 +5,8 @@
 **Product:** OpsPilot — Small Business AI Workflow Companion
 **Primary demo vertical:** Ember Table restaurant
 
+**PRD authority:** This document is the canonical product specification for OpsPilot. Other markdown under `.claude/` (playbooks, context, workflows) should stay aligned with it. Prefer **append-only** edits and clarifications here; do not remove existing sections unless a deliberate product change is recorded (for example in `decisions/decision-log.md`).
+
 ---
 
 ## 1. Product Overview
@@ -22,6 +24,18 @@ This PRD reflects three inputs:
 1. **The hackathon brief:** build an AI product that replaces one real workflow, shows clear before-vs-after, uses AI meaningfully, and demonstrates willingness to pay.
 2. **The current Lovable concept and IA** for Ember Table.
 3. **The Figma discussions and screenshots**, which add missing detail around scheduling/cancellations, feedback workflows, inventory logic, business performance analysis, and especially finance.
+
+### 1.2 Phase 3 — MCP bridge, feedback, and dashboard visibility (implementation track)
+
+This subsection records **current engineering scope** without changing earlier requirements. It complements §4.3 (IA), §8.7 (MCP Integration Service), §12.1 (MVP), and the Feedback / Integrations acceptance criteria.
+
+| Track | What “done” means for the hackathon demo |
+|-------|------------------------------------------|
+| **MCP bridge** | HTTP ingress at `POST /api/integrations/webhooks/:provider` validates payloads, writes `integration_sync_events`, dedupes on `external_event_id`, and dispatches to the **same** domain services as first-party routes (`integrations` service). The **Integrations** page explains the bridge; the **dashboard** surfaces an **MCP bridge & connectors** panel (status + link). |
+| **Feedback** | **`/feedback`** remains the home for flagged reviews, recovery drafts, and follow-up actions (§4.2.4). The **dashboard** includes a **Feedback & recovery** spotlight (summary + link) so judges always see the module. Until a dedicated `feedback` table and APIs land, the page may use **clearly marked** demo/mock rows; the spotlight may summarize representative cases. |
+| **Navigation** | Global sidebar IA MUST list **Feedback** and **Integrations** explicitly (not only under ambiguous labels). A **Support** (or equivalent) group is acceptable if it keeps both routes one click away. |
+
+**Non-regression:** Removing these surfaces from the dashboard or primary nav is a **product regression** relative to §4.1 and §12.1 unless the PRD is formally updated.
 
 ---
 

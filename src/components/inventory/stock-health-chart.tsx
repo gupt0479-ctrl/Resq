@@ -46,9 +46,9 @@ export function StockHealthChart({
   if (totalItems === 0) return null
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Donut */}
-      <div className="relative flex-1 min-h-[180px]">
+    <div className="flex w-full min-w-0 flex-col">
+      {/* Donut — fixed height so ResponsiveContainer always gets a real box (avoids width/height -1). */}
+      <div className="relative h-[200px] w-full min-w-0 shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie

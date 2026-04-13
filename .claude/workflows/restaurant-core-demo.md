@@ -219,6 +219,7 @@ Minimum rules:
 - `FinanceService`
 - `FeedbackService`
 - `AIOrchestrator`
+- **UI contract (PRD §1.2):** Dashboard always includes **MCP bridge & connectors** and **Feedback & recovery** panels; sidebar lists **Feedback** and **Integrations** explicitly. Do not drop these without updating the PRD.
 
 ### Phase 4
 

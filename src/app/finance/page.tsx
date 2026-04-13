@@ -1,12 +1,16 @@
 import type { ReactNode } from "react"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { getFinanceSummaryQuery, listTransactionsQuery } from "@/lib/queries/finance"
 import { isSupabaseConfigured } from "@/lib/env"
+import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FINANCE_TRANSACTION_TYPE_LABEL } from "@/lib/constants/enums"
 import type { FinanceTransactionType } from "@/lib/constants/enums"
 import type { FinanceTransactionResponse } from "@/lib/schemas/finance"
 import { TrendingUp, TrendingDown, AlertCircle, Clock } from "lucide-react"
+
+export const dynamic = "force-dynamic"
 
 function fmt(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" })
@@ -22,10 +26,22 @@ export default async function FinancePage() {
   }
 
   const client = createServerSupabaseClient()
-  const [summary, transactions] = await Promise.all([
-    getFinanceSummaryQuery(client).catch(() => null),
+
+  const schema = await getLedgerSchemaHealth(client)
+  if (!schema.ok) {
+    return <LedgerSchemaBanner message={schema.message} />
+  }
+
+  const [summaryResult, transactions] = await Promise.all([
+    getFinanceSummaryQuery(client)
+      .then((data) => ({ summary: data, error: null as string | null }))
+      .catch((err: unknown) => ({
+        summary: null,
+        error: err instanceof Error ? err.message : String(err),
+      })),
     listTransactionsQuery(client, DEMO_ORG_ID, { limit: 20 }).catch(() => []),
   ])
+  const { summary, error: financeLoadError } = summaryResult
 
   return (
     <div className="p-6 space-y-6">
@@ -96,7 +112,14 @@ export default async function FinancePage() {
           </div>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">Failed to load finance summary.</p>
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">Failed to load finance summary.</p>
+          {financeLoadError ? (
+            <p className="text-xs font-mono rounded-lg border border-border bg-muted/40 p-3 text-red-800 whitespace-pre-wrap">
+              {financeLoadError}
+            </p>
+          ) : null}
+        </div>
       )}
 
       {/* Transaction table */}

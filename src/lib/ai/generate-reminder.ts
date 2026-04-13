@@ -1,7 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk"
-import type { Invoice } from "@/lib/types"
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+/** Facts only — amounts come from the invoice row, never from model inference. */
+export type InvoiceReminderFacts = {
+  customerName:   string
+  totalDue:       number
+  dueAt:          string
+  reminderCount:  number
+  invoiceNumber:  string
+}
 
 export async function generateReminder(
   invoice: Invoice,
@@ -53,7 +59,7 @@ Return ONLY valid JSON, no other text:
   // ── Overdue: escalating payment reminder ─────────────────────────────────
   const daysOverdue = Math.max(
     0,
-    Math.floor((Date.now() - new Date(invoice.due_at).getTime()) / (1000 * 60 * 60 * 24))
+    Math.floor((Date.now() - new Date(facts.dueAt).getTime()) / (1000 * 60 * 60 * 24))
   )
   const tone =
     reminderNumber === 1 ? "gentle and friendly" :
@@ -63,7 +69,8 @@ Return ONLY valid JSON, no other text:
   const prompt = `You are the manager of Ember Table restaurant sending a payment reminder.
 Tone: ${tone}
 Guest: ${name}
-Amount due: $${invoice.total}
+Invoice: ${facts.invoiceNumber}
+Amount due (do not change this number): $${totalStr}
 Days overdue: ${daysOverdue}
 Reminder number: ${reminderNumber}
 
@@ -85,7 +92,10 @@ Return ONLY valid JSON, no other text:
   } catch {
     return {
       subject: `Payment reminder — Ember Table`,
-      message: `Dear ${name}, this is a reminder that your invoice of $${invoice.total} is overdue by ${daysOverdue} days. Please arrange payment at your earliest convenience. Thank you for dining with us at Ember Table.`,
+      message:
+        `Dear ${name}, this is a reminder that invoice ${facts.invoiceNumber} for $${totalStr} is` +
+        (daysOverdue > 0 ? ` overdue by ${daysOverdue} days` : " coming due") +
+        ". Please arrange payment at your earliest convenience. Thank you for dining with us at Ember Table.",
       reminder_number: reminderNumber,
     }
   }

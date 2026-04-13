@@ -1,42 +1,47 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getInvoice, recordReminderSent } from "@/lib/services/invoice.service"
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { getInvoiceDetail, recordInvoiceReminderSent } from "@/lib/services/invoices"
 import { generateReminder } from "@/lib/ai/generate-reminder"
 
 export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  _req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
+  const { id } = await ctx.params
 
-  let followUpType: "overdue" | "paid" = "overdue"
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let invoiceFallback: any = null
   try {
-    const body = await req.json()
-    if (body?.followUpType === "paid") followUpType = "paid"
-    if (body?.invoiceFallback) invoiceFallback = body.invoiceFallback
-  } catch { /* no body is fine */ }
+    const client = createServerSupabaseClient()
+    const invoice = await getInvoiceDetail(client, id, DEMO_ORG_ID)
 
-  let invoice: import("@/lib/types").Invoice | null = null
-  const result = await getInvoice(id)
-  if (!result.error && result.data) {
-    invoice = result.data
-  } else if (invoiceFallback) {
-    // Mock / fallback data from client
-    invoice = invoiceFallback as import("@/lib/types").Invoice
-  } else {
-    return NextResponse.json({ error: "Invoice not found." }, { status: 404 })
+    if (invoice.status === "paid" || invoice.status === "void") {
+      return NextResponse.json({ error: "Invoice is not eligible for reminders." }, { status: 400 })
+    }
+
+    const cust = invoice.customers as { full_name?: string } | null | undefined
+    const customerName = cust?.full_name ?? "Guest"
+
+    const totalDue = Math.max(0, (Number(invoice.total_amount) || 0) - (Number(invoice.amount_paid) || 0))
+
+    const reminder = await generateReminder({
+      customerName,
+      totalDue,
+      dueAt:         invoice.due_at,
+      reminderCount: Number(invoice.reminder_count) || 0,
+      invoiceNumber: invoice.invoice_number,
+    })
+
+    const reminderNumber = await recordInvoiceReminderSent(client, id, DEMO_ORG_ID)
+
+    return NextResponse.json({
+      subject:         reminder.subject,
+      message:         reminder.message,
+      reminder_number: reminderNumber,
+      customer_name:   customerName,
+      invoice_total:   totalDue,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unexpected error"
+    const status = message.toLowerCase().includes("not found") ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
   }
-
-  const reminder = await generateReminder(invoice, followUpType)
-  if (followUpType === "overdue") await recordReminderSent(id)
-
-  return NextResponse.json({
-    subject: reminder.subject,
-    message: reminder.message,
-    reminder_number: reminder.reminder_number,
-    customer_name: invoice.customer?.name ?? "Guest",
-    invoice_total: invoice.total,
-    follow_up_type: followUpType,
-  })
 }

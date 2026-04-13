@@ -1,5 +1,4 @@
 import "server-only"
-
 import { supabase } from "./client"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import type {
@@ -92,7 +91,6 @@ export async function getInventoryItemById(id: string): Promise<InventoryItem | 
 
 /** Menu catalog in ledger = `services`. */
 export async function getMenuItems(): Promise<MenuItem[]> {
-  const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
     .from("services")
     .select("id, name, category, price_per_person")
@@ -110,14 +108,21 @@ export async function getMenuItems(): Promise<MenuItem[]> {
 
 /** No usage bridge table in core ledger — empty until modeled. */
 export async function getMenuInventoryUsage(): Promise<MenuItemInventoryUsage[]> {
-  return []
+  const { data, error } = await supabase
+    .from("menu_item_inventory_usage")
+    .select("menu_item_id, item_id, units_used_per_order")
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((r) => ({
+    menuItemId: r.menu_item_id as string,
+    itemId: r.item_id as string,
+    unitsUsedPerOrder: Number(r.units_used_per_order),
+  }))
 }
 
 // ── Reservations ──────────────────────────────────────────────────────────────
 
 /** Demand history from `appointments` (replaces legacy `reservations`). */
 export async function getReservations(): Promise<Reservation[]> {
-  const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
     .from("appointments")
     .select("id, starts_at, covers, service_id")

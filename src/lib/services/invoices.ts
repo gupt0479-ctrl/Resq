@@ -301,6 +301,148 @@ export async function getInvoiceDetail(
 
 // ─── Recompute overdue status (called by cron or scheduled job) ───────────
 
+/**
+ * When an appointment is already completed, ensure a ledger invoice exists
+ * (idempotent — returns existing invoice if already generated).
+ */
+export async function ensureInvoiceForCompletedAppointment(
+  client: SupabaseClient,
+  appointmentId: string,
+  organizationId: string
+): Promise<{ invoiceId: string; created: boolean }> {
+  const { data: appt, error: fetchErr } = await client
+    .from("appointments")
+    .select("*")
+    .eq("id", appointmentId)
+    .eq("organization_id", organizationId)
+    .single()
+
+  if (fetchErr || !appt) {
+    throw new Error(fetchErr?.message ?? "Appointment not found")
+  }
+
+  if (appt.status !== "completed") {
+    throw new Error(
+      `Cannot create invoice: appointment status is '${appt.status}'. Only completed appointments can have invoices.`
+    )
+  }
+
+  const { data: existing, error: exErr } = await client
+    .from("invoices")
+    .select("id")
+    .eq("appointment_id", appointmentId)
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+
+  if (exErr) throw new Error(exErr.message)
+  if (existing?.id) {
+    return { invoiceId: existing.id, created: false }
+  }
+
+  try {
+    const invoiceId = await generateInvoiceFromAppointment(client, {
+      id:              appt.id as string,
+      organization_id: appt.organization_id as string,
+      customer_id:     appt.customer_id as string,
+      service_id:      appt.service_id as string,
+      covers:          appt.covers as number,
+      notes:           (appt.notes as string | null) ?? null,
+    })
+
+    return { invoiceId, created: true }
+  } catch (err) {
+    // A concurrent request may have inserted the invoice between our read and
+    // insert — re-fetch to handle the unique-violation case.
+    const { data: concurrentExisting, error: concurrentErr } = await client
+      .from("invoices")
+      .select("id")
+      .eq("appointment_id", appointmentId)
+      .eq("organization_id", organizationId)
+      .maybeSingle()
+
+    if (concurrentErr) {
+      // Wrap both errors for full context.
+      throw new Error(
+        `Invoice insert failed (${(err as Error).message}); re-fetch also failed: ${concurrentErr.message}`
+      )
+    }
+
+    if (concurrentExisting?.id) {
+      return { invoiceId: concurrentExisting.id, created: false }
+    }
+
+    throw err
+  }
+}
+
+/** Record that a payment reminder was drafted/sent (increments reminder_count). */
+export async function recordInvoiceReminderSent(
+  client: SupabaseClient,
+  invoiceId: string,
+  organizationId: string
+): Promise<number> {
+  const now = new Date().toISOString()
+  const maxAttempts = 5
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const { data: inv, error: fetchErr } = await client
+      .from("invoices")
+      .select("id, appointment_id, reminder_count, invoice_number")
+      .eq("id", invoiceId)
+      .eq("organization_id", organizationId)
+      .single()
+
+    if (fetchErr || !inv) {
+      throw new Error(fetchErr?.message ?? "Invoice not found")
+    }
+
+    const current = Number(inv.reminder_count) || 0
+    const next = current + 1
+
+    // CAS-style update: only commit if reminder_count hasn't changed since we read it.
+    // Use maybeSingle() so a 0-row CAS miss returns data:null instead of a 406 error.
+    const { data: updatedInv, error: updateErr } = await client
+      .from("invoices")
+      .update({
+        reminder_count:   next,
+        last_reminded_at: now,
+        updated_at:       now,
+      })
+      .eq("id", invoiceId)
+      .eq("organization_id", organizationId)
+      .eq("reminder_count", current)
+      .select("reminder_count")
+      .maybeSingle()
+
+    if (updateErr) {
+      throw new Error(updateErr.message)
+    }
+
+    if (!updatedInv) {
+      // 0 rows matched — another concurrent update won the race; retry.
+      continue
+    }
+
+    const finalCount = Number(updatedInv.reminder_count) || next
+
+    if (inv.appointment_id) {
+      await client.from("appointment_events").insert({
+        appointment_id:  inv.appointment_id as string,
+        organization_id: organizationId,
+        event_type:      DOMAIN_EVENT.INVOICE_REMINDER_SENT,
+        from_status:     null,
+        to_status:       null,
+        notes:           `Payment reminder #${finalCount} for invoice ${inv.invoice_number as string}`,
+        metadata:        { invoice_id: invoiceId, reminder_count: finalCount },
+      })
+    }
+
+    return finalCount
+  }
+
+  throw new Error("Failed to record invoice reminder after concurrent updates")
+}
+
 export async function markOverdueInvoices(
   client: SupabaseClient,
   organizationId: string

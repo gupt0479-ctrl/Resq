@@ -40,6 +40,7 @@ Read **`context/remote-main-and-merge.md`** before `git merge origin/main` or `g
 - Merge or rebase **`origin/main`** with a deliberate choice for inventory/shipment data layer (Supabase vs static).
 - Commit `.claude/` and `supabase/` when stable so teammates and CI see the same docs and schema.
 - Add automated tests once the team picks a runner; today there is **no** `npm test` script.
+- **Phase 3 (PRD §1.2):** Keep **Feedback** + **Integrations** in primary nav and **MCP / feedback** panels on the dashboard; complete `FeedbackService`, feedback schema/APIs, and MCP dispatch coverage (`feedback.received`, etc.) per playbooks.
 
 ## What not to rebuild
 

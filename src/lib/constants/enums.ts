@@ -93,6 +93,7 @@ export const DOMAIN_EVENT = {
   INVOICE_GENERATED:      "invoice.generated",
   INVOICE_SENT:           "invoice.sent",
   INVOICE_PAID:           "invoice.paid",
+  INVOICE_REMINDER_SENT:  "invoice.reminder_sent",
   INVOICE_OVERDUE:        "invoice.overdue",
   FEEDBACK_RECEIVED:      "feedback.received",
   FEEDBACK_FLAGGED:       "feedback.flagged",

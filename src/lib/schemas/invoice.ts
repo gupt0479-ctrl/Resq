@@ -90,6 +90,15 @@ export const MarkPaidBodySchema = z.object({
   notes:         z.string().optional(),
 })
 
+/** Deterministic invoice creation from a completed appointment (no client line-item totals). */
+export const GenerateInvoiceFromAppointmentBodySchema = z.object({
+  appointmentId: z.string().uuid(),
+})
+
+export type GenerateInvoiceFromAppointmentBody = z.infer<
+  typeof GenerateInvoiceFromAppointmentBodySchema
+>
+
 export const SendInvoiceBodySchema = z.object({
   notes: z.string().optional(),
 })

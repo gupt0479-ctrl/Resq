@@ -2,6 +2,10 @@ import { type NextRequest } from "next/server"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import { ingestWebhookPayload } from "@/lib/services/integrations"
 import { normalizeWebhookPayload } from "@/lib/schemas/integrations"
+import {
+  integrationWebhookAuthError,
+  integrationWebhookRateLimitError,
+} from "@/lib/integrations/webhook-guard"
 
 /**
  * MCP bridge ingress endpoint.
@@ -19,6 +23,11 @@ export async function POST(
   if (!provider || typeof provider !== "string") {
     return Response.json({ error: "Missing provider" }, { status: 400 })
   }
+
+  const rate = integrationWebhookRateLimitError(request)
+  if (rate) return rate
+  const authErr = integrationWebhookAuthError(request)
+  if (authErr) return authErr
 
   let body: unknown
   try {
@@ -59,6 +68,10 @@ export async function POST(
     )
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error"
-    return Response.json({ error: message }, { status: 500 })
+    const status =
+      message.includes("externalEventId") ? 400 :
+      message.includes("not found") ? 404 :
+      500
+    return Response.json({ error: message }, { status })
   }
 }
