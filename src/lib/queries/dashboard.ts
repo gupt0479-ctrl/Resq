@@ -14,26 +14,36 @@ export async function getDashboardSummary(
   await connection()
 
   const now      = new Date()
-  const todayStr = toDateString(now)
   const weekISO  = startOfWeek(now).toISOString()
 
-  // Today's reservations
+  // Use America/Chicago (Ember Table timezone) for "today" boundaries
+  const chicagoFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  })
+  const parts = chicagoFormatter.formatToParts(now)
+  const month = parts.find(p => p.type === "month")!.value
+  const day   = parts.find(p => p.type === "day")!.value
+  const year  = parts.find(p => p.type === "year")!.value
+  const todayStr = `${year}-${month}-${day}`
+
+  // Today's reservations — use a broad window to catch local-time stored records
   const { data: todayAppts } = await client
     .from("appointments")
     .select("id, status")
     .eq("organization_id", organizationId)
-    .gte("starts_at", `${todayStr}T00:00:00Z`)
-    .lte("starts_at", `${todayStr}T23:59:59Z`)
+    .gte("starts_at", `${todayStr}T00:00:00`)
+    .lte("starts_at", `${todayStr}T23:59:59`)
 
   const todayReservationCount = todayAppts?.length ?? 0
 
-  // Upcoming (scheduled/confirmed, not today's)
+  // Upcoming (scheduled/confirmed, after today)
   const { count: upcomingCount } = await client
     .from("appointments")
     .select("*", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .in("status", ["scheduled", "confirmed"])
-    .gt("starts_at", `${todayStr}T23:59:59Z`)
+    .gt("starts_at", `${todayStr}T23:59:59`)
 
   const upcomingReservationCount = upcomingCount ?? 0
 
@@ -98,7 +108,7 @@ export async function getDashboardSummary(
       services  ( name )
     `)
     .eq("organization_id", organizationId)
-    .order("starts_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(5)
 
   const recentReservations: DashboardSummary["recentReservations"] = (recentAppts ?? []).map(
@@ -191,9 +201,6 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-function toDateString(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
 
 function startOfWeek(d: Date): Date {
   const out = new Date(d)

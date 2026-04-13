@@ -6,6 +6,11 @@ export async function POST(req: NextRequest) {
   if (!body.natural_language) {
     return NextResponse.json({ error: "natural_language is required." }, { status: 400 })
   }
-  const result = await parseReservationRequest(body.natural_language, body.existing_reservation_id)
-  return NextResponse.json({ parsed: result })
+  try {
+    const result = await parseReservationRequest(body.natural_language, body.existing_reservation_id)
+    return NextResponse.json({ parsed: result })
+  } catch (error) {
+    console.error("Parse request error:", error)
+    return NextResponse.json({ error: "Failed to parse request" }, { status: 500 })
+  }
 }

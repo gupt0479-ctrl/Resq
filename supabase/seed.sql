@@ -391,3 +391,18 @@ INSERT INTO ai_actions (
    'feedback', '00000000-0000-0000-000a-000000000003', 'feedback.received', 'customer_service.analyze_review',
    'Jennifer Kim - score 5 - internal', '{"sentiment":"positive","urgency":1}'::jsonb, 'executed', '2026-04-10 11:02:00+00')
 ON CONFLICT (id) DO NOTHING;
+
+-- ─── Occasion & follow-up data for appointments ───────────────────────────
+-- Run after 0002_appointments_extras.sql migration
+
+UPDATE appointments SET occasion = 'anniversary', follow_up_sent = TRUE
+  WHERE id = '00000000-0000-0000-0004-000000000001';
+
+UPDATE appointments SET follow_up_sent = TRUE
+  WHERE id = '00000000-0000-0000-0004-000000000004';
+
+UPDATE appointments SET occasion = 'birthday'
+  WHERE id IN (
+    '00000000-0000-0000-0004-000000000007',
+    '00000000-0000-0000-0004-000000000011'
+  );

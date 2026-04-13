@@ -14,9 +14,6 @@ import Anthropic from '@anthropic-ai/sdk'
 import {
   sendThankYou,
   sendFeedbackRequest,
-  sendReturnVisitNudge,
-  sendReservationReminder,
-  sendReservationConfirmation,
   queueRecoveryMessage,
 } from './messageSender.js'
 
