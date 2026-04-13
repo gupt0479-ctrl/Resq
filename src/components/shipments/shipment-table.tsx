@@ -22,7 +22,7 @@ function dateLabel(isoDate: string): string {
   const tomorrow = new Date(TODAY)
   tomorrow.setDate(tomorrow.getDate() + 1)
   if (isoDate === tomorrow.toISOString().slice(0, 10)) return "Tomorrow"
-  return new Date(isoDate).toLocaleDateString("en-AU", {
+  return new Date(isoDate).toLocaleDateString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -30,9 +30,9 @@ function dateLabel(isoDate: string): string {
 }
 
 function fmt(n: number) {
-  return new Intl.NumberFormat("en-AU", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "AUD",
+    currency: "USD",
     minimumFractionDigits: 2,
   }).format(n)
 }

@@ -1,37 +1,24 @@
 import type { Metadata } from "next"
-import { Suspense } from "react"
+import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
-import { Sidebar } from "@/components/layout/sidebar"
-import { Header } from "@/components/layout/header"
+import { ConditionalShell } from "@/components/layout/conditional-shell"
+
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] })
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "OpsPilot · Ember Table",
-  description: "AI operations companion for Ember Table restaurant",
+  description: "AI-powered restaurant operations for Ember Table, Minneapolis",
 }
 
-function MainLoading() {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-[40vh] items-center justify-center p-8 text-sm text-muted-foreground">
-      Loading…
-    </div>
-  )
-}
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
-  return (
-    <html lang="en" className="h-full antialiased">
-      <body className="flex h-full overflow-hidden bg-background">
-        <Sidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto">
-            <Suspense fallback={<MainLoading />}>{children}</Suspense>
-          </main>
-        </div>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full scroll-smooth antialiased`}
+    >
+      <body className="h-full" suppressHydrationWarning>
+        <ConditionalShell>{children}</ConditionalShell>
       </body>
     </html>
   )

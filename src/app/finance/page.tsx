@@ -55,12 +55,12 @@ export default async function FinancePage() {
           {/* Metric cards */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <MetricCard
-              label="Revenue this week"
+              label="Revenue (last 7 days)"
               value={fmt(summary.revenueThisWeek)}
               icon={<TrendingUp className="h-4 w-4 text-green-500" />}
             />
             <MetricCard
-              label="Expenses this week"
+              label="Expenses (last 7 days)"
               value={fmt(summary.expensesThisWeek)}
               icon={<TrendingDown className="h-4 w-4 text-red-500" />}
             />
@@ -83,7 +83,7 @@ export default async function FinancePage() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold">Net Cash Flow (this week)</CardTitle>
+                <CardTitle className="text-sm font-semibold">Net Cash Flow (last 7 days)</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className={`text-3xl font-bold ${summary.netCashFlowEstimate >= 0 ? "text-green-600" : "text-red-600"}`}>

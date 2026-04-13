@@ -151,6 +151,8 @@ export type Shipment = {
   lineItems: ShipmentLineItem[]
   totalCost: number
   notes: string | null
+  /** When true, row is sourced from `finance_transactions` (ledger); UI/API mutations are not supported. */
+  ledgerBacked?: boolean
 }
 
 export type DeliveryPerformance = "early" | "on_time" | "late"

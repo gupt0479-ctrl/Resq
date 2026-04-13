@@ -10,7 +10,7 @@ import { CancelDialog } from "./cancel-dialog"
 import type { Shipment } from "@/lib/types"
 
 function fmt(n: number) {
-  return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: 2 }).format(n)
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n)
 }
 
 interface ShipmentCardProps {
@@ -106,7 +106,7 @@ export function ShipmentCard({ shipment: initial, onUpdate }: ShipmentCardProps)
                 {shipment.lineItems.length} item{shipment.lineItems.length !== 1 ? "s" : ""}
                 &nbsp;·&nbsp;
                 <span className="font-medium text-foreground">{fmt(shipment.totalCost)}</span>
-                &nbsp;·&nbsp;Ordered {new Date(shipment.orderedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+                &nbsp;·&nbsp;Ordered {new Date(shipment.orderedAt).toLocaleDateString("en-US", { day: "numeric", month: "short" })}
               </p>
               {/* Tracking link */}
               {shipment.trackingNumber && shipment.trackingUrl && (

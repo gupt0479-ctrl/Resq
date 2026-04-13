@@ -3,29 +3,29 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  LayoutDashboard,
-  CalendarDays,
-  FileText,
-  DollarSign,
-  MessageSquare,
-  Plug,
-  Package,
-  Truck,
   Flame,
+  LayoutDashboard,
+  GitBranch,
+  MessageSquare,
+  FileText,
+  Package,
+  CalendarDays,
+  DollarSign,
+  Truck,
 } from "lucide-react"
 
 const coreItems = [
-  { href: "/dashboard",     label: "Dashboard",     icon: LayoutDashboard },
-  { href: "/appointments",  label: "Reservations",  icon: CalendarDays },
-  { href: "/invoices",      label: "Invoices",      icon: FileText },
-  { href: "/finance",       label: "Finance",       icon: DollarSign },
-  { href: "/feedback",      label: "Feedback",      icon: MessageSquare },
-  { href: "/integrations",  label: "Integrations",  icon: Plug },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/appointments", label: "Reservations", icon: CalendarDays },
+  { href: "/workflow", label: "Workflow", icon: GitBranch },
 ]
 
 const opsItems = [
-  { href: "/inventory",  label: "Inventory",  icon: Package },
-  { href: "/shipments",  label: "Shipments",  icon: Truck },
+  { href: "/feedback", label: "Customer Service", icon: MessageSquare },
+  { href: "/invoices", label: "Invoices", icon: FileText },
+  { href: "/finance", label: "Finance", icon: DollarSign },
+  { href: "/inventory", label: "Inventory", icon: Package },
+  { href: "/shipments", label: "Shipments", icon: Truck },
 ]
 
 export function Sidebar() {
@@ -76,9 +76,9 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Bottom info */}
+      {/* Bottom */}
       <div className="border-t border-border p-4">
-        <p className="text-[10px] text-muted-foreground">v0.1.0 · Demo</p>
+        <p className="text-[10px] text-muted-foreground">Powered by Claude AI</p>
       </div>
     </aside>
   )
