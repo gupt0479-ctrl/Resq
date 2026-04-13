@@ -11,6 +11,9 @@ const MOCK_INVOICES: Invoice[] = [
     amount: 181.22,
     status: "paid",
     date: "Apr 9",
+    dueDate: "Apr 16",
+    reminderCount: 0,
+    customer: { name: "Marcus Webb", email: "marcus.webb@email.com", phone: "(612) 555-0101", visit_count: 4 },
     lineItems: [
       { description: "Ember Wagyu Ribeye", qty: 1, amount: 68.00 },
       { description: "Roasted Beet Salad", qty: 1, amount: 18.00 },
@@ -27,6 +30,9 @@ const MOCK_INVOICES: Invoice[] = [
     amount: 94.95,
     status: "overdue",
     date: "Apr 10",
+    dueDate: "Apr 10",
+    reminderCount: 1,
+    customer: { name: "Priya Nair", email: "priya.nair@gmail.com", phone: "(612) 555-0184", visit_count: 2 },
     lineItems: [
       { description: "Pan-Seared Duck Breast", qty: 1, amount: 42.00 },
       { description: "Heirloom Beet Salad", qty: 1, amount: 16.00 },
@@ -42,6 +48,9 @@ const MOCK_INVOICES: Invoice[] = [
     amount: 522.39,
     status: "paid",
     date: "Apr 10",
+    dueDate: "Apr 17",
+    reminderCount: 0,
+    customer: { name: "Daniel Kim", email: "d.kim@studio.co", visit_count: 7 },
     lineItems: [
       { description: "Chef Tasting Menu", qty: 4, amount: 340.00 },
       { description: "Wine Pairing", qty: 4, amount: 88.00 },
@@ -57,6 +66,8 @@ const MOCK_INVOICES: Invoice[] = [
     amount: 118.58,
     status: "paid",
     date: "Apr 5",
+    dueDate: "Apr 12",
+    reminderCount: 0,
     lineItems: [
       { description: "Braised Short Rib", qty: 2, amount: 76.00 },
       { description: "House Salad", qty: 1, amount: 14.00 },
@@ -72,6 +83,9 @@ const MOCK_INVOICES: Invoice[] = [
     amount: 218.81,
     status: "overdue",
     date: "Apr 12",
+    dueDate: "Apr 5",
+    reminderCount: 2,
+    customer: { name: "Tom Okafor", email: "tom.okafor@outlook.com", phone: "(651) 555-0239", visit_count: 1 },
     lineItems: [
       { description: "Ember Wagyu Ribeye", qty: 2, amount: 136.00 },
       { description: "Crème Brûlée", qty: 2, amount: 24.00 },
@@ -83,10 +97,13 @@ const MOCK_INVOICES: Invoice[] = [
   {
     id: "inv-6",
     number: "INV-2025-006",
-    guest: "Unknown",
+    guest: "Sofia Morales",
     amount: 68.26,
     status: "overdue",
     date: "Apr 2",
+    dueDate: "Apr 2",
+    reminderCount: 0,
+    customer: { name: "Sofia Morales", email: "sofia.m@icloud.com", visit_count: 1 },
     lineItems: [
       { description: "Pan-Seared Duck Breast", qty: 1, amount: 42.00 },
       { description: "House Wine", qty: 1, amount: 14.00 },
@@ -118,10 +135,10 @@ export default function InvoicesPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          { label: "Total invoices", value: MOCK_INVOICES.length, color: "text-foreground", bg: "bg-muted/50 border-border" },
-          { label: "Paid", value: `${paid.length} · $${paidTotal.toFixed(0)}`, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100" },
-          { label: "Pending", value: pending.length, color: "text-amber-700", bg: "bg-amber-50 border-amber-100" },
-          { label: "Overdue", value: `${overdue.length} · $${overdueTotal.toFixed(0)}`, color: "text-red-600", bg: "bg-red-50 border-red-100" },
+          { label: "Total invoices",    value: MOCK_INVOICES.length,                                        color: "text-foreground",  bg: "bg-muted/50 border-border" },
+          { label: "Collected",         value: `$${paidTotal.toFixed(0)} · ${paid.length} paid`,            color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100" },
+          { label: "Outstanding",       value: pending.length > 0 ? `${pending.length} pending` : "0",      color: "text-amber-700",   bg: "bg-amber-50 border-amber-100" },
+          { label: "Overdue",           value: `$${overdueTotal.toFixed(0)} · ${overdue.length} invoices`,  color: "text-red-600",     bg: "bg-red-50 border-red-100" },
         ].map(({ label, value, color, bg }) => (
           <div key={label} className={`rounded-xl border p-4 ${bg}`}>
             <p className={`text-2xl font-bold ${color}`}>{value}</p>
