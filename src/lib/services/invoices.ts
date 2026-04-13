@@ -400,6 +400,7 @@ export async function recordInvoiceReminderSent(
     const next = current + 1
 
     // CAS-style update: only commit if reminder_count hasn't changed since we read it.
+    // Use maybeSingle() so a 0-row CAS miss returns data:null instead of a 406 error.
     const { data: updatedInv, error: updateErr } = await client
       .from("invoices")
       .update({
@@ -411,14 +412,14 @@ export async function recordInvoiceReminderSent(
       .eq("organization_id", organizationId)
       .eq("reminder_count", current)
       .select("reminder_count")
-      .single()
+      .maybeSingle()
 
     if (updateErr) {
       throw new Error(updateErr.message)
     }
 
     if (!updatedInv) {
-      // Another concurrent update won the race — retry.
+      // 0 rows matched — another concurrent update won the race; retry.
       continue
     }
 

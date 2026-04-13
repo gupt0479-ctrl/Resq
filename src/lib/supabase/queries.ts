@@ -1,3 +1,4 @@
+import "server-only"
 import { supabase } from "./client"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import type {
