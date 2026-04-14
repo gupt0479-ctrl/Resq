@@ -1,8 +1,9 @@
 import { Bell, Search } from "lucide-react"
+import { ThemeToggle } from "@/components/theme/theme-toggle"
 
 export function Header() {
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-6">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/80 bg-card/88 px-6 backdrop-blur-xl">
       {/* Search */}
       <div className="relative w-72">
         <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -15,6 +16,7 @@ export function Header() {
 
       {/* Right */}
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         <button className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background hover:bg-muted transition-colors">
           <Bell className="h-4 w-4 text-muted-foreground" />
           <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">

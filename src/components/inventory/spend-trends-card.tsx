@@ -117,38 +117,40 @@ export function SpendTrendsCard({ data }: Props) {
       </div>
 
       {/* Composed chart: stacked bars (spend) + line (revenue) */}
-      <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={weeks} barCategoryGap="28%" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <XAxis
-            dataKey="week"
-            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis hide />
-          <Tooltip
-            content={<CustomTooltip vendors={vendors} />}
-            cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-          />
-          {vendors.map((vendor, i) => (
-            <Bar
-              key={vendor}
-              dataKey={vendor}
-              stackId="spend"
-              fill={VENDOR_COLORS[i]}
-              radius={i === vendors.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+      <div className="relative h-[200px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={weeks} barCategoryGap="28%" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <XAxis
+              dataKey="week"
+              tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+              axisLine={false}
+              tickLine={false}
             />
-          ))}
-          <Line
-            type="monotone"
-            dataKey="revenue"
-            stroke="#10b981"
-            strokeWidth={2}
-            dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
-            activeDot={{ r: 4 }}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+            <YAxis hide />
+            <Tooltip
+              content={<CustomTooltip vendors={vendors} />}
+              cursor={{ fill: "var(--muted)", opacity: 0.4 }}
+            />
+            {vendors.map((vendor, i) => (
+              <Bar
+                key={vendor}
+                dataKey={vendor}
+                stackId="spend"
+                fill={VENDOR_COLORS[i]}
+                radius={i === vendors.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+              />
+            ))}
+            <Line
+              type="monotone"
+              dataKey="revenue"
+              stroke="#10b981"
+              strokeWidth={2}
+              dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
+              activeDot={{ r: 4 }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-x-4 gap-y-1">
