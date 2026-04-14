@@ -90,7 +90,7 @@ function isFlaggedQueueRow(r: {
   return isOpenFeedbackRow(r) && (r.flagged || r.safety_flag || r.urgency >= 4)
 }
 
-export async function getFeedbackPageData(
+export async function listFeedbackQuery(
   client: SupabaseClient,
   organizationId: string
 ): Promise<FeedbackPageData> {
@@ -349,4 +349,11 @@ export async function getFeedbackSpotlightForDashboard(
         safetyFlag: Boolean(r.safety_flag),
       }
     })
+}
+
+export async function getFeedbackPageData(
+  client: SupabaseClient,
+  organizationId: string
+): Promise<FeedbackPageData> {
+  return listFeedbackQuery(client, organizationId)
 }

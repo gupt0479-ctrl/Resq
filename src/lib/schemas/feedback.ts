@@ -1,15 +1,33 @@
 import { z } from "zod"
 import { FEEDBACK_FOLLOW_UP_STATUS, FEEDBACK_SOURCE } from "@/lib/constants/enums"
 
-export const FeedbackSubmitBodySchema = z.object({
-  guestName:   z.string().min(1).max(200),
-  score:       z.number().int().min(1).max(5),
-  comment:     z.string().max(8000).default(""),
-  source:      z.enum(FEEDBACK_SOURCE).default("internal"),
-  customerId:  z.string().uuid().optional(),
-  appointmentId: z.string().uuid().optional(),
-  /** When true, runs analysis after insert (requires ANTHROPIC_API_KEY for model path). */
-  analyze:     z.boolean().optional().default(true),
+const UuidLikeSchema = z.string().regex(
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+  "Invalid UUID"
+)
+
+const CreateFeedbackBaseSchema = z.object({
+  guestName:     z.string().min(1).max(200),
+  score:         z.number().int().min(1).max(5),
+  comment:       z.string().max(8000),
+  appointmentId: UuidLikeSchema.optional(),
+  analyze:       z.boolean().optional().default(true),
+})
+
+export const CreateReviewSchema = z.object({
+  guestName: z.string().min(1),
+  score:     z.number().int().min(1).max(5),
+  comment:   z.string().min(1),
+  source:    z.enum(["internal", "google", "yelp", "opentable"]),
+  guestId:   UuidLikeSchema,
+})
+
+export type CreateReviewBody = z.infer<typeof CreateReviewSchema>
+
+export const FeedbackSubmitBodySchema = CreateFeedbackBaseSchema.extend({
+  comment:    z.string().max(8000).default(""),
+  source:     z.enum(FEEDBACK_SOURCE).default("internal"),
+  customerId: UuidLikeSchema.optional(),
 })
 
 export type FeedbackSubmitBody = z.infer<typeof FeedbackSubmitBodySchema>
@@ -30,21 +48,21 @@ export const FeedbackFollowUpBodySchema = z.object({
 })
 
 export const FeedbackRequestParamsSchema = z.object({
-  appointmentId: z.string().uuid(),
+  appointmentId: UuidLikeSchema,
 })
 
 export const FeedbackRowSchema = z.object({
-  id:              z.string().uuid(),
-  organizationId:  z.string().uuid(),
-  customerId:      z.string().uuid().nullable(),
-  appointmentId:   z.string().uuid().nullable(),
-  source:          z.string(),
+  id:              UuidLikeSchema,
+  organizationId:  UuidLikeSchema,
+  customerId:      UuidLikeSchema.nullable(),
+  appointmentId:   UuidLikeSchema.nullable(),
+  source:          z.enum(FEEDBACK_SOURCE),
   guestName:       z.string().nullable(),
-  score:           z.number(),
+  score:           z.number().int().min(1).max(5),
   comment:         z.string(),
-  sentiment:       z.string().nullable(),
+  sentiment:       z.enum(["positive", "neutral", "negative"]).nullable(),
   topics:          z.array(z.string()),
-  urgency:         z.number(),
+  urgency:         z.number().int().min(1).max(5),
   safetyFlag:      z.boolean(),
   followUpStatus:  z.enum(FEEDBACK_FOLLOW_UP_STATUS),
   flagged:         z.boolean(),

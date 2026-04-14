@@ -12,7 +12,7 @@ import { AlertTriangle, Star } from "lucide-react"
 import { ReviewActions, DismissActions } from "@/components/feedback/review-actions"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
-import { getFeedbackPageData } from "@/lib/queries/feedback"
+import { listFeedbackQuery } from "@/lib/queries/feedback"
 import { isSupabaseConfigured } from "@/lib/env"
 import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
 
@@ -105,7 +105,7 @@ export default async function FeedbackPage() {
 
   let pageData
   try {
-    pageData = await getFeedbackPageData(client, DEMO_ORG_ID)
+    pageData = await listFeedbackQuery(client, DEMO_ORG_ID)
   } catch {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">
@@ -420,3 +420,4 @@ export default async function FeedbackPage() {
     </div>
   )
 }
+

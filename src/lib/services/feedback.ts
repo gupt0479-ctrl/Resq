@@ -20,23 +20,40 @@ export async function buildGuestHistory(
   organizationId: string,
   customerId: string
 ): Promise<GuestHistoryInput> {
-  const { data, error } = await client
+  const { data: customerRow, error: customerError } = await client
     .from("customers")
     .select("lifetime_value, last_visit_at, notes, risk_status")
     .eq("id", customerId)
     .eq("organization_id", organizationId)
     .maybeSingle()
 
-  if (error || !data) return null
+  if (customerError || !customerRow) return null
 
-  const lifetime = Number(data.lifetime_value) || 0
-  const notes = (data.notes as string | null) ?? ""
+  const { data: recentAppointments, error: appointmentError, count: visitCount } = await client
+    .from("appointments")
+    .select("starts_at, notes", { count: "exact" })
+    .eq("customer_id", customerId)
+    .eq("organization_id", organizationId)
+    .order("starts_at", { ascending: false })
+    .limit(3)
+
+  if (appointmentError) throw new Error(appointmentError.message)
+
+  const lifetime = Number(customerRow.lifetime_value) || 0
+  const customerNotes = (customerRow.notes as string | null) ?? ""
+  const appointmentNotes = (recentAppointments ?? [])
+    .map((row) => (row.notes as string | null) ?? "")
+    .filter(Boolean)
+    .join(" ")
+  const combinedNotes = [customerNotes, appointmentNotes].filter(Boolean).join(" ").trim()
+  const mostRecentVisit = (recentAppointments ?? [])[0]?.starts_at as string | undefined
+
   return {
-    visitCount:     undefined,
-    lifetimeSpend:  lifetime,
-    lastVisit:      (data.last_visit_at as string | null) ?? undefined,
-    vip:            lifetime >= 1200 || /\bVIP\b/i.test(notes),
-    dietaryNotes:   notes.match(/allergy|nut|gluten|dairy|shellfish/i) ? notes : null,
+    visitCount:    visitCount ?? undefined,
+    lifetimeSpend: lifetime,
+    lastVisit:     mostRecentVisit ?? (customerRow.last_visit_at as string | null) ?? undefined,
+    vip:           lifetime >= 1200 || /\bVIP\b/i.test(combinedNotes),
+    dietaryNotes:  combinedNotes.match(/allergy|nut|gluten|dairy|shellfish/i) ? combinedNotes : null,
   }
 }
 
@@ -292,6 +309,113 @@ async function readCurrentFeedbackState(
   }
 }
 
+type PersistFeedbackAnalysisContext = {
+  guestName: string
+  score: number
+  comment: string
+  source: string
+  customerId: string | null
+  guestHistory?: GuestHistoryInput
+}
+
+async function persistNormalizedFeedbackAnalysis(
+  client: SupabaseClient,
+  organizationId: string,
+  feedbackId: string,
+  ctx: PersistFeedbackAnalysisContext,
+  analysis: ReviewAnalysis,
+  analysisSource: "model" | "rules_fallback" | "invalid_model"
+) {
+  const flagged = analysis.safety_flag || analysis.urgency >= 4 || analysis.sentiment === "negative"
+  const currentState = await readCurrentFeedbackState(client, organizationId, feedbackId)
+
+  let persistedFollowUpStatus = analysis.follow_up_status
+  let persistedFlagged = flagged
+
+  if (
+    currentState.followUpStatus === "resolved" ||
+    currentState.followUpStatus === "thankyou_sent"
+  ) {
+    persistedFollowUpStatus = currentState.followUpStatus as "resolved" | "thankyou_sent"
+    persistedFlagged = false
+  }
+
+  const { error: upErr } = await client
+    .from("feedback")
+    .update({
+      sentiment:        analysis.sentiment,
+      topics:           analysis.topics,
+      urgency:          analysis.urgency,
+      safety_flag:      analysis.safety_flag,
+      follow_up_status: persistedFollowUpStatus,
+      flagged:          persistedFlagged,
+      reply_draft:      analysis.reply_draft ?? null,
+      internal_note:    analysis.internal_note,
+      manager_summary:  analysis.manager_summary,
+      analysis_json:    analysis as unknown as Record<string, unknown>,
+      analysis_source:  analysisSource,
+      updated_at:       new Date().toISOString(),
+    })
+    .eq("id", feedbackId)
+    .eq("organization_id", organizationId)
+
+  if (upErr) throw new Error(upErr.message)
+
+  if (ctx.customerId) {
+    await patchCustomerRiskOnly(client, organizationId, ctx.customerId, analysis)
+  }
+
+  await maybeInsertFollowUp(client, organizationId, feedbackId, analysis)
+
+  await recordAiAction(client, {
+    organizationId,
+    entityType:   "feedback",
+    entityId:     feedbackId,
+    triggerType:  "feedback.received",
+    actionType:   "customer_service.analyze_review",
+    inputSummary: `${ctx.guestName} - score ${ctx.score} - ${ctx.source}`,
+    outputPayload: {
+      sentiment:   analysis.sentiment,
+      urgency:     analysis.urgency,
+      safety_flag: analysis.safety_flag,
+      source:      analysisSource,
+    },
+    status: "executed",
+  })
+
+  return {
+    analysis,
+    analysisSource,
+    flagged: persistedFlagged,
+    followUpStatus: persistedFollowUpStatus,
+  }
+}
+
+export async function persistAgentFeedbackAnalysis(
+  client: SupabaseClient,
+  organizationId: string,
+  feedbackId: string,
+  ctx: PersistFeedbackAnalysisContext,
+  rawAnalysis: Record<string, unknown>,
+  analysisSource: "model" | "rules_fallback" | "invalid_model" = "model"
+) {
+  const cleaned = stripAgentMeta(rawAnalysis)
+  const analysis = parseAndApplyReviewBusinessRules(cleaned, {
+    score:        ctx.score,
+    source:       ctx.source,
+    guestHistory: ctx.guestHistory ?? null,
+    comment:      ctx.comment,
+  })
+
+  return persistNormalizedFeedbackAnalysis(
+    client,
+    organizationId,
+    feedbackId,
+    ctx,
+    analysis,
+    analysisSource
+  )
+}
 /**
  * Runs model (if key present) + deterministic rules, persists analysis, ai_action, optional follow_up.
  */
@@ -377,62 +501,17 @@ export async function analyzeAndPersistFeedback(
     logAiCall({ feature: "customer_service.analyzeReview", ok: true, durationMs: Date.now() - t0 })
   }
 
-  const flagged = analysis.safety_flag || analysis.urgency >= 4 || analysis.sentiment === "negative"
-  const currentState = await readCurrentFeedbackState(client, organizationId, feedbackId)
-
-  let persistedFollowUpStatus = analysis.follow_up_status
-  let persistedFlagged = flagged
-
-  if (
-    currentState.followUpStatus === "resolved" ||
-    currentState.followUpStatus === "thankyou_sent"
-  ) {
-    persistedFollowUpStatus = currentState.followUpStatus as "resolved" | "thankyou_sent"
-    persistedFlagged = false
-  }
-
-  const { error: upErr } = await client
-    .from("feedback")
-    .update({
-      sentiment:          analysis.sentiment,
-      topics:             analysis.topics,
-      urgency:            analysis.urgency,
-      safety_flag:        analysis.safety_flag,
-      follow_up_status:   persistedFollowUpStatus,
-      flagged:            persistedFlagged,
-      reply_draft:        analysis.reply_draft ?? null,
-      internal_note:      analysis.internal_note,
-      manager_summary:    analysis.manager_summary,
-      analysis_json:      analysis as unknown as Record<string, unknown>,
-      analysis_source:    analysisSource,
-      updated_at:         new Date().toISOString(),
-    })
-    .eq("id", feedbackId)
-    .eq("organization_id", organizationId)
-
-  if (upErr) throw new Error(upErr.message)
-
-  if (ctx.customerId) {
-    await patchCustomerRiskOnly(client, organizationId, ctx.customerId, analysis)
-  }
-
-  await maybeInsertFollowUp(client, organizationId, feedbackId, analysis)
-
-  await recordAiAction(client, {
+  await persistNormalizedFeedbackAnalysis(
+    client,
     organizationId,
-    entityType:    "feedback",
-    entityId:      feedbackId,
-    triggerType:   "feedback.received",
-    actionType:    "customer_service.analyze_review",
-    inputSummary:  `${ctx.guestName} - score ${ctx.score} - ${ctx.source}`,
-    outputPayload: {
-      sentiment:   analysis.sentiment,
-      urgency:     analysis.urgency,
-      safety_flag: analysis.safety_flag,
-      source:      analysisSource,
+    feedbackId,
+    {
+      ...ctx,
+      guestHistory,
     },
-    status: "executed",
-  })
+    analysis,
+    analysisSource
+  )
 }
 
 export async function markFeedbackReplyApproved(
@@ -609,3 +688,4 @@ export async function resolveCustomerIdByEmail(
   if (error) throw new Error(error.message)
   return (data?.id as string) ?? null
 }
+
