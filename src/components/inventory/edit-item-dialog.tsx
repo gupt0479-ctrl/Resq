@@ -17,6 +17,7 @@ interface EditItemDialogProps {
   open: boolean
   onClose: () => void
   onSaved: (updated: InventoryItem) => void
+  onDeleted: (id: string) => void
 }
 
 function Label({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
@@ -52,7 +53,7 @@ function SelectField({
   )
 }
 
-export function EditItemDialog({ item, open, onClose, onSaved }: EditItemDialogProps) {
+export function EditItemDialog({ item, open, onClose, onSaved, onDeleted }: EditItemDialogProps) {
   const [form, setForm] = useState({
     itemName: item.itemName,
     category: item.category,
@@ -65,6 +66,7 @@ export function EditItemDialog({ item, open, onClose, onSaved }: EditItemDialogP
     priceTrendStatus: item.priceTrendStatus,
   })
   const [loading, setLoading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
@@ -102,6 +104,27 @@ export function EditItemDialog({ item, open, onClose, onSaved }: EditItemDialogP
       setError(err instanceof Error ? err.message : "Unknown error")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleDelete() {
+    const confirmed = window.confirm(`Delete "${item.itemName}" from inventory?`)
+    if (!confirmed) return
+
+    setDeleting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/inventory/${item.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error((body as { error?: string }).error ?? `Request failed (${res.status})`)
+      }
+      onDeleted(item.id)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -247,10 +270,18 @@ export function EditItemDialog({ item, open, onClose, onSaved }: EditItemDialogP
       </DialogBody>
 
       <DialogFooter>
-        <Button variant="outline" onClick={onClose} disabled={loading}>
+        <Button
+          variant="destructive"
+          onClick={handleDelete}
+          disabled={loading || deleting}
+          className="mr-auto"
+        >
+          {deleting ? "Deleting…" : "Delete Item"}
+        </Button>
+        <Button variant="outline" onClick={onClose} disabled={loading || deleting}>
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={loading}>
+        <Button onClick={handleSave} disabled={loading || deleting}>
           {loading ? "Saving…" : "Save Changes"}
         </Button>
       </DialogFooter>

@@ -4,8 +4,9 @@ import { getInventoryItems, getShipments } from "@/lib/supabase/queries"
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
+  const today = new Date().toISOString().slice(0, 10)
   const asOfDate: string =
-    typeof body?.asOfDate === "string" ? body.asOfDate : "2026-04-11"
+    typeof body?.asOfDate === "string" ? body.asOfDate : today
 
   try {
     const [inventoryItems, shipments] = await Promise.all([

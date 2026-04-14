@@ -2,10 +2,9 @@ import { connection, NextResponse } from "next/server"
 import { generatePredictions } from "@/lib/inventory/generate-predictions"
 import { getInventoryItems, getMenuInventoryUsage, getReservations, getShipments } from "@/lib/supabase/queries"
 
-const AS_OF_DATE = "2026-04-11"
-
 export async function GET() {
   await connection()
+  const asOfDate = new Date().toISOString().slice(0, 10)
 
   const [items, usages, reservations, shipments] = await Promise.all([
     getInventoryItems(),
@@ -19,7 +18,7 @@ export async function GET() {
     usages,
     reservations,
     shipments,
-    asOfDate: AS_OF_DATE,
+    asOfDate,
   })
 
   const high = predictions.filter((p) => p.riskLevel === "high")
@@ -38,7 +37,7 @@ export async function GET() {
     }))
 
   return NextResponse.json({
-    predictionDate: AS_OF_DATE,
+    predictionDate: asOfDate,
     highRiskCount: high.length,
     mediumRiskCount: medium.length,
     lowRiskCount: low.length,

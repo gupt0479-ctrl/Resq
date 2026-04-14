@@ -6,19 +6,21 @@ import { Badge } from "@/components/ui/badge"
 import { InventoryTable } from "./inventory-table"
 import type { InventoryItem } from "@/lib/types"
 
-type Tab = "all" | "low_stock" | "expiring" | "issues" | "price_spikes"
+type Tab = "all" | "low_stock" | "expiring" | "expired" | "issues" | "price_spikes"
 
 interface InventoryTabsProps {
   activeTab: Tab
   allItems: InventoryItem[]
   lowStockItems: InventoryItem[]
   expiringItems: InventoryItem[]
+  expiredItems: InventoryItem[]
   issueItems: InventoryItem[]
   priceItems: InventoryItem[]
   summary: {
     totalItems: number
     lowStockCount: number
     expiringCount: number
+    expiredCount: number
     issueCount: number
     priceSpikeCount: number
   }
@@ -29,6 +31,7 @@ export function InventoryTabs({
   allItems,
   lowStockItems,
   expiringItems,
+  expiredItems,
   issueItems,
   priceItems,
   summary,
@@ -60,6 +63,14 @@ export function InventoryTabs({
             </Badge>
           )}
         </TabsTrigger>
+        <TabsTrigger value="expired">
+          Expired
+          {summary.expiredCount > 0 && (
+            <Badge variant="secondary" className="ml-1.5 text-xs bg-red-100 text-red-800">
+              {summary.expiredCount}
+            </Badge>
+          )}
+        </TabsTrigger>
         <TabsTrigger value="issues">
           Issues
           {summary.issueCount > 0 && (
@@ -87,6 +98,9 @@ export function InventoryTabs({
         </TabsContent>
         <TabsContent value="expiring">
           <InventoryTable items={expiringItems} />
+        </TabsContent>
+        <TabsContent value="expired">
+          <InventoryTable items={expiredItems} />
         </TabsContent>
         <TabsContent value="issues">
           <InventoryTable items={issueItems} />

@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Plus,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { ShipmentStatusBadge } from "./shipment-status-badge"
 import { ModifySheet } from "./modify-sheet"
 import { CancelDialog } from "./cancel-dialog"
@@ -325,14 +326,14 @@ export function ShipmentTable({ initialShipments }: { initialShipments: Shipment
   return (
     <>
       {/* Toolbar */}
-      <div className="flex items-center justify-end border-b border-border px-4 py-2">
-        <button
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-        >
+      <div className="flex items-center justify-between border-b border-border px-4 py-4">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Latest Shipments
+        </p>
+        <Button size="sm" className="h-8 gap-1.5" onClick={() => setAddOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
-          New Shipment
-        </button>
+          Add shipment
+        </Button>
       </div>
 
       {/* Table */}
