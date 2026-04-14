@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { connection } from "next/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
@@ -22,6 +23,12 @@ import { ExpenseChart } from "@/components/finance/ExpenseChart"
 import type { ExpenseSlice } from "@/components/finance/ExpenseChart"
 import { TaxFilterPills } from "@/components/finance/TaxFilterPills"
 import type { TaxTransaction } from "@/components/finance/TaxFilterPills"
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { isSupabaseConfigured } from "@/lib/env"
+import { getFinanceSummaryQuery, listTransactionsQuery } from "@/lib/queries/finance"
+import { listInvoicesQuery } from "@/lib/queries/invoices"
+import type { FinanceTransactionResponse } from "@/lib/schemas/finance"
+import type { InvoiceStatus } from "@/lib/constants/enums"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -46,172 +53,88 @@ function todayLabel() {
   })
 }
 
-// ── Mock data — Invoice agent ─────────────────────────────────────────────────
-// TODO: replace with Supabase query
+// ── Data derivation helpers ───────────────────────────────────────────────────
 
-type MockInvoiceStatus = "paid" | "overdue" | "pending" | "draft"
+const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const
+const WEEK_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 
-type MockInvoice = {
-  id: string
-  number: string
-  guest: string
-  amount: number
-  status: MockInvoiceStatus
-  date: string
-  dueDate: string
-  paymentMethod: string
-  daysOverdue?: number
+function buildWeeklyChartData(
+  transactions: FinanceTransactionResponse[]
+): WeeklyDataPoint[] {
+  const byDay: Record<string, number> = {
+    Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0,
+  }
+  for (const t of transactions) {
+    if (t.direction !== "in") continue
+    const day = DAY_ABBR[new Date(t.occurredAt).getDay()]
+    byDay[day] = (byDay[day] ?? 0) + t.amount
+  }
+  return WEEK_ORDER.map((day) => ({
+    day,
+    revenue: Math.round((byDay[day] ?? 0) * 100) / 100,
+  }))
 }
 
-const MOCK_INVOICES: MockInvoice[] = [
-  {
-    id: "inv-1",
-    number: "INV-2025-001",
-    guest: "Marcus Webb",
-    amount: 181.22,
-    status: "paid",
-    date: "Apr 9",
-    dueDate: "Apr 16",
-    paymentMethod: "card",
-  },
-  {
-    id: "inv-2",
-    number: "INV-2025-002",
-    guest: "Priya Nair",
-    amount: 94.95,
-    status: "overdue",
-    date: "Apr 10",
-    dueDate: "Apr 10",
-    paymentMethod: "—",
-    daysOverdue: 2,
-  },
-  {
-    id: "inv-3",
-    number: "INV-2025-003",
-    guest: "Daniel Kim",
-    amount: 522.39,
-    status: "paid",
-    date: "Apr 10",
-    dueDate: "Apr 17",
-    paymentMethod: "card",
-  },
-  {
-    id: "inv-4",
-    number: "INV-2025-004",
-    guest: "Rachel Tran",
-    amount: 118.58,
-    status: "paid",
-    date: "Apr 5",
-    dueDate: "Apr 12",
-    paymentMethod: "card",
-  },
-  {
-    id: "inv-5",
-    number: "INV-2025-005",
-    guest: "Tom Okafor",
-    amount: 218.81,
-    status: "overdue",
-    date: "Apr 9",
-    dueDate: "Apr 9",
-    paymentMethod: "—",
-    daysOverdue: 3,
-  },
-  {
-    id: "inv-6",
-    number: "INV-2025-006",
-    guest: "Unknown",
-    amount: 68.26,
-    status: "overdue",
-    date: "Apr 2",
-    dueDate: "Apr 2",
-    paymentMethod: "—",
-    daysOverdue: 11,
-  },
-]
+const CATEGORY_COLORS: Record<string, string> = {
+  labor:             "#4b5563",
+  protein:           "#f87171",
+  utilities:         "#fbbf24",
+  beverage:          "#60a5fa",
+  produce:           "#4ade80",
+  dairy:             "#2dd4bf",
+  platform:          "#c084fc",
+  waste:             "#fb923c",
+  inventory_purchase:"#34d399",
+  dining_revenue:    "#6366f1",
+}
+const EXTRA_COLORS = ["#94a3b8", "#f472b6", "#a78bfa", "#38bdf8", "#fb7185"]
 
-// ── Mock data — Finance transactions ─────────────────────────────────────────
-// TODO: replace with Supabase query
-
-const MOCK_TRANSACTIONS = {
-  revenueIn: [
-    { date: "Apr 9",  amount: 181.22, category: "dining",   method: "card" },
-    { date: "Apr 10", amount: 522.39, category: "dining",   method: "card" },
-    { date: "Apr 5",  amount: 118.58, category: "dining",   method: "card" },
-  ],
-  expensesOut: [
-    { date: "Apr 11", amount: 62.00,   category: "produce",   type: "expense",            description: "Local Farm Direct" },
-    { date: "Apr 10", amount: 284.00,  category: "protein",   type: "expense",            description: "Premium Meats Co." },
-    { date: "Apr 8",  amount: 192.00,  category: "beverage",  type: "expense",            description: "Vine Street Imports" },
-    { date: "Apr 7",  amount: 310.00,  category: "utilities", type: "expense",            description: "Xcel Energy" },
-    { date: "Apr 9",  amount: 2800.00, category: "labor",     type: "expense",            description: "Weekly payroll" },
-    { date: "Apr 9",  amount: 18.50,   category: "platform",  type: "fee",                description: "OpenTable booking fee" },
-    { date: "Apr 11", amount: 54.00,   category: "dairy",     type: "inventory_purchase", description: "Artisan Dairy MN" },
-    { date: "Apr 11", amount: 28.00,   category: "waste",     type: "writeoff",           description: "Expired produce" },
-  ],
+function buildExpenseChartData(
+  expenseTransactions: FinanceTransactionResponse[]
+): ExpenseSlice[] {
+  const byCat: Record<string, number> = {}
+  for (const t of expenseTransactions) {
+    byCat[t.category] = (byCat[t.category] ?? 0) + t.amount
+  }
+  let extra = 0
+  return Object.entries(byCat).map(([name, value]) => ({
+    name,
+    value: Math.round(value * 100) / 100,
+    color: CATEGORY_COLORS[name] ?? EXTRA_COLORS[extra++ % EXTRA_COLORS.length],
+  }))
 }
 
-// ── Mock data — Weekly revenue chart ─────────────────────────────────────────
-// TODO: replace with Supabase query
+function buildTaxTransactions(
+  transactions: FinanceTransactionResponse[]
+): TaxTransaction[] {
+  return transactions
+    .filter((t) => t.taxRelevant)
+    .map((t) => ({
+      date: new Date(t.occurredAt).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      }),
+      description: t.notes ?? t.category,
+      category: t.category,
+      amount: t.amount,
+      type: t.type,
+      writeoffEligible: (t.writeoffEligible ? "yes" : "no") as TaxTransaction["writeoffEligible"],
+    }))
+}
 
-const WEEKLY_CHART_DATA: WeeklyDataPoint[] = [
-  { day: "Mon", revenue: 0 },
-  { day: "Tue", revenue: 0 },
-  { day: "Wed", revenue: 118.58 },
-  { day: "Thu", revenue: 0 },
-  { day: "Fri", revenue: 181.22 },
-  { day: "Sat", revenue: 522.39 },
-  { day: "Sun", revenue: 0 },
-]
+function computeDaysOverdue(dueAt: string): number {
+  return Math.max(
+    0,
+    Math.floor((Date.now() - new Date(dueAt).getTime()) / (1000 * 60 * 60 * 24))
+  )
+}
 
-// ── Mock data — Expense chart slices ─────────────────────────────────────────
-// TODO: replace with Supabase query
-
-const EXPENSE_CHART_DATA: ExpenseSlice[] = [
-  { name: "labor",    value: 2800.00, color: "#4b5563" },
-  { name: "protein",  value: 284.00,  color: "#f87171" },
-  { name: "utilities",value: 310.00,  color: "#fbbf24" },
-  { name: "beverage", value: 192.00,  color: "#60a5fa" },
-  { name: "produce",  value: 62.00,   color: "#4ade80" },
-  { name: "dairy",    value: 54.00,   color: "#2dd4bf" },
-  { name: "platform", value: 18.50,   color: "#c084fc" },
-  { name: "waste",    value: 28.00,   color: "#fb923c" },
-]
-
-// ── Mock data — Tax write-off transactions ───────────────────────────────────
-// TODO: replace with Supabase query
-
-const TAX_TRANSACTIONS: TaxTransaction[] = [
-  { date: "Apr 9",  description: "Weekly payroll",       category: "labor",    amount: 2800.00, type: "expense",            writeoffEligible: "yes" },
-  { date: "Apr 10", description: "Premium Meats Co.",    category: "protein",  amount: 284.00,  type: "expense",            writeoffEligible: "yes" },
-  { date: "Apr 7",  description: "Xcel Energy",          category: "utilities",amount: 310.00,  type: "expense",            writeoffEligible: "yes" },
-  { date: "Apr 8",  description: "Vine Street Imports",  category: "beverage", amount: 192.00,  type: "expense",            writeoffEligible: "yes" },
-  { date: "Apr 11", description: "Local Farm Direct",    category: "produce",  amount: 62.00,   type: "expense",            writeoffEligible: "yes" },
-  { date: "Apr 11", description: "Artisan Dairy MN",     category: "dairy",    amount: 54.00,   type: "inventory_purchase", writeoffEligible: "yes" },
-  { date: "Apr 9",  description: "OpenTable booking fee",category: "platform", amount: 18.50,   type: "fee",                writeoffEligible: "yes" },
-  { date: "Apr 11", description: "Expired produce",      category: "waste",    amount: 28.00,   type: "writeoff",           writeoffEligible: "yes" },
-]
-
-// ── Derived KPIs ──────────────────────────────────────────────────────────────
-// TODO: replace with Supabase query
-
-const REVENUE_WEEK   = 822.00
-const PENDING_AMT    = 0.00
-const OVERDUE_AMT    = 382.02   // 94.95 + 218.81 + 68.26
-const EXPENSES_WEEK  = 3748.50
-const NET_CASH_FLOW  = -2926.50 // REVENUE_WEEK - EXPENSES_WEEK
-const TAX_WRITEOFFS  = 3466.50
-
-// ── Top line items by revenue ─────────────────────────────────────────────────
-// TODO: replace with Supabase query from invoice line items
-
-const TOP_LINE_ITEMS = [
-  { name: "Chef Tasting Menu x6", amount: 348 },
-  { name: "Short Rib x2",         amount: 84 },
-  { name: "Wagyu Ribeye",         amount: 68 },
-  { name: "Wine Pairing x6",      amount: 60 },
-  { name: "Cocktails x4",         amount: 56 },
-]
-const TOP_LINE_MAX = Math.max(...TOP_LINE_ITEMS.map((i) => i.amount))
+function formatDueDate(dueAt: string): string {
+  return new Date(dueAt).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })
+}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -249,12 +172,14 @@ function KpiCard({
   )
 }
 
-function StatusBadge({ status }: { status: MockInvoiceStatus }) {
-  const map: Record<MockInvoiceStatus, string> = {
+function StatusBadge({ status }: { status: InvoiceStatus }) {
+  const map: Record<InvoiceStatus, string> = {
     paid:    "bg-emerald-100 text-emerald-700",
     overdue: "bg-red-100 text-red-700",
     pending: "bg-amber-100 text-amber-700",
     draft:   "bg-muted text-muted-foreground",
+    sent:    "bg-blue-100 text-blue-700",
+    void:    "bg-muted text-muted-foreground",
   }
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${map[status]}`}>
@@ -300,24 +225,91 @@ function InsightCard({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function FinancePage() {
-  const paidInvoices    = MOCK_INVOICES.filter((i) => i.status === "paid")
-  const overdueInvoices = MOCK_INVOICES.filter((i) => i.status === "overdue")
-  const draftInvoices   = MOCK_INVOICES.filter((i) => i.status === "draft")
+export default async function FinancePage() {
+  await connection()
 
-  // Invoice aging buckets
+  if (!isSupabaseConfigured()) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">
+          Finance data unavailable — Supabase is not configured.
+        </p>
+      </div>
+    )
+  }
+
+  const client = createServerSupabaseClient()
+  const [summary, transactions, invoices] = await Promise.all([
+    getFinanceSummaryQuery(client, DEMO_ORG_ID),
+    listTransactionsQuery(client, DEMO_ORG_ID, { limit: 50 }),
+    listInvoicesQuery(client, DEMO_ORG_ID),
+  ])
+
+  // ── Derived transaction data ────────────────────────────────────────────────
+  const expenseTransactions = transactions.filter((t) => t.direction === "out")
+  const weeklyChartData     = buildWeeklyChartData(transactions)
+  const expenseChartData    = buildExpenseChartData(expenseTransactions)
+  const taxTransactions     = buildTaxTransactions(transactions)
+  const taxWriteoffs        = taxTransactions.reduce((s, t) => s + t.amount, 0)
+
+  // ── Invoice derived data ────────────────────────────────────────────────────
+  type PageInvoice = {
+    id: string
+    number: string
+    guest: string
+    amount: number
+    status: InvoiceStatus
+    dueDate: string
+    daysOverdue?: number
+  }
+
+  const pageInvoices: PageInvoice[] = invoices.map((inv) => ({
+    id:          inv.id,
+    number:      inv.invoiceNumber,
+    guest:       inv.customerName,
+    amount:      inv.totalAmount,
+    status:      inv.status,
+    dueDate:     formatDueDate(inv.dueAt),
+    daysOverdue: inv.status === "overdue" ? computeDaysOverdue(inv.dueAt) : undefined,
+  }))
+
+  const paidInvoices    = pageInvoices.filter((i) => i.status === "paid")
+  const overdueInvoices = pageInvoices.filter((i) => i.status === "overdue")
+  const draftInvoices   = pageInvoices.filter((i) => i.status === "draft")
+
   const aging0to7   = overdueInvoices.filter((i) => (i.daysOverdue ?? 0) <= 7)
-  const aging8to30  = overdueInvoices.filter((i) => (i.daysOverdue ?? 0) > 7 && (i.daysOverdue ?? 0) <= 30)
+  const aging8to30  = overdueInvoices.filter(
+    (i) => (i.daysOverdue ?? 0) > 7 && (i.daysOverdue ?? 0) <= 30
+  )
   const agingOver30 = overdueInvoices.filter((i) => (i.daysOverdue ?? 0) > 30)
 
   const aging0to7Amt   = aging0to7.reduce((s, i) => s + i.amount, 0)
   const aging8to30Amt  = aging8to30.reduce((s, i) => s + i.amount, 0)
   const agingOver30Amt = agingOver30.reduce((s, i) => s + i.amount, 0)
 
-  // Cash flow bar proportions
-  const cashTotal = REVENUE_WEEK + EXPENSES_WEEK
-  const revPct    = ((REVENUE_WEEK / cashTotal) * 100).toFixed(0)
-  const expPct    = ((EXPENSES_WEEK / cashTotal) * 100).toFixed(0)
+  const maxDaysOverdue = overdueInvoices.reduce(
+    (max, i) => Math.max(max, i.daysOverdue ?? 0),
+    0
+  )
+
+  // ── Cash flow bar proportions ───────────────────────────────────────────────
+  const cashTotal = summary.revenueThisWeek + summary.expensesThisWeek
+  const revPct    = cashTotal > 0
+    ? ((summary.revenueThisWeek / cashTotal) * 100).toFixed(0)
+    : "0"
+  const expPct    = cashTotal > 0
+    ? ((summary.expensesThisWeek / cashTotal) * 100).toFixed(0)
+    : "0"
+
+  // ── Top line items — no query yet, static stub ──────────────────────────────
+  const TOP_LINE_ITEMS = [
+    { name: "Chef Tasting Menu x6", amount: 348 },
+    { name: "Short Rib x2",         amount: 84 },
+    { name: "Wagyu Ribeye",         amount: 68 },
+    { name: "Wine Pairing x6",      amount: 60 },
+    { name: "Cocktails x4",         amount: 56 },
+  ]
+  const TOP_LINE_MAX = Math.max(...TOP_LINE_ITEMS.map((i) => i.amount))
 
   return (
     <div className="space-y-5 p-6">
@@ -336,37 +328,35 @@ export default function FinancePage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label="Revenue this week"
-          value={fmtRound(REVENUE_WEEK)}
+          value={fmtRound(summary.revenueThisWeek)}
           sub={`${paidInvoices.length} paid invoices`}
           color="green"
         />
         <KpiCard
-          label="Pending receivables"
-          value={fmt(PENDING_AMT)}
-          sub="0 invoices pending"
-          color="gray"
-        />
-        <KpiCard
           label="Overdue"
-          value={fmt(OVERDUE_AMT)}
-          sub={`${overdueInvoices.length} invoices · oldest 11 days`}
+          value={fmt(summary.overdueReceivables)}
+          sub={`${overdueInvoices.length} invoice${overdueInvoices.length !== 1 ? "s" : ""} · oldest ${maxDaysOverdue} days`}
           color="red"
         />
         <KpiCard
           label="Expenses this week"
-          value={fmt(EXPENSES_WEEK)}
-          sub={`${MOCK_TRANSACTIONS.expensesOut.length} transactions`}
+          value={fmt(summary.expensesThisWeek)}
+          sub={`${expenseTransactions.length} transactions`}
           color="amber"
         />
         <KpiCard
           label="Net cash flow"
-          value={`−${fmt(Math.abs(NET_CASH_FLOW))}`}
+          value={
+            summary.netCashFlowEstimate < 0
+              ? `−${fmt(Math.abs(summary.netCashFlowEstimate))}`
+              : fmt(summary.netCashFlowEstimate)
+          }
           sub="Revenue minus expenses"
-          color="red"
+          color={summary.netCashFlowEstimate < 0 ? "red" : "green"}
         />
         <KpiCard
           label="Tax write-offs tracked"
-          value={fmt(TAX_WRITEOFFS)}
+          value={fmt(taxWriteoffs)}
           sub="tax_relevant transactions"
           color="blue"
         />
@@ -379,13 +369,53 @@ export default function FinancePage() {
             <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Weekly revenue
             </CardTitle>
-            <span className="text-xs text-muted-foreground">{fmtRound(REVENUE_WEEK)} this week</span>
+            <span className="text-xs text-muted-foreground">{fmtRound(summary.revenueThisWeek)} this week</span>
           </div>
         </CardHeader>
         <CardContent className="pb-4">
-          <WeeklyRevenueChart data={WEEKLY_CHART_DATA} />
+          <WeeklyRevenueChart data={weeklyChartData} />
         </CardContent>
       </Card>
+
+      {/* ── AI finance tips ──────────────────────────────────────────────────── */}
+      <SectionHeader
+        title="Finance insights"
+        sub="Powered by OpsPilot AI"
+      />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <InsightCard
+          borderColor="border-l-amber-400"
+          icon={<TrendingUp className="h-4 w-4 text-amber-500" />}
+          title="Wagyu Ribeye cost is rising"
+          body="Your protein costs increased this week. Wagyu Ribeye is both your highest cost item and your highest ticket item — consider a $4-6 menu price adjustment to protect margin."
+        />
+        <InsightCard
+          borderColor="border-l-red-400"
+          icon={<AlertCircle className="h-4 w-4 text-red-500" />}
+          title={`${overdueInvoices.length} invoice${overdueInvoices.length !== 1 ? "s" : ""} overdue — act today`}
+          body={`You have ${fmt(summary.overdueReceivables)} in overdue invoices. Beyond 14 days, collection rates drop significantly. Send a personal follow-up, not just an automated reminder.`}
+        />
+        <InsightCard
+          borderColor="border-l-blue-400"
+          icon={<Lightbulb className="h-4 w-4 text-blue-500" />}
+          title="Labor is 74% of weekly expenses"
+          body="Industry benchmark for restaurants is 28-35%. Your labor cost ratio suggests either a slow week for revenue or an opportunity to review scheduling."
+        />
+        <InsightCard
+          borderColor="border-l-green-400"
+          icon={<CheckCircle className="h-4 w-4 text-green-500" />}
+          title="Tax documentation is strong this week"
+          body={`${taxTransactions.length} expense transaction${taxTransactions.length !== 1 ? "s are" : " is"} flagged tax_relevant. You have ${fmt(taxWriteoffs)} in documented deductible expenses — well organized for filing.`}
+        />
+        <InsightCard
+          borderColor="border-l-purple-400"
+          icon={<Calendar className="h-4 w-4 text-purple-500" />}
+          title="Cash flow forecast: watch next 7 days"
+          body={`You have 5 confirmed reservations worth an estimated $400-600 in revenue. Combined with ${fmt(summary.overdueReceivables)} in overdue invoices if collected, next week could close positive. Key risk: if costs stay elevated and covers stay below 10/day, the week runs negative.`}
+          fullWidth
+        />
+      </div>
 
       {/* ── Invoice agent panel ──────────────────────────────────────────────── */}
       <SectionHeader
@@ -399,10 +429,10 @@ export default function FinancePage() {
           {/* Stat pills */}
           <div className="flex flex-wrap gap-2">
             {[
-              { label: "Total",   value: `${MOCK_INVOICES.length}`,                           bg: "bg-muted text-muted-foreground" },
-              { label: "Paid",    value: `${paidInvoices.length} (${fmtRound(REVENUE_WEEK)})`, bg: "bg-emerald-100 text-emerald-700" },
-              { label: "Overdue", value: `${overdueInvoices.length} (${fmt(OVERDUE_AMT)})`,    bg: "bg-red-100 text-red-700" },
-              { label: "Draft",   value: String(draftInvoices.length),                          bg: "bg-muted text-muted-foreground" },
+              { label: "Total",   value: `${pageInvoices.length}`,                                          bg: "bg-muted text-muted-foreground" },
+              { label: "Paid",    value: `${paidInvoices.length} (${fmtRound(summary.revenueThisWeek)})`,   bg: "bg-emerald-100 text-emerald-700" },
+              { label: "Overdue", value: `${overdueInvoices.length} (${fmt(summary.overdueReceivables)})`,   bg: "bg-red-100 text-red-700" },
+              { label: "Draft",   value: String(draftInvoices.length),                                        bg: "bg-muted text-muted-foreground" },
             ].map(({ label, value, bg }) => (
               <span key={label} className={`rounded-full px-3 py-1 text-xs font-medium ${bg}`}>
                 {label}: {value}
@@ -427,7 +457,7 @@ export default function FinancePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {MOCK_INVOICES.map((inv) => (
+                    {pageInvoices.map((inv) => (
                       <TableRow
                         key={inv.id}
                         className={inv.status === "overdue" ? "bg-red-50 hover:bg-red-100/70" : undefined}
@@ -442,7 +472,7 @@ export default function FinancePage() {
                         <TableCell>
                           <StatusBadge status={inv.status} />
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{inv.paymentMethod}</TableCell>
+                        <TableCell className="text-muted-foreground">—</TableCell>
                         <TableCell className="text-muted-foreground">{inv.dueDate}</TableCell>
                         <TableCell className="text-right">
                           {inv.daysOverdue !== undefined ? (
@@ -540,17 +570,23 @@ export default function FinancePage() {
           <CardContent className="pt-4 pb-5 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Money in this week</span>
-              <span className="font-semibold text-emerald-600 tabular-nums">{fmt(REVENUE_WEEK)}</span>
+              <span className="font-semibold text-emerald-600 tabular-nums">{fmt(summary.revenueThisWeek)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Money out this week</span>
-              <span className="font-semibold text-red-600 tabular-nums">{fmt(EXPENSES_WEEK)}</span>
+              <span className="font-semibold text-red-600 tabular-nums">{fmt(summary.expensesThisWeek)}</span>
             </div>
             <div className="flex items-center justify-between border-t border-border pt-3">
               <span className="text-sm font-semibold text-foreground">Net</span>
-              <span className="text-xl font-bold text-red-600 tabular-nums">
-                −{fmt(Math.abs(NET_CASH_FLOW))}
-              </span>
+              {summary.netCashFlowEstimate < 0 ? (
+                <span className="text-xl font-bold text-red-600 tabular-nums">
+                  −{fmt(Math.abs(summary.netCashFlowEstimate))}
+                </span>
+              ) : (
+                <span className="text-xl font-bold text-emerald-600 tabular-nums">
+                  {fmt(summary.netCashFlowEstimate)}
+                </span>
+              )}
             </div>
 
             {/* In vs out bar */}
@@ -587,8 +623,8 @@ export default function FinancePage() {
           <CardContent className="pt-4 pb-5 space-y-3">
             {[
               { label: "Confirmed reservations (5): est.", value: "$400–600" },
-              { label: "Pending receivables",              value: fmt(PENDING_AMT) },
-              { label: "Overdue to collect",               value: fmt(OVERDUE_AMT) },
+              { label: "Pending receivables",              value: fmt(summary.pendingReceivables) },
+              { label: "Overdue to collect",               value: fmt(summary.overdueReceivables) },
               { label: "Scheduled expenses (est.)",        value: "~$3,200" },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between gap-4 text-sm">
@@ -601,8 +637,8 @@ export default function FinancePage() {
             <div className="mt-2 flex items-start gap-2.5 rounded-lg bg-blue-50 border border-blue-100 px-3 py-3">
               <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
               <p className="text-xs leading-relaxed text-blue-800">
-                Your overdue invoices total $382. Sending reminders today could recover this before
-                end of week. INV-2025-006 is 11 days overdue — prioritize that one.
+                Your overdue invoices total {fmt(summary.overdueReceivables)}. Sending reminders
+                today could recover this before end of week. Prioritize your oldest overdue invoice.
               </p>
             </div>
           </CardContent>
@@ -629,12 +665,14 @@ export default function FinancePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {EXPENSE_CHART_DATA.map((row) => (
+                {expenseChartData.map((row) => (
                   <TableRow key={row.name}>
                     <TableCell className="font-medium capitalize">{row.name}</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(row.value)}</TableCell>
                     <TableCell className="text-right text-muted-foreground tabular-nums">
-                      {((row.value / EXPENSES_WEEK) * 100).toFixed(1)}%
+                      {summary.expensesThisWeek > 0
+                        ? ((row.value / summary.expensesThisWeek) * 100).toFixed(1)
+                        : "0.0"}%
                     </TableCell>
                     <TableCell>
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
@@ -648,7 +686,7 @@ export default function FinancePage() {
                 <tr className="border-t border-border">
                   <td className="p-2 font-bold text-sm text-foreground">Total</td>
                   <td className="p-2 text-right font-bold text-sm text-foreground tabular-nums">
-                    {fmt(EXPENSES_WEEK)}
+                    {fmt(summary.expensesThisWeek)}
                   </td>
                   <td colSpan={2} />
                 </tr>
@@ -665,7 +703,7 @@ export default function FinancePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4 pb-5">
-            <ExpenseChart data={EXPENSE_CHART_DATA} />
+            <ExpenseChart data={expenseChartData} />
           </CardContent>
         </Card>
       </div>
@@ -681,7 +719,7 @@ export default function FinancePage() {
           {/* Blue info banner */}
           <div className="flex items-center justify-between gap-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
             <p className="text-xs text-blue-800 leading-relaxed">
-              <span className="font-semibold">{fmt(TAX_WRITEOFFS)}</span> in potentially deductible
+              <span className="font-semibold">{fmt(taxWriteoffs)}</span> in potentially deductible
               expenses tracked this week. Export this list for your accountant at tax time.
             </p>
             <button className="shrink-0 flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors">
@@ -691,49 +729,10 @@ export default function FinancePage() {
           </div>
 
           {/* Filter pills + table (client component) */}
-          <TaxFilterPills transactions={TAX_TRANSACTIONS} />
+          <TaxFilterPills transactions={taxTransactions} />
         </CardContent>
       </Card>
 
-      {/* ── AI finance tips ──────────────────────────────────────────────────── */}
-      <SectionHeader
-        title="Finance insights"
-        sub="Powered by OpsPilot AI"
-      />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <InsightCard
-          borderColor="border-l-amber-400"
-          icon={<TrendingUp className="h-4 w-4 text-amber-500" />}
-          title="Wagyu Ribeye cost is rising"
-          body="Your protein costs increased this week. Wagyu Ribeye is both your highest cost item and your highest ticket item — consider a $4-6 menu price adjustment to protect margin."
-        />
-        <InsightCard
-          borderColor="border-l-red-400"
-          icon={<AlertCircle className="h-4 w-4 text-red-500" />}
-          title="3 invoices overdue — act today"
-          body="INV-2025-006 is 11 days overdue ($68.26). Beyond 14 days, collection rates drop significantly. Send a personal follow-up, not just an automated reminder."
-        />
-        <InsightCard
-          borderColor="border-l-blue-400"
-          icon={<Lightbulb className="h-4 w-4 text-blue-500" />}
-          title="Labor is 74% of weekly expenses"
-          body="Industry benchmark for restaurants is 28-35%. Your labor cost ratio suggests either a slow week for revenue or an opportunity to review scheduling."
-        />
-        <InsightCard
-          borderColor="border-l-green-400"
-          icon={<CheckCircle className="h-4 w-4 text-green-500" />}
-          title="Tax documentation is strong this week"
-          body="All 8 expense transactions are flagged tax_relevant. You have $3,466.50 in documented deductible expenses — well organized for filing."
-        />
-        <InsightCard
-          borderColor="border-l-purple-400"
-          icon={<Calendar className="h-4 w-4 text-purple-500" />}
-          title="Cash flow forecast: watch next 7 days"
-          body="You have 5 confirmed reservations worth an estimated $400-600 in revenue. Combined with $382 in overdue invoices if collected, next week could close positive. Key risk: if protein costs stay elevated and covers stay below 10/day, the week runs negative."
-          fullWidth
-        />
-      </div>
     </div>
   )
 }
