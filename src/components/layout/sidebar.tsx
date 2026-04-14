@@ -92,10 +92,6 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Bottom */}
-      <div className="border-t border-border p-4">
-        <p className="text-[10px] text-muted-foreground">Powered by Claude AI</p>
-      </div>
     </aside>
   )
 }
