@@ -31,11 +31,11 @@ This subsection records **current engineering scope** without changing earlier r
 
 | Track | What “done” means for the hackathon demo |
 |-------|------------------------------------------|
-| **MCP bridge** | HTTP ingress at `POST /api/integrations/webhooks/:provider` validates payloads, writes `integration_sync_events`, dedupes on `external_event_id`, and dispatches to the **same** domain services as first-party routes (`integrations` service). The **Integrations** page explains the bridge; the **dashboard** surfaces an **MCP bridge & connectors** panel (status + link). |
-| **Feedback** | **`/feedback`** remains the home for flagged reviews, recovery drafts, and follow-up actions (§4.2.4). The **dashboard** includes a **Feedback & recovery** spotlight (summary + link) so judges always see the module. Until a dedicated `feedback` table and APIs land, the page may use **clearly marked** demo/mock rows; the spotlight may summarize representative cases. |
+| **MCP bridge** | HTTP ingress at `POST /api/integrations/webhooks/:provider` validates payloads, writes `integration_sync_events`, dedupes on `external_event_id`, and dispatches to the **same** domain services as first-party routes (`integrations` service). The **Integrations** page is the primary surface for connector status, bridge explanation, and webhook testing. The dashboard does **not** need a duplicate connector panel once this decision is recorded, but it must not hide support-impacting integration issues entirely. |
+| **Feedback** | **`/feedback`** remains the home for flagged reviews, recovery drafts, and follow-up actions (§4.2.4). The **dashboard** includes a **Feedback & recovery** spotlight (summary + link) so judges always see the module. In the current implementation track, `/feedback` is driven by Supabase-backed `feedback` and `follow_up_actions` rows when migration `004_feedback_domain.sql` and seed data are applied. |
 | **Navigation** | Global sidebar IA MUST list **Feedback** and **Integrations** explicitly (not only under ambiguous labels). A **Support** (or equivalent) group is acceptable if it keeps both routes one click away. |
 
-**Non-regression:** Removing these surfaces from the dashboard or primary nav is a **product regression** relative to §4.1 and §12.1 unless the PRD is formally updated.
+**Non-regression:** Removing **Feedback** visibility from the dashboard or removing **Feedback / Integrations** from primary navigation is a **product regression** relative to §4.1 and §12.1 unless the PRD is formally updated. Connector detail may live on `/integrations` instead of a duplicate dashboard panel once that product decision is recorded in the decision log.
 
 ---
 
@@ -1126,7 +1126,7 @@ The codebase now contains a substantial part of the first operational milestone:
 | **API Routes — Feedback** | ✅ Complete | `/api/review` (POST — full agent pipeline), `/api/feedback/submit`, `/api/feedback/:id/flag`, `/api/feedback/:id/follow-up`, `/api/feedback/:id/approve-reply` |
 | **API Routes — Integrations** | ✅ Complete | `/api/integrations/webhooks/:provider` (POST — MCP bridge ingress) |
 | **Customer Service Agent** | ✅ Complete | `agents/customer-service/agent.js` — `analyzeReview()` + `analyzeAndRespond()` with full JSON schema |
-| **Dashboard Page** | ✅ Complete | `/dashboard` — KPI cards, MCP bridge panel, Feedback & recovery spotlight, AI manager briefing, finance snapshot |
+| **Dashboard Page** | ✅ Complete | `/dashboard` — KPI cards, Feedback & recovery spotlight, AI manager briefing, finance snapshot |
 | **Feedback Page** | ✅ Complete | `/feedback` — flagged reviews, pending manager decisions, all feedback table, approval/dismissal actions |
 | **Invoices Page** | ✅ Complete | `/invoices` — list with status tags, detail drawer, mark-paid flow |
 | **Finance Page** | ✅ Complete | `/finance` — transactions table, cash flow summary, invoice aging |
@@ -1178,9 +1178,9 @@ The codebase now contains a substantial part of the first operational milestone:
 
 4. GET /dashboard
    → All KPIs reflect DB truth
-   → MCP bridge panel visible
    → Feedback spotlight shows flagged reviews
    → Finance snapshot shows revenue/expenses
+   → Integrations stay one click away in nav and on `/integrations`
 ```
 
 #### E.5 — Supabase Connection Checklist (Must Complete Before Demo)

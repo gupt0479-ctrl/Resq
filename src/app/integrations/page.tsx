@@ -8,6 +8,7 @@ import { CONNECTOR_STATUS_LABEL } from "@/lib/constants/enums"
 import type { ConnectorStatus } from "@/lib/constants/enums"
 import { CheckCircle2, XCircle, MinusCircle, Plug } from "lucide-react"
 import { Fragment } from "react"
+import { ClearConnectorErrorButton } from "@/components/integrations/clear-connector-error-button"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +28,7 @@ function ConnectorCard({ connector }: { connector: Record<string, unknown> }) {
   const status = connector.status as ConnectorStatus
   const lastError = getErrorString(connector.last_error)
   const showError = Boolean(connector.last_error && lastError)
+  const provider = connector.provider as string
 
   return (
     <div className="flex items-center justify-between py-2 border-b border-border last:border-0">
@@ -50,9 +52,12 @@ function ConnectorCard({ connector }: { connector: Record<string, unknown> }) {
           {CONNECTOR_STATUS_LABEL[status]}
         </span>
         {showError && (
-          <p className="text-[10px] text-red-500 mt-0.5 max-w-xs text-right">
-            {lastError}
-          </p>
+          <>
+            <p className="text-[10px] text-red-500 mt-0.5 max-w-xs text-right">
+              {lastError}
+            </p>
+            <ClearConnectorErrorButton provider={provider} />
+          </>
         )}
       </div>
     </div>
@@ -81,11 +86,10 @@ export default async function IntegrationsPage() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Integrations</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          MCP bridge connectors — external data sources normalised into OpsPilot
+          MCP bridge connectors — external systems normalised into the same deterministic OpsPilot workflow used by the UI
         </p>
       </div>
 
-      {/* MCP concept banner */}
       <Card className="bg-muted/30 border-dashed">
         <CardContent className="pt-4 text-sm text-muted-foreground space-y-1">
           <p className="font-medium text-foreground text-sm">How the MCP bridge works</p>
@@ -96,17 +100,22 @@ export default async function IntegrationsPage() {
             deterministic service layer used by the UI — never bypassing invoice or finance truth.
             Mutating events (<code className="font-mono text-xs">reservation.completed</code>,{" "}
             <code className="font-mono text-xs">invoice.sent</code>,{" "}
-            <code className="font-mono text-xs">invoice.paid</code>) require{" "}
+            <code className="font-mono text-xs">invoice.paid</code>,{" "}
+            <code className="font-mono text-xs">feedback.received</code>) require{" "}
             <code className="font-mono text-xs">externalEventId</code> for deduplication. Production requires{" "}
             <code className="font-mono text-xs">INTEGRATIONS_WEBHOOK_SECRET</code>; under{" "}
             <code className="font-mono text-xs">next dev</code> with no secret, unsigned test POSTs are allowed (set the
             secret or <code className="font-mono text-xs">INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED=false</code> to enforce
             signing in dev).
           </p>
+          <p>
+            Connector errors shown below come from persisted bridge state (`status`, `last_sync_at`, `last_error`). The
+            demo-safe reset action only clears the local error marker so you can rehearse the happy path without faking
+            OAuth or changing provider config.
+          </p>
         </CardContent>
       </Card>
 
-      {/* Connector list */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
@@ -141,9 +150,14 @@ export default async function IntegrationsPage() {
       <Card className="border-dashed">
         <CardContent className="pt-4 text-xs text-muted-foreground">
           <p className="font-medium text-foreground text-sm mb-1">Test the MCP bridge locally</p>
-          <pre className="bg-muted rounded p-3 overflow-x-auto text-[11px]">{`curl -X POST http://localhost:3000/api/integrations/webhooks/square \\
+          <p className="mb-3">
+            This example exercises a supported review-ingest path and creates a replay-safe sync event because it includes
+            both <code className="rounded bg-muted px-1">externalEventId</code> and a valid review score.
+          </p>
+          <pre className="bg-muted rounded p-3 overflow-x-auto text-[11px]">{`curl -X POST http://localhost:3000/api/integrations/webhooks/google_reviews \\
   -H "Content-Type: application/json" \\
-  -d '{"externalEventId":"sq_evt_001","eventType":"payment.completed","data":{"amount":207.10}}'`}</pre>
+  -H "x-webhook-secret: $INTEGRATIONS_WEBHOOK_SECRET" \\
+  -d '{"externalEventId":"google_evt_001","eventType":"feedback.received","data":{"score":2,"guestName":"Priya Nair","comment":"Slow seating and cold bread.","source":"google"}}'`}</pre>
         </CardContent>
       </Card>
     </div>

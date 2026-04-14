@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { MUTATING_INTEGRATION_EVENTS, normalizeDomainEvent } from "@/lib/integrations/webhook-domain"
+import {
+  MUTATING_INTEGRATION_EVENTS,
+  getWebhookDispatchValidationError,
+  normalizeDomainEvent,
+} from "@/lib/integrations/webhook-domain"
 
 describe("normalizeDomainEvent", () => {
   it("returns canonical names for known strings", () => {
@@ -30,5 +34,36 @@ describe("normalizeDomainEvent (extended)", () => {
   it("maps cancellation and reschedule strings", () => {
     expect(normalizeDomainEvent("opentable", "ReservationCancelled")).toBe("reservation.cancelled")
     expect(normalizeDomainEvent("opentable", "reservation.rescheduled")).toBe("reservation.rescheduled")
+  })
+})
+
+describe("getWebhookDispatchValidationError", () => {
+  it("requires appointmentId for reservation completion", () => {
+    expect(getWebhookDispatchValidationError("reservation.completed", {})).toBe(
+      "reservation.completed requires appointmentId in webhook data."
+    )
+  })
+
+  it("requires invoiceId for invoice payment", () => {
+    expect(getWebhookDispatchValidationError("invoice.paid", { amount: 207.1 })).toBe(
+      "invoice.paid requires invoiceId in webhook data."
+    )
+  })
+
+  it("requires reschedule timestamps", () => {
+    expect(
+      getWebhookDispatchValidationError("reservation.rescheduled", {
+        appointmentId: "appt_123",
+      })
+    ).toBe("reservation.rescheduled requires startsAt and endsAt in webhook data.")
+  })
+
+  it("accepts valid feedback payloads", () => {
+    expect(
+      getWebhookDispatchValidationError("feedback.received", {
+        score: 2,
+        comment: "Cold bread.",
+      })
+    ).toBeNull()
   })
 })
