@@ -325,22 +325,23 @@ export async function runInventoryAgent(
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY is not set in environment")
 
   const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({
+
+  // ── Phase 1: gather data via tool calls ───────────────────────────────────
+  // responseMimeType is incompatible with function calling, so we use a plain
+  // tool-enabled model here and collect all results ourselves.
+  const toolModel = genAI.getGenerativeModel({
     model: "gemini-2.5-flash-lite",
     tools: [{ functionDeclarations }],
     systemInstruction,
-    generationConfig: {
-      maxOutputTokens: 8192,
-    },
   })
 
-  const chat = model.startChat()
+  const chat = toolModel.startChat()
   let result = await chat.sendMessage(
-    `Today is ${asOfDate}. Analyse Ember Table's inventory purchasing and shipment data.
-Call all three tools to gather the data, then produce the JSON report.`
+    `Today is ${asOfDate}. Call all three tools to gather the data. Do NOT write the report yet — just call the tools.`
   )
 
-  // Agentic loop — process tool calls until the model returns final text
+  const gathered: Record<string, unknown> = {}
+
   for (let turn = 0; turn < 10; turn++) {
     const calls = result.response.functionCalls()
     if (!calls || calls.length === 0) break
@@ -351,10 +352,13 @@ Call all three tools to gather the data, then produce the JSON report.`
       if (call.name === "get_shipment_order_history") {
         const args = call.args as { days?: number }
         toolResult = getShipmentOrderHistory(shipments, asOfDate, args.days ?? 30)
+        gathered.orderHistory = toolResult
       } else if (call.name === "assess_spoilage_risk") {
         toolResult = assessSpoilageRisk(shipments, inventoryItems, asOfDate)
+        gathered.spoilageRisk = toolResult
       } else if (call.name === "get_vendor_performance") {
         toolResult = getVendorPerformanceDetails(shipments, inventoryItems)
+        gathered.vendorPerformance = toolResult
       } else {
         toolResult = { error: `Unknown tool: ${call.name}` }
       }
@@ -370,13 +374,33 @@ Call all three tools to gather the data, then produce the JSON report.`
     result = await chat.sendMessage(responses)
   }
 
-  let parsed = tryParseAgentReport(result.response.text())
-  if (!parsed) {
-    const repair = await chat.sendMessage(
-      "Your previous response was not valid JSON. Return only valid JSON matching the required report shape. No markdown fences, no commentary."
-    )
-    parsed = tryParseAgentReport(repair.response.text())
-  }
+  // ── Phase 2: synthesise JSON with a tool-free model ───────────────────────
+  // Without function declarations, responseMimeType: "application/json" is
+  // allowed and forces the model to emit a complete, well-formed JSON object.
+  const jsonModel = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash-lite",
+    systemInstruction,
+    generationConfig: {
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+    },
+  })
+
+  const dataPrompt = `Today is ${asOfDate}. Here is the data gathered from Ember Table's systems:
+
+ORDER HISTORY:
+${JSON.stringify(gathered.orderHistory ?? {})}
+
+SPOILAGE RISK:
+${JSON.stringify(gathered.spoilageRisk ?? {})}
+
+VENDOR PERFORMANCE:
+${JSON.stringify(gathered.vendorPerformance ?? {})}
+
+Using this data, produce the JSON report. Return only the JSON object — no markdown, no commentary.`
+
+  const jsonResult = await jsonModel.generateContent(dataPrompt)
+  const parsed = tryParseAgentReport(jsonResult.response.text())
 
   if (!parsed) {
     throw new Error("AI returned incomplete JSON. Please retry analysis.")
