@@ -1113,7 +1113,7 @@ export function InvoiceTable({ invoices: initial }: { invoices: Invoice[] }) {
     }
   }
 
-  const actionable = (status: string) => status === "overdue" || status === "pending"
+  const actionable = (status: string) => status === "overdue" || status === "pending" || status === "sent"
 
   function nextInvoiceNumber() {
     const nums = invoices
