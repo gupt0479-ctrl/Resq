@@ -403,7 +403,7 @@ export default function LandingPage() {
                 {/* AI assistant strip */}
                 <div style={{ background: "#F4F0EA", border: `0.5px solid ${BORDER}`, borderRadius: "6px", padding: "8px 10px", marginBottom: "10px", display: "flex", gap: "8px", alignItems: "center" }}>
                   <span style={{ fontSize: "9px", color: EMBER, fontFamily: "sans-serif", flexShrink: 0 }}>AI</span>
-                  <p style={{ fontSize: "10px", color: MUTED, fontStyle: "italic", fontFamily: "sans-serif" }}>"Book a table for 4 this Saturday at 7pm"</p>
+                  <p style={{ fontSize: "10px", color: MUTED, fontStyle: "italic", fontFamily: "sans-serif" }}>&quot;Book a table for 4 this Saturday at 7pm&quot;</p>
                 </div>
                 {([
                   { name: "Marcus Webb",  covers: 2, time: "7:00 PM", status: "Completed", dot: "#22c55e", col: "#166534", bg: "#DCFCE7" },
@@ -685,7 +685,7 @@ export default function LandingPage() {
                     <span style={{ fontSize: "8px", background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: "3px", fontFamily: "sans-serif" }}>SAFETY FLAG · Urgency 5/5</span>
                   </div>
                   <p style={{ fontSize: "10px", fontStyle: "italic", color: MUTED, lineHeight: 1.5, marginBottom: "6px" }}>
-                    "Server brought wrong dish despite my nut allergy being on file. I had a reaction."
+                    &quot;Server brought wrong dish despite my nut allergy being on file. I had a reaction.&quot;
                   </p>
                   <p style={{ fontSize: "9px", color: MUTED, fontFamily: "sans-serif", marginBottom: "5px" }}>AI-drafted recovery reply ready for approval</p>
                   <div style={{ display: "flex", gap: "6px" }}>

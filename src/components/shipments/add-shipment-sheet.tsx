@@ -328,7 +328,7 @@ function ItemCombobox({ value, onChange, onSelect, onAddNew, items, placeholder 
               >
                 <Plus className="h-3.5 w-3.5 text-violet-600 shrink-0" />
                 <span className="text-sm text-violet-700">
-                  Create <span className="font-semibold">"{value.trim()}"</span> in inventory
+                  Create <span className="font-semibold">&quot;{value.trim()}&quot;</span> in inventory
                 </span>
               </button>
             </div>

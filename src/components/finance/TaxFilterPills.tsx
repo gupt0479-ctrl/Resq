@@ -32,18 +32,18 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 function typeStyle(type: string): string {
   switch (type) {
-    case "expense":            return "bg-blue-500/20 text-blue-300"
-    case "fee":                return "bg-purple-500/20 text-purple-300"
-    case "writeoff":           return "bg-orange-500/20 text-orange-300"
-    case "inventory_purchase": return "bg-teal-500/20 text-teal-300"
-    default:                   return "bg-slate-700/50 text-slate-400"
+    case "expense":            return "bg-blue-500/20 text-blue-400"
+    case "fee":                return "bg-purple-500/20 text-purple-400"
+    case "writeoff":           return "bg-orange-500/20 text-orange-400"
+    case "inventory_purchase": return "bg-teal-500/20 text-teal-400"
+    default:                   return "bg-muted text-muted-foreground"
   }
 }
 
 function eligibleStyle(v: "yes" | "no" | "review"): string {
-  if (v === "yes")    return "bg-emerald-500/20 text-emerald-300"
-  if (v === "review") return "bg-amber-500/20 text-amber-300"
-  return "bg-slate-700/50 text-slate-400"
+  if (v === "yes")    return "bg-emerald-500/20 text-emerald-400"
+  if (v === "review") return "bg-amber-500/20 text-amber-400"
+  return "bg-muted text-muted-foreground"
 }
 
 export function TaxFilterPills({
@@ -75,7 +75,7 @@ export function TaxFilterPills({
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               active === key
                 ? "bg-blue-600 text-white"
-                : "bg-slate-700/60 text-slate-400 hover:bg-slate-700 hover:text-white"
+                : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
             }`}
           >
             {label}
@@ -85,24 +85,24 @@ export function TaxFilterPills({
 
       <Table>
         <TableHeader>
-          <TableRow className="border-b border-slate-700/50 hover:bg-transparent">
-            <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Date</TableHead>
-            <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Description</TableHead>
-            <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Category</TableHead>
-            <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider text-right">Amount</TableHead>
-            <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Type</TableHead>
-            <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Write-off eligible</TableHead>
+          <TableRow className="border-b border-border/50 hover:bg-transparent">
+            <TableHead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider">Date</TableHead>
+            <TableHead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider">Description</TableHead>
+            <TableHead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider">Category</TableHead>
+            <TableHead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider text-right">Amount</TableHead>
+            <TableHead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider">Type</TableHead>
+            <TableHead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider">Write-off eligible</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtered.map((t, i) => (
             <TableRow
               key={i}
-              className="text-white border-b border-slate-700/30 transition-all duration-150 hover:bg-slate-700/30 hover:border-l-2 hover:border-l-blue-500"
+              className="text-foreground border-b border-border/30 transition-all duration-150 hover:bg-muted/50 hover:border-l-2 hover:border-l-blue-500"
             >
-              <TableCell className="whitespace-nowrap text-slate-400">{t.date}</TableCell>
-              <TableCell className="font-medium text-white">{t.description}</TableCell>
-              <TableCell className="capitalize text-slate-400">{t.category}</TableCell>
+              <TableCell className="whitespace-nowrap text-muted-foreground">{t.date}</TableCell>
+              <TableCell className="font-medium text-foreground">{t.description}</TableCell>
+              <TableCell className="capitalize text-muted-foreground">{t.category}</TableCell>
               <TableCell className="text-right font-medium text-red-400">
                 {t.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}
               </TableCell>
@@ -120,11 +120,11 @@ export function TaxFilterPills({
           ))}
         </TableBody>
         <TableFooter>
-          <TableRow className="border-t border-slate-700/50 bg-slate-800/60 hover:bg-slate-800/60">
-            <TableCell colSpan={3} className="font-semibold text-white">
+          <TableRow className="border-t border-border/50 bg-muted/50 hover:bg-muted/50">
+            <TableCell colSpan={3} className="font-semibold text-foreground">
               Total
             </TableCell>
-            <TableCell className="text-right font-bold text-white">
+            <TableCell className="text-right font-bold text-foreground">
               {filteredTotal.toLocaleString("en-US", { style: "currency", currency: "USD" })}
             </TableCell>
             <TableCell colSpan={2} />
