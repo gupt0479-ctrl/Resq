@@ -331,7 +331,6 @@ export async function runInventoryAgent(
     systemInstruction,
     generationConfig: {
       maxOutputTokens: 8192,
-      responseMimeType: "application/json",
     },
   })
 
