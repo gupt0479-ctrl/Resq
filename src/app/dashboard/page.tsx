@@ -14,7 +14,6 @@ import {
   Clock,
   DollarSign,
   MessageSquare,
-  Plug,
   TrendingUp,
 } from "lucide-react"
 
@@ -129,6 +128,7 @@ export default async function DashboardPage() {
     feedbackSpotlight,
     recentAiActivity,
   } = summary
+  const connectorErrorCount = integrationConnectors.filter((connector) => connector.status === "error").length
   const cashTrend =
     financeSnapshot.netCashFlow > 0
       ? "Revenue ahead of expenses this week"
@@ -181,63 +181,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* Phase 3: MCP bridge + feedback must remain visible on dashboard (PRD §4.3, §12.1). */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-primary/15 bg-primary/[0.03]">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <Plug className="h-4 w-4 text-primary" />
-              <CardTitle className="text-sm font-semibold">MCP bridge &amp; connectors</CardTitle>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              External tools and automations POST to{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">/api/integrations/webhooks/:provider</code>
-              . Events are logged and normalized into the same services as the UI.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3 pb-4">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <Badge variant="outline" className="font-normal">
-                {integrationConnectors.length} connector{integrationConnectors.length === 1 ? "" : "s"} linked
-              </Badge>
-              {integrationConnectors.some((c) => c.status === "error") ? (
-                <Badge variant="destructive" className="text-[10px]">
-                  Attention: connector error
-                </Badge>
-              ) : null}
-            </div>
-            {integrationConnectors.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No connectors in Supabase yet — seed adds demo rows.</p>
-            ) : (
-              <ul className="max-h-28 space-y-1 overflow-y-auto text-xs">
-                {integrationConnectors.map((connector) => (
-                  <li key={connector.provider} className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">{connector.displayName}</span>
-                    <span
-                      className={
-                        connector.status === "connected"
-                          ? "text-green-600"
-                          : connector.status === "error"
-                            ? "text-red-600"
-                            : "text-muted-foreground"
-                      }
-                    >
-                      {connector.status}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Link
-              href="/integrations"
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              Open integrations &amp; webhook docs
-              <ArrowRight className="h-3 w-3" />
-            </Link>
-          </CardContent>
-        </Card>
-
+      <div>
         <Card className="border-amber-200/80 bg-amber-50/40">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
@@ -265,16 +209,31 @@ export default async function DashboardPage() {
                 ))}
               </ul>
             )}
+            {connectorErrorCount > 0 ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                {connectorErrorCount} connector error{connectorErrorCount === 1 ? "" : "s"} may affect inbound reviews
+                or sync visibility. Check the Integrations page before the demo.
+              </div>
+            ) : null}
             <p className="text-[10px] text-muted-foreground">
               Data from Supabase feedback table. Open the queue for full detail and drafts.
             </p>
-            <Link
-              href="/feedback"
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              Open feedback queue
-              <ArrowRight className="h-3 w-3" />
-            </Link>
+            <div className="flex flex-wrap gap-4">
+              <Link
+                href="/feedback"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Open feedback queue
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+              <Link
+                href="/integrations"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Open integrations
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>

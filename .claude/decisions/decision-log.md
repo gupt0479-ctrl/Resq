@@ -39,3 +39,9 @@ Append short entries here when the project learns something important. Keep it f
 - Decision: compress top-level and `.claude/` operational docs into a smaller, consistent submission set.
 - Why: the team is in deadline mode; agents and reviewers need fast orientation more than exhaustive prose.
 - Result: `README.md`, `CLAUDE.md`, `.claude/README.md`, current-state, architecture, demo workflow, and demo checklist now emphasize the same verified workflow and verification commands.
+
+## 2026-04-14 - Dashboard Keeps Feedback, Integrations Own Connector Detail
+
+- Decision: remove the dedicated dashboard MCP bridge card and keep connector detail on `/integrations`, while preserving Feedback visibility on `/dashboard` and keeping Feedback / Integrations explicit in sidebar navigation.
+- Why: the Integrations page already carries the connector story with clearer status and bridge context, so duplicating that panel on the dashboard adds noise without improving the core demo workflow.
+- Guardrail: the dashboard must still surface support urgency through the Feedback spotlight and must not hide connector problems entirely when an integration error affects the demo.
