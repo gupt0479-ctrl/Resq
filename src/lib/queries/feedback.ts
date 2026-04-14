@@ -292,20 +292,15 @@ export async function countUnhappyGuestsForDashboard(
   client: SupabaseClient,
   organizationId: string
 ): Promise<number> {
-  const { data, error } = await client
+  const { count, error } = await client
     .from("feedback")
-    .select("flagged, safety_flag, urgency, follow_up_status")
+    .select("*", { count: "exact", head: true })
     .eq("organization_id", organizationId)
+    .not("follow_up_status", "in", '("resolved","thankyou_sent")')
+    .or("flagged.eq.true,safety_flag.eq.true,urgency.gte.4")
 
   if (error) throw new Error(error.message)
-  return (data ?? []).filter((r) =>
-    isFlaggedQueueRow(r as {
-      flagged: boolean
-      safety_flag: boolean
-      urgency: number
-      follow_up_status: string
-    })
-  ).length
+  return count ?? 0
 }
 
 export async function getFeedbackSpotlightForDashboard(

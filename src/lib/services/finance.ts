@@ -198,7 +198,7 @@ async function buildSyntheticTransactions(client: SupabaseClient, limit: number)
       payment_method: null,
       tax_relevant: true,
       writeoff_eligible: false,
-      notes: `Reservation Â· ${r.covers} covers`,
+      notes: `Reservation · ${r.covers} covers`,
       external_ref: null,
       created_at: `${r.date}T19:00:00.000Z`,
     })

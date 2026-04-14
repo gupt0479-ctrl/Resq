@@ -1,5 +1,5 @@
--- Ember Table â€” deterministic seed data
--- Run after applying 0001_core_ledger.sql
+-- Ember Table — deterministic seed data
+-- Run after applying 0001_core_ledger.sql (and 004_feedback_domain.sql for the feedback block at the bottom)
 -- All dates relative to the demo anchor date: 2026-04-11
 
 -- â”€â”€â”€ Organisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -55,21 +55,21 @@ ON CONFLICT (id) DO NOTHING;
 -- â”€â”€â”€ Appointments / Reservations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO appointments (id, organization_id, customer_id, staff_id, service_id, covers, starts_at, ends_at, status, booking_source, confirmation_sent_at, notes) VALUES
-  -- COMPLETED: Emily, Prix-Fixe, 2 covers â€” 3 days ago (has paid invoice)
+  -- COMPLETED: Emily, Prix-Fixe, 2 covers — 3 days ago (has paid invoice)
   ('00000000-0000-0000-0004-000000000001', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0003-000000000001', '00000000-0000-0000-0001-000000000002',
    '00000000-0000-0000-0002-000000000001', 2,
    '2026-04-08 19:00:00+00', '2026-04-08 21:00:00+00',
    'completed', 'opentable', '2026-04-06 10:00:00+00', 'Anniversary dinner'),
 
-  -- COMPLETED: Carlos, Seasonal Tasting, 4 covers â€” 11 days ago (invoice overdue)
+  -- COMPLETED: Carlos, Seasonal Tasting, 4 covers — 11 days ago (invoice overdue)
   ('00000000-0000-0000-0004-000000000002', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0003-000000000004', '00000000-0000-0000-0001-000000000003',
    '00000000-0000-0000-0002-000000000002', 4,
    '2026-03-31 19:00:00+00', '2026-03-31 22:00:00+00',
    'completed', 'manual', '2026-03-29 09:00:00+00', 'Group booking'),
 
-  -- COMPLETED: Jennifer, Private Dining, 6 covers â€” 2 days ago (invoice sent/pending)
+  -- COMPLETED: Jennifer, Private Dining, 6 covers — 2 days ago (invoice sent/pending)
   ('00000000-0000-0000-0004-000000000003', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0003-000000000005', '00000000-0000-0000-0001-000000000001',
    '00000000-0000-0000-0002-000000000005', 6,
@@ -167,42 +167,42 @@ ON CONFLICT (id) DO NOTHING;
 -- Tax rate: 9%
 
 INSERT INTO invoices (id, organization_id, appointment_id, customer_id, invoice_number, currency, subtotal, tax_rate, tax_amount, discount_amount, total_amount, amount_paid, due_at, status, sent_at, paid_at) VALUES
-  -- ET-2026-0001: Emily, 2Ã—$95 = $190 subtotal, $17.10 tax, $207.10 total â€” PAID
+  -- ET-2026-0001: Emily, 2×$95 = $190 subtotal, $17.10 tax, $207.10 total — PAID
   ('00000000-0000-0000-0005-000000000001', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0004-000000000001', '00000000-0000-0000-0003-000000000001',
    'ET-2026-0001', 'USD', 190.00, 0.0900, 17.10, 0.00, 207.10, 207.10,
    '2026-04-22 23:59:59+00', 'paid',
    '2026-04-08 21:15:00+00', '2026-04-09 10:30:00+00'),
 
-  -- ET-2026-0002: Carlos, 4Ã—$145 = $580 subtotal, $52.20 tax, $632.20 total â€” OVERDUE
+  -- ET-2026-0002: Carlos, 4×$145 = $580 subtotal, $52.20 tax, $632.20 total — OVERDUE
   ('00000000-0000-0000-0005-000000000002', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0004-000000000002', '00000000-0000-0000-0003-000000000004',
    'ET-2026-0002', 'USD', 580.00, 0.0900, 52.20, 0.00, 632.20, 0.00,
    '2026-04-07 23:59:59+00', 'overdue',
    '2026-03-31 22:15:00+00', NULL),
 
-  -- ET-2026-0003: Jennifer, 6Ã—$200 = $1200 subtotal, $108 tax, $1308 total â€” SENT/PENDING
+  -- ET-2026-0003: Jennifer, 6×$200 = $1200 subtotal, $108 tax, $1308 total — SENT/PENDING
   ('00000000-0000-0000-0005-000000000003', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0004-000000000003', '00000000-0000-0000-0003-000000000005',
    'ET-2026-0003', 'USD', 1200.00, 0.0900, 108.00, 0.00, 1308.00, 0.00,
    '2026-04-23 23:59:59+00', 'sent',
    '2026-04-09 22:45:00+00', NULL),
 
-  -- ET-2026-0004: Michael, 2Ã—$95 = $190 subtotal, $17.10 tax, $207.10 total â€” SENT (today)
+  -- ET-2026-0004: Michael, 2×$95 = $190 subtotal, $17.10 tax, $207.10 total — SENT (today)
   ('00000000-0000-0000-0005-000000000004', '00000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0004-000000000004', '00000000-0000-0000-0003-000000000002',
    'ET-2026-0004', 'USD', 190.00, 0.0900, 17.10, 0.00, 207.10, 0.00,
    '2026-04-25 23:59:59+00', 'sent',
    '2026-04-11 21:45:00+00', NULL),
 
-  -- ET-2026-0005: David, old invoice from March â€” OVERDUE (different org scenario)
+  -- ET-2026-0005: David, old invoice from March — OVERDUE (different org scenario)
   ('00000000-0000-0000-0005-000000000005', '00000000-0000-0000-0000-000000000001',
    NULL, '00000000-0000-0000-0003-000000000006',
    'ET-2026-0005', 'USD', 190.00, 0.0900, 17.10, 0.00, 207.10, 0.00,
    '2026-03-29 23:59:59+00', 'overdue',
    '2026-03-15 20:30:00+00', NULL),
 
-  -- ET-2026-0006: Aisha, manual follow-up invoice â€” PENDING
+  -- ET-2026-0006: Aisha, manual follow-up invoice — PENDING
   ('00000000-0000-0000-0005-000000000006', '00000000-0000-0000-0000-000000000001',
    NULL, '00000000-0000-0000-0003-000000000007',
    'ET-2026-0006', 'USD', 260.00, 0.0900, 23.40, 0.00, 283.40, 0.00,
@@ -213,35 +213,35 @@ ON CONFLICT (id) DO NOTHING;
 -- â”€â”€â”€ Invoice Line Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO invoice_items (id, invoice_id, organization_id, service_id, description, quantity, unit_price, amount) VALUES
-  -- Invoice 0001: Emily, Prix-Fixe Ã— 2
+  -- Invoice 0001: Emily, Prix-Fixe × 2
   ('00000000-0000-0000-0007-000000000001', '00000000-0000-0000-0005-000000000001',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000001',
-   'Prix-Fixe Dinner Ã— 2 guests', 2, 95.00, 190.00),
+   'Prix-Fixe Dinner × 2 guests', 2, 95.00, 190.00),
 
-  -- Invoice 0002: Carlos, Tasting Menu Ã— 4
+  -- Invoice 0002: Carlos, Tasting Menu × 4
   ('00000000-0000-0000-0007-000000000002', '00000000-0000-0000-0005-000000000002',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000002',
-   'Seasonal Tasting Menu Ã— 4 guests', 4, 145.00, 580.00),
+   'Seasonal Tasting Menu × 4 guests', 4, 145.00, 580.00),
 
-  -- Invoice 0003: Jennifer, Private Dining Ã— 6
+  -- Invoice 0003: Jennifer, Private Dining × 6
   ('00000000-0000-0000-0007-000000000003', '00000000-0000-0000-0005-000000000003',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000005',
-   'Private Dining Experience Ã— 6 guests', 6, 200.00, 1200.00),
+   'Private Dining Experience × 6 guests', 6, 200.00, 1200.00),
 
-  -- Invoice 0004: Michael, Prix-Fixe Ã— 2
+  -- Invoice 0004: Michael, Prix-Fixe × 2
   ('00000000-0000-0000-0007-000000000004', '00000000-0000-0000-0005-000000000004',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000001',
-   'Prix-Fixe Dinner Ã— 2 guests', 2, 95.00, 190.00),
+   'Prix-Fixe Dinner × 2 guests', 2, 95.00, 190.00),
 
-  -- Invoice 0005: David, Prix-Fixe Ã— 2
+  -- Invoice 0005: David, Prix-Fixe × 2
   ('00000000-0000-0000-0007-000000000005', '00000000-0000-0000-0005-000000000005',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000001',
-   'Prix-Fixe Dinner Ã— 2 guests', 2, 95.00, 190.00),
+   'Prix-Fixe Dinner × 2 guests', 2, 95.00, 190.00),
 
-  -- Invoice 0006: Aisha, Wine Pairing Ã— 4
+  -- Invoice 0006: Aisha, Wine Pairing × 4
   ('00000000-0000-0000-0007-000000000006', '00000000-0000-0000-0005-000000000006',
    '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0002-000000000003',
-   'Wine Pairing Experience Ã— 4 guests', 4, 65.00, 260.00)
+   'Wine Pairing Experience × 4 guests', 4, 65.00, 260.00)
 ON CONFLICT (id) DO NOTHING;
 
 -- â”€â”€â”€ Finance Transactions (ledger) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -258,13 +258,13 @@ INSERT INTO finance_transactions (id, organization_id, invoice_id, type, categor
   ('00000000-0000-0000-0008-000000000002', '00000000-0000-0000-0000-000000000001',
    NULL, 'inventory_purchase', 'produce', 342.00, 'out',
    '2026-04-07 08:00:00+00', 'bank_transfer', TRUE, FALSE,
-   'Weekly fresh produce â€” Green City Market'),
+   'Weekly fresh produce — Green City Market'),
 
   -- Expense: wine inventory
   ('00000000-0000-0000-0008-000000000003', '00000000-0000-0000-0000-000000000001',
    NULL, 'inventory_purchase', 'beverage', 1280.00, 'out',
    '2026-04-07 09:00:00+00', 'bank_transfer', TRUE, FALSE,
-   'Wine restocking â€” Sommelier Select'),
+   'Wine restocking — Sommelier Select'),
 
   -- Fee: payment processing
   ('00000000-0000-0000-0008-000000000004', '00000000-0000-0000-0000-000000000001',
@@ -310,7 +310,7 @@ INSERT INTO integration_connectors (id, organization_id, provider, display_name,
    'google_reviews','Google Reviews','error',     '2026-04-10 08:00:00+00', 'OAuth token expired. Re-authenticate to resume sync.')
 ON CONFLICT (id) DO NOTHING;
 
--- â”€â”€â”€ Feedback (Phase 3 demo â€” requires migration 004_feedback_domain.sql) â”€
+-- â”€â”€â”€ Feedback (Phase 3 demo — requires migration 004_feedback_domain.sql) â”€
 -- To insert this block alone later: supabase/seed_feedback_addon.sql
 
 -- Feedback (Phase 3 demo - requires migration 004_feedback_domain.sql)
