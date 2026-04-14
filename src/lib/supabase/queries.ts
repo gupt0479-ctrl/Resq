@@ -199,6 +199,106 @@ export async function getFinanceTransactions(): Promise<FinanceTransaction[]> {
 
 // ── Mutations ─────────────────────────────────────────────────────────────────
 
+export type CreateShipmentPayload = {
+  vendorName: string
+  status: ShipmentStatus
+  expectedDeliveryDate: string
+  actualDeliveryDate?: string | null
+  orderedAt?: string
+  trackingNumber?: string | null
+  trackingUrl?: string | null
+  notes?: string | null
+  lineItems: {
+    itemName: string
+    quantityOrdered: number
+    unitCost: number
+  }[]
+}
+
+export async function createShipment(input: CreateShipmentPayload): Promise<Shipment> {
+  const { createServerSupabaseClient: createSvc } = await import("@/lib/db/supabase-server")
+  const svc = createSvc()
+
+  const totalCost = Math.round(
+    input.lineItems.reduce((sum, li) => sum + li.quantityOrdered * li.unitCost, 0) * 100
+  ) / 100
+
+  const shipmentId = crypto.randomUUID()
+
+  const { error: shipmentErr } = await svc
+    .from("shipments")
+    .insert({
+      id: shipmentId,
+      vendor_name: input.vendorName,
+      status: input.status,
+      expected_delivery_date: input.expectedDeliveryDate,
+      actual_delivery_date: input.actualDeliveryDate ?? null,
+      ordered_at: input.orderedAt ?? new Date().toISOString(),
+      tracking_number: input.trackingNumber ?? null,
+      tracking_url: input.trackingUrl ?? null,
+      notes: input.notes ?? null,
+      total_cost: totalCost,
+    })
+
+  if (shipmentErr) throw new Error(shipmentErr.message)
+
+  if (input.lineItems.length > 0) {
+    const { error: liErr } = await svc.from("shipment_line_items").insert(
+      input.lineItems.map((li) => ({
+        id: crypto.randomUUID(),
+        shipment_id: shipmentId,
+        item_id: crypto.randomUUID(),
+        item_name: li.itemName,
+        quantity_ordered: li.quantityOrdered,
+        unit_cost: li.unitCost,
+        total_cost: Math.round(li.quantityOrdered * li.unitCost * 100) / 100,
+      }))
+    )
+    if (liErr) throw new Error(liErr.message)
+  }
+
+  const created = await getShipmentById(shipmentId)
+  if (!created) throw new Error("Failed to fetch created shipment")
+  return created
+}
+
+export type CreateInventoryItemPayload = {
+  itemName: string
+  category: string
+  unitCost: number
+  vendorName?: string
+  quantityOnHand?: number
+  reorderLevel?: number
+  expiresAt?: string | null
+}
+
+export async function createInventoryItem(input: CreateInventoryItemPayload): Promise<InventoryItem> {
+  const { createServerSupabaseClient: createSvc } = await import("@/lib/db/supabase-server")
+  const svc = createSvc()
+
+  const itemId = crypto.randomUUID()
+
+  const { data, error } = await svc
+    .from("inventory_items")
+    .insert({
+      id: itemId,
+      item_name: input.itemName,
+      category: input.category,
+      unit_cost: input.unitCost,
+      vendor_name: input.vendorName ?? "Unknown Vendor",
+      quantity_on_hand: input.quantityOnHand ?? 0,
+      reorder_level: input.reorderLevel ?? 0,
+      expires_at: input.expiresAt ?? null,
+      issue_status: "none",
+      price_trend_status: "stable",
+    })
+    .select("id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status")
+    .single()
+
+  if (error) throw new Error(error.message)
+  return mapInventoryItem(data as Record<string, unknown>)
+}
+
 export async function cancelShipment(id: string): Promise<void> {
   const { error } = await supabase
     .from("shipments")

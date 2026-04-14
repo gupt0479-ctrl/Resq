@@ -36,6 +36,23 @@ export const DashboardManagerSummarySchema = z.object({
   generatedAt: z.string().optional(),
 })
 
+export const DashboardFeedbackSpotlightItemSchema = z.object({
+  id:         z.string(),
+  guestName:  z.string(),
+  score:      z.number(),
+  summary:    z.string(),
+  urgency:    z.number(),
+  safetyFlag: z.boolean(),
+})
+
+export const DashboardAiActivityItemSchema = z.object({
+  id:           z.string(),
+  actionType:   z.string(),
+  inputSummary: z.string(),
+  status:       z.string(),
+  createdAt:    z.string(),
+})
+
 export const DashboardSummarySchema = z.object({
   kpis: DashboardKpisSchema,
   recentReservations: z.array(RecentReservationSchema),
@@ -46,6 +63,8 @@ export const DashboardSummarySchema = z.object({
   }),
   integrationConnectors: z.array(DashboardConnectorHealthSchema),
   managerSummary:          DashboardManagerSummarySchema,
+  feedbackSpotlight:     z.array(DashboardFeedbackSpotlightItemSchema),
+  recentAiActivity:      z.array(DashboardAiActivityItemSchema),
 })
 
 export type DashboardSummary = z.infer<typeof DashboardSummarySchema>

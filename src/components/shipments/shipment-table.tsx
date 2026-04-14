@@ -9,10 +9,12 @@ import {
   Pencil,
   XCircle,
   MoreHorizontal,
+  Plus,
 } from "lucide-react"
 import { ShipmentStatusBadge } from "./shipment-status-badge"
 import { ModifySheet } from "./modify-sheet"
 import { CancelDialog } from "./cancel-dialog"
+import { AddShipmentSheet } from "./add-shipment-sheet"
 import type { Shipment } from "@/lib/types"
 
 const TODAY = "2026-04-11"
@@ -248,6 +250,7 @@ export function ShipmentTable({ initialShipments }: { initialShipments: Shipment
   // Modal state lifted here so dialogs render outside <table>/<tbody>
   const [modifyTarget, setModifyTarget] = useState<Shipment | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Shipment | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
   function updateShipment(updated: Shipment) {
@@ -312,11 +315,26 @@ export function ShipmentTable({ initialShipments }: { initialShipments: Shipment
     else if (action === "receive") patchStatus(id, "delivered")
   }
 
+  function handleShipmentCreated(shipment: Shipment) {
+    setShipments((prev) => [shipment, ...prev])
+  }
+
   const active = shipments.filter((s) => s.status !== "cancelled")
   const cancelled = shipments.filter((s) => s.status === "cancelled")
 
   return (
     <>
+      {/* Toolbar */}
+      <div className="flex items-center justify-end border-b border-border px-4 py-2">
+        <button
+          onClick={() => setAddOpen(true)}
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New Shipment
+        </button>
+      </div>
+
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -413,6 +431,11 @@ export function ShipmentTable({ initialShipments }: { initialShipments: Shipment
           saving={saving}
         />
       )}
+      <AddShipmentSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={handleShipmentCreated}
+      />
     </>
   )
 }

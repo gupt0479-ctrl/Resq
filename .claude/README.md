@@ -1,38 +1,44 @@
 # OpsPilot Project Memory
 
-This folder is the repo-local memory and execution guide for OpsPilot.
+This folder is the agent handoff layer for OpsPilot.
 
-It is written to be tool-agnostic. Any assistant, extension, or editor automation should be able to read these files directly and recover project context without depending on Claude-specific agent or skill mechanics.
+## Read this folder in order
 
-## How To Use This Folder
+1. `PRD.md`
+2. `context/current-state.md`
+3. `context/6hour-status.md`
+4. `context/keyword-map.md`
+5. The matching `playbooks/`, `workflows/`, or `checklists/` file
 
-1. Read `PRD.md` for the full product brief.
-2. Read `context/current-state.md` to understand what is already implemented and how it compares to `origin/main`.
-3. If you are about to pull or merge, read `context/remote-main-and-merge.md`.
-4. Read `context/keyword-map.md` and then jump to the most relevant playbook for the current prompt.
-5. Before editing, read the matching file under `checklists/`.
-6. After finishing a substantial change, update `decisions/decision-log.md` or append to `PRD.md` if the change affects long-term product truth.
-
-## Folder Layout
+## Folder purpose
 
 - `PRD.md`
-  Product source of truth. Never delete or replace content; only append clarifications.
+  Canonical product truth. Preserve history and append clarifications.
 - `context/`
-  Stable project memory: architecture, current implementation, keyword routing, **remote merge posture**, and **external review cross-checks**.
+  Current implementation state, architecture, routing map, and merge notes.
 - `playbooks/`
-  Task-specific guidance for backend, Supabase, finance, UI, AI, and integrations.
+  Task-specific guidance by domain.
 - `checklists/`
-  Short operational checklists to run before or after changes.
+  Short execution and quality gates.
 - `workflows/`
-  Canonical demo workflow and build order.
+  Canonical demo and operating flows.
 - `decisions/`
-  Running log of engineering decisions and lessons learned.
+  Material engineering and product decisions.
 
-## Global Rules
+## Project rules
 
-- Postgres/Supabase is the system of record.
-- Route handlers and services own deterministic business logic.
-- AI may summarize, classify, draft, or prioritize. AI must not own invoice totals, status transitions, or ledger mutations.
-- Webhooks and integrations must reuse the same service layer as first-party routes.
-- UI labels should stay restaurant-specific even if internal table names remain generic.
-- Prefer improving existing files and contracts over adding parallel patterns.
+- Supabase is the system of record
+- Services own deterministic business logic
+- Queries own read-model shaping
+- AI may summarize, classify, draft, and prioritize
+- AI must not own money, status transitions, or ledger truth
+- Webhooks must reuse the same services as UI actions
+
+## Deadline posture
+
+Treat the project as demo-ready with limited remaining time. Optimize for:
+
+1. Reliability
+2. Clarity
+3. Fast handoff
+4. Minimal-risk polish

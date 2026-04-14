@@ -26,3 +26,16 @@ Append short entries here when the project learns something important. Keep it f
 
 - Decision: keep `context/remote-main-and-merge.md` and `context/external-review-codex-2026-04.md` updated when `origin/main` moves or when external reviews reference specific SHAs.
 - Why: this checkout mixes a pre-merge branch tip, large untracked feature work, and an eight-commit `main` fork for inventory/shipments; without written merge targets, teammates duplicate work or resolve the wrong conflicts.
+
+## 2026-04-14 - 6-Hour Deadline Documentation Update
+
+- Decision: Append comprehensive "what's done vs. what's left" status to PRD Appendix E, update CLAUDE.md with deadline-focused guidance, create `context/6hour-status.md` for AI agent quick reference.
+- Why: Hackathon submission deadline requires all team members (human and AI) to share identical understanding of complete vs. incomplete work. Prevents wasted time rebuilding working features or discovering gaps during demo.
+- Scope frozen: Core workflow (reservation→invoice→finance→feedback) complete. Deferred: automated tests, real email sending, receipt upload, inventory predictions integration, n8n workflow configuration.
+- Post-hackathon: Revisit merge with `origin/main`, add tests, integrate teammate agents.
+
+## 2026-04-14 - Submission Docs Compressed For Fast Handoff
+
+- Decision: compress top-level and `.claude/` operational docs into a smaller, consistent submission set.
+- Why: the team is in deadline mode; agents and reviewers need fast orientation more than exhaustive prose.
+- Result: `README.md`, `CLAUDE.md`, `.claude/README.md`, current-state, architecture, demo workflow, and demo checklist now emphasize the same verified workflow and verification commands.

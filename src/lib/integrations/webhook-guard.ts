@@ -10,8 +10,10 @@ function safeEqual(a: string, b: string): boolean {
 
 /**
  * Returns a NextResponse when the request must be rejected; otherwise null.
- * Production requires INTEGRATIONS_WEBHOOK_SECRET. Local dev may set
- * INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED=true when the secret is unset.
+ * Production requires INTEGRATIONS_WEBHOOK_SECRET.
+ * Non-production without a secret: `next dev` (NODE_ENV=development) allows unsigned
+ * webhooks by default; set INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED=false to require a secret
+ * anyway, or INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED=true in other non-prod modes (e.g. test).
  */
 export function integrationWebhookAuthError(request: NextRequest): NextResponse | null {
   const secret = process.env.INTEGRATIONS_WEBHOOK_SECRET?.trim()
@@ -34,7 +36,8 @@ export function integrationWebhookAuthError(request: NextRequest): NextResponse 
     )
   }
 
-  if (process.env.INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED !== "true") {
+  const unsignedFlag = process.env.INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED?.trim()
+  if (unsignedFlag === "false") {
     return NextResponse.json(
       {
         error:
@@ -44,7 +47,17 @@ export function integrationWebhookAuthError(request: NextRequest): NextResponse 
     )
   }
 
-  return null
+  if (unsignedFlag === "true" || process.env.NODE_ENV === "development") {
+    return null
+  }
+
+  return NextResponse.json(
+    {
+      error:
+        "Set INTEGRATIONS_WEBHOOK_SECRET, run under `next dev`, or INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED=true for unsigned webhooks.",
+    },
+    { status: 401 }
+  )
 }
 
 const WINDOW_MS = 60_000

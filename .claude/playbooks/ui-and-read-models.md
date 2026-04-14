@@ -1,59 +1,46 @@
 # UI And Read Models Playbook
 
-Use this file when changing dashboard pages, list pages, KPI cards, detail views, or page data contracts.
+Use for dashboard pages, KPI cards, list pages, or replacing mocks with live data.
 
-Keywords:
+## UI goal
 
-- dashboard
-- ui
-- page
-- card
-- list
-- detail
-- kpi
-- real data
-- mocks
-- read model
+The UI should prove the backend workflow is real.
 
-## Goal
+## Hard rules
 
-The UI should prove that the backend workflow is real. A judge should see actual reservations, invoices, finance state, and integration status backed by the database.
+- Pages should consume stable, UI-ready data
+- Repeated shaping belongs in query modules
+- Keep restaurant-specific language in the UI
+- Do not present fake AI behavior as real
+- High-attention states must be visually obvious
 
-## Required Pattern
+## Important files
 
-- pages should consume stable, UI-ready data shapes
-- route handlers should not leak raw DB row shapes if the UI needs transformed data
-- repeated mapping belongs in query modules, not spread across pages
+```text
+src/lib/queries/dashboard.ts
+src/lib/queries/appointments.ts
+src/lib/queries/invoices.ts
+src/lib/queries/finance.ts
+src/lib/queries/feedback.ts
+src/app/dashboard/
+src/app/appointments/
+src/app/invoices/
+src/app/finance/
+src/app/feedback/
+```
 
-## Existing Query Layer
+## Demo requirement
 
-Use and extend:
+At least one visible page should make each core workflow stage obvious:
 
-- `src/lib/queries/dashboard.ts`
-- `src/lib/queries/appointments.ts`
-- `src/lib/queries/invoices.ts`
-- `src/lib/queries/finance.ts`
+- reservation status progression
+- invoice creation and payment state
+- finance ledger truth
+- feedback issue and recovery flow
+- dashboard summary of what matters now
 
-## UI Rules
+## Common mistakes
 
-- keep restaurant language in labels and empty states
-- do not show fake “AI” elements that are not backed by data or clearly marked as deferred
-- make high-attention states obvious: overdue invoices, pending receivables, failed connectors
-
-## Demo Rules
-
-At least one visible page or card must always demonstrate each core workflow stage that exists in the backend.
-
-Examples:
-
-- **dashboard** -> KPIs, AI briefing, **MCP bridge & connectors** card, **Feedback & recovery** spotlight, finance snapshot where applicable (PRD §1.2)
-- reservations page -> status progression
-- invoices page -> sent, pending, overdue, paid
-- finance page -> ledger and receivables
-- dashboard -> KPIs from real data
-
-## Common Mistakes To Avoid
-
-- reintroducing local mock transformations
-- pages bypassing query modules to stitch data ad hoc
-- vague empty states that hide a broken backend connection
+- Reintroducing ad hoc mock transforms
+- Bypassing query modules in pages
+- Empty states that hide a broken backend connection

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { getInventoryItems } from "@/lib/supabase/queries"
+import { getInventoryItems, createInventoryItem } from "@/lib/supabase/queries"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
@@ -32,12 +32,30 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  void request
-  return Response.json(
-    {
-      error:
-        "Creating inventory_items is disabled. The core ledger schema has no stock table; use finance_transactions or a future inventory module.",
-    },
-    { status: 501 }
-  )
+  try {
+    const body = await request.json()
+    const { itemName, category, unitCost } = body
+
+    if (!itemName || typeof itemName !== "string" || !itemName.trim())
+      return Response.json({ error: "itemName is required" }, { status: 400 })
+    if (!category || typeof category !== "string")
+      return Response.json({ error: "category is required" }, { status: 400 })
+    if (unitCost === undefined || isNaN(Number(unitCost)) || Number(unitCost) < 0)
+      return Response.json({ error: "unitCost must be a non-negative number" }, { status: 400 })
+
+    const item = await createInventoryItem({
+      itemName: itemName.trim(),
+      category,
+      unitCost: Number(unitCost),
+      vendorName: body.vendorName ?? undefined,
+      quantityOnHand: body.quantityOnHand !== undefined ? Number(body.quantityOnHand) : undefined,
+      reorderLevel: body.reorderLevel !== undefined ? Number(body.reorderLevel) : undefined,
+      expiresAt: body.expiresAt ?? null,
+    })
+
+    return Response.json({ data: item }, { status: 201 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error"
+    return Response.json({ error: message }, { status: 500 })
+  }
 }

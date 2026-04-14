@@ -4,6 +4,7 @@ import type {
   FinanceSummaryResponse,
   FinanceTransactionResponse,
 } from "@/lib/schemas/finance"
+import { DEMO_ORG_ID } from "@/lib/db/supabase-server"
 
 type TransactionRow = Record<string, unknown> & {
   id: string
@@ -21,9 +22,10 @@ type TransactionRow = Record<string, unknown> & {
 }
 
 export async function getFinanceSummaryQuery(
-  client: SupabaseClient
+  client: SupabaseClient,
+  organizationId: string = DEMO_ORG_ID
 ): Promise<FinanceSummaryResponse> {
-  return getFinanceSummary(client)
+  return getFinanceSummary(client, organizationId)
 }
 
 export async function listTransactionsQuery(

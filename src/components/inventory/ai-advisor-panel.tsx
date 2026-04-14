@@ -14,6 +14,7 @@ import {
   PackageSearch,
   TriangleAlert,
   BadgeDollarSign,
+  Lightbulb,
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -177,6 +178,25 @@ function ShipmentIntelligence({ report }: { report: AgentReport }) {
               <p className={`font-medium ${riskText[alert.riskLevel]}`}>
                 {alert.recommendation}
               </p>
+
+              {alert.recoveryActions && alert.recoveryActions.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-current/10 space-y-1">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Lightbulb className="h-3 w-3 text-amber-500 shrink-0" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">
+                      Recovery ideas
+                    </span>
+                  </div>
+                  <ul className="space-y-1">
+                    {alert.recoveryActions.map((action, i) => (
+                      <li key={i} className="flex items-start gap-1.5">
+                        <span className="text-amber-500 shrink-0 mt-px">·</span>
+                        <span className="text-muted-foreground leading-snug">{action}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           ))}
         </div>

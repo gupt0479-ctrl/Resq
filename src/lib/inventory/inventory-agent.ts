@@ -193,6 +193,7 @@ After gathering the data, produce a JSON report with:
 Writing rules:
 - Reference exact numbers: "ordered 4× in 30 days, avg 5.5 kg", "42% late rate", "$1,840 spend/30d"
 - Spoilage: flag if daysUntilExpiry × estimated daily usage < quantityOnHand + recentOrders
+- Recovery actions: For each high or medium spoilage alert, suggest 2–3 specific operational actions tailored to the ingredient. Draw from: (a) a named dish discount (e.g. "20% off the mushroom risotto tonight"), (b) "Tonight's Special" or chef feature board, (c) staff/family meal using it before service, (d) happy-hour snack or tasting flight (e.g. "lamb slider bar snack at $6 from 4–6 PM"), (e) a social media push tying the ingredient to freshness ("fresh [ingredient] in tonight — ask your server"). Reference Ember Table menu styles: pasta specials, bar snacks, the charcuterie board, brunch features, prix-fixe add-ons. Low-risk alerts must have an empty recoveryActions array.
 - Negotiation tactics must be concrete, not generic. "Request a 5% credit clause for deliveries more than 2 days late" not "consider negotiating"
 - Only include vendors with lateCount > 0 or hasPriceIncrease === true in negotiationOpportunities
 - Return ONLY valid JSON with no markdown fences, matching this exact shape:
@@ -219,7 +220,12 @@ Writing rules:
       "totalOrdered30d": <number>,
       "currentStock": <number>,
       "recommendation": "<specific reduction — e.g. 'Reduce next order to 2 kg'>",
-      "evidence": "<e.g. '8 kg on hand, expires Apr 15 (3 days), avg weekly usage ~3 kg'>"
+      "evidence": "<e.g. '8 kg on hand, expires Apr 15 (3 days), avg weekly usage ~3 kg'>",
+      "recoveryActions": [
+        "<creative operational action 1 — name a specific dish, promotion, or event>",
+        "<creative operational action 2>",
+        "<creative operational action 3 — optional, include only for high-risk items>"
+      ]
     }
   ],
   "negotiationOpportunities": [
@@ -249,7 +255,7 @@ export async function runInventoryAgent(
 
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.5-flash-lite",
     tools: [{ functionDeclarations }],
     systemInstruction,
   })

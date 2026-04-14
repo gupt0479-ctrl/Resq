@@ -35,7 +35,8 @@ export async function completeAppointment(
   client: SupabaseClient,
   appointmentId: string,
   organizationId: string,
-  notes?: string
+  notes?: string,
+  customLineItems?: Array<{ description: string; qty: number; unitPrice: number }>
 ): Promise<CompleteAppointmentResult> {
   // 1. Fetch the appointment
   const { data: appt, error: fetchErr } = await client
@@ -81,10 +82,11 @@ export async function completeAppointment(
     metadata:        { source: "api" },
   })
 
-  // 4. Generate invoice deterministically from the service catalog
+  // 4. Generate invoice from custom line items (if provided) or service catalog
   const invoiceId = await generateInvoiceFromAppointment(client, {
     ...appt,
     status: "completed",
+    customLineItems: customLineItems && customLineItems.length > 0 ? customLineItems : undefined,
   })
 
   return { appointment: { ...appt, status: "completed" }, invoiceId }
