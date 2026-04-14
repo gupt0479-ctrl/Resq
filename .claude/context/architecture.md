@@ -1,123 +1,53 @@
 # Architecture Snapshot
 
-This file describes the intended architecture as of the current codebase. Update it when patterns change materially.
+## Product shape
 
-## Product Shape
+OpsPilot is a restaurant operations app for the Ember Table demo. The app is built to prove one believable operational loop, not a general chatbot.
 
-OpsPilot is a restaurant operations app for the demo brand Ember Table. The product is meant to prove one believable operational flow, not a general chatbot:
+## System rules
 
-1. reservation exists
-2. reservation is completed
-3. invoice is generated deterministically
-4. invoice is sent or pending
-5. payment creates exactly one revenue ledger row
-6. finance views update from database truth
-7. AI later summarizes facts or drafts recovery actions
+- Supabase/Postgres is the source of truth
+- Route handlers validate and delegate
+- Services own deterministic mutations and side effects
+- Queries shape UI-ready read models
+- AI is downstream of facts, never upstream of money or workflow truth
 
-## Source Of Truth
+## Main flow
 
-- Supabase/Postgres is the source of truth for domain state.
-- Route handlers call service modules.
-- Service modules own state transitions and deterministic side effects.
-- Query modules shape UI-ready read models.
-- AI is downstream of facts, never upstream of money or workflow truth.
+1. Reservation exists
+2. Reservation completes
+3. Invoice is created deterministically
+4. Payment marks the invoice paid
+5. Finance ledger updates exactly once
+6. Feedback is analyzed and surfaced for action
+7. Dashboard summarizes what needs attention
 
-## Current Layering
+## Core code paths
 
-### Database / Supabase
+- `src/lib/domain/`
+  Deterministic business rules
+- `src/lib/services/`
+  Mutation logic and side effects
+- `src/lib/queries/`
+  Read models for pages and APIs
+- `src/app/api/`
+  Route handlers
+- `agents/customer-service/`
+  Review analysis and recovery drafting
 
-- `supabase/migrations/0001_core_ledger.sql`
-- `supabase/seed.sql`
+## Forbidden AI ownership
 
-Core tables include:
+- Invoice totals
+- Amount calculations
+- Reservation status transitions
+- Invoice status transitions
+- Finance ledger writes
 
-- `organizations`
-- `customers`
-- `staff`
-- `services`
-- `appointments`
-- `appointment_events`
-- `invoices`
-- `invoice_items`
-- `finance_transactions`
-- `integration_connectors`
-- `integration_sync_events`
+## Integration rule
 
-### Server Access
+External webhooks must:
 
-- `src/lib/env.ts`
-- `src/lib/db/supabase-server.ts`
-
-These are server-only and should not leak service role credentials into client bundles.
-
-### Domain Rules
-
-- `src/lib/domain/invoice-calculator.ts`
-- `src/lib/domain/status-guards.ts`
-
-These files are the deterministic core for invoice math and state transitions.
-
-### Services
-
-- `src/lib/services/appointments.ts`
-- `src/lib/services/invoices.ts`
-- `src/lib/services/finance.ts`
-- `src/lib/services/integrations.ts`
-
-Rules:
-
-- mutations belong here, not in route handlers
-- webhook-driven mutations must also land here
-- finance writes must be idempotent where required
-
-### Read Models
-
-- `src/lib/queries/dashboard.ts`
-- `src/lib/queries/appointments.ts`
-- `src/lib/queries/invoices.ts`
-- `src/lib/queries/finance.ts`
-
-Rules:
-
-- these files exist to shape UI-ready payloads
-- pages and routes should prefer them over ad hoc mapping
-- keep read shaping separate from mutation services
-
-### Schemas And Enums
-
-- `src/lib/constants/enums.ts`
-- `src/lib/schemas/*.ts`
-
-Rules:
-
-- DB vocabulary and Zod schemas are the authority
-- `src/lib/types/index.ts` is a compatibility layer for UI-facing types, not the source of truth
-
-## Integration Boundary
-
-External systems such as OpenTable or Square should:
-
-1. send a webhook
-2. have the raw payload stored
-3. dedupe on external event id
-4. normalize into an internal domain event or command
-5. call the same services as first-party UI routes
-
-They must not write invoices or finance rows directly.
-
-## AI Boundary
-
-Allowed:
-
-- classification
-- drafting
-- explanation
-- prioritization
-- summaries
-
-Forbidden:
-
-- invoice totals
-- amount calculations
-- finance ledger writes
-- reservation or invoice status ownership
+1. Store raw payloads
+2. Dedupe retries
+3. Normalize into internal commands
+4. Call the same services as first-party UI actions

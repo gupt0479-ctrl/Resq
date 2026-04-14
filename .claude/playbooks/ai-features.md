@@ -1,58 +1,44 @@
 # AI Features Playbook
 
-Use this file when designing or implementing AI functionality.
+Use for AI summaries, review analysis, recovery drafting, or prompt changes.
 
-Keywords:
+## AI is allowed to own
 
-- ai
-- summary
-- classify
-- feedback
-- recovery
-- orchestrator
-- prompt
-- model
+- Feedback classification
+- Recovery and follow-up drafting
+- Manager summary wording
+- Prioritization based on existing facts
 
-## Current Status
+## AI is not allowed to own
 
-AI is not the first milestone priority. The deterministic data and finance foundation must be trustworthy first.
+- Invoice totals
+- Payment amounts
+- Reservation status
+- Invoice status
+- Finance ledger writes
 
-## Allowed AI Work
+## Required contract
 
-- classify feedback
-- draft follow-up messages
-- suggest recovery actions
-- generate manager summaries from existing facts
+Every meaningful AI feature should have:
 
-## Forbidden AI Work
+1. Stable input shape
+2. Zod-validated output
+3. Adapter boundary to the provider
+4. Safe failure mode
+5. Persistence if the output matters to the product
 
-- creating or editing invoice totals
-- deciding payment amounts
-- setting reservation or invoice statuses directly
-- writing finance ledger entries
+## Important files
 
-## Minimum Contract For Any AI Feature
+```text
+agents/customer-service/agent.js
+src/lib/services/feedback.ts
+src/lib/services/ai-actions.ts
+src/lib/services/ai-summaries.ts
+src/lib/schemas/feedback-ai.ts
+```
 
-Every AI task should have:
+## Common mistakes
 
-1. a stable input shape
-2. a Zod output schema
-3. provider isolation behind an adapter
-4. response validation
-5. a safe failure mode
-6. persistence for auditability if the feature matters to the product
-
-## Preconditions Before AI Summary Work
-
-Do not start summary work until:
-
-- live Supabase data exists
-- finance summary routes are working
-- there is at least one paid invoice with a revenue row
-- there are real overdue or pending examples to summarize
-
-## Common Mistakes To Avoid
-
-- building AI around mock facts
-- letting prompts substitute for missing domain modeling
-- calling provider SDKs directly from route handlers or page code
+- Building AI on mock facts
+- Calling the provider directly from route handlers
+- Letting prompts replace domain rules
