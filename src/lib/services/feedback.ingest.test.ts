@@ -1,11 +1,11 @@
 import { vi, describe, it, expect } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-// Must come before the module import so vitest hoists it above the static imports.
+// vi.mock is hoisted by vitest above all imports, so "server-only" is mocked
+// before feedback.ts (and its transitive deps) resolve the import.
 vi.mock("server-only", () => ({}))
 
-// Imported AFTER vi.mock so the server-only mock is active for the full module graph.
-const { ingestFeedbackRow } = await import("./feedback")
+import { ingestFeedbackRow } from "@/lib/services/feedback"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
