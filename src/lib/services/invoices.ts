@@ -18,6 +18,7 @@ interface AppointmentForInvoice {
   service_id:      string
   covers:          number
   notes:           string | null
+  customLineItems?: Array<{ description: string; qty: number; unitPrice: number }>
 }
 
 // ─── Generate invoice from completed appointment ──────────────────────────
@@ -33,19 +34,28 @@ export async function generateInvoiceFromAppointment(
   client: SupabaseClient,
   appt: AppointmentForInvoice
 ): Promise<string> {
-  // 1. Fetch the service catalog entry (pricing source of truth)
-  const { data: service, error: svcErr } = await client
-    .from("services")
-    .select("id, name, price_per_person")
-    .eq("id", appt.service_id)
-    .single()
+  // 1. Build line items — use custom items if provided, otherwise fall back to service catalog
+  let lines: import("@/lib/domain/invoice-calculator").InvoiceLineInput[]
 
-  if (svcErr || !service) {
-    throw new Error(svcErr?.message ?? "Service not found — cannot price invoice")
+  if (appt.customLineItems && appt.customLineItems.length > 0) {
+    lines = appt.customLineItems.map((li) => ({
+      serviceId:   null,
+      description: li.description,
+      quantity:    li.qty,
+      unitPrice:   li.unitPrice,
+    }))
+  } else {
+    const { data: service, error: svcErr } = await client
+      .from("services")
+      .select("id, name, price_per_person")
+      .eq("id", appt.service_id)
+      .single()
+
+    if (svcErr || !service) {
+      throw new Error(svcErr?.message ?? "Service not found — cannot price invoice")
+    }
+    lines = buildServiceLines(service, appt.covers)
   }
-
-  // 2. Build line items from catalog price × covers
-  const lines = buildServiceLines(service, appt.covers)
 
   // 3. Compute totals deterministically
   const totals = computeInvoiceTotals(lines)
@@ -220,6 +230,7 @@ export async function markInvoicePaid(
 
   // Create idempotent revenue transaction (unique index guards against duplication)
   await createRevenueTransaction(client, {
+    organizationId,
     invoiceId,
     amount:        amountPaid,
     paymentMethod: opts.paymentMethod,

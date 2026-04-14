@@ -1,47 +1,58 @@
 # Current State
 
-Single source of truth for **what exists in this repo right now** and **how it relates to `origin/main`**. Update this after every major merge or when you commit large untracked work.
+Updated: 2026-04-14
 
-## Git posture (authoritative)
+## Submission posture
 
-- **Branch:** `mcp-bridges` at commit `4c43603` (merge of PR #11 — static `src/lib/data/*` for inventory/shipments).
-- **`origin/main`:** `a0f7f9d`, **8 commits ahead** of that tip (PRs #12–#15 and follow-up edits). Your checkout has **not** merged those commits.
-- **Tracked vs untracked:** Only `.claude/PRD.md` is tracked under `.claude/`. The rest of `.claude/`, `supabase/`, and most new `src/lib/*` + API/pages from the “ledger + dashboard” slice are **untracked** until you add and commit them.
+OpsPilot is in final hackathon mode. The core demo workflow is implemented and verified:
 
-## Two parallel backend stories (until you merge)
+`reservation completed -> invoice generated -> invoice paid -> finance row created -> review analyzed -> follow-up surfaced`
 
-1. **Committed `mcp-bridges` tip:** Inventory and shipments APIs/pages use **in-memory** modules under `src/lib/data/`.
-2. **`origin/main`:** Same surface area moved to **`src/lib/supabase/client.ts`** + **`queries.ts`**; static data files removed or reduced; new UI such as inventory edit dialog.
-3. **Local uncommitted/untracked work:** Appointments, invoices, finance, integrations, dashboard APIs and pages; **`src/lib/db/supabase-server.ts`** (service role); domain + services + query modules; `supabase/migrations` + `seed.sql`.
+## Verified baseline
 
-Until you integrate `origin/main`, treat these as **three layers** that must be reconciled, not one stack.
-
-## Verified commands (this environment, latest run)
-
-All succeeded on the current working tree:
+These commands pass on the current working tree:
 
 - `npm run lint`
 - `npx tsc --noEmit`
-- `npx next build --webpack`
+- `npm run test`
+- `npm run build`
 
-Plain `next build` (Turbopack) may fail in some sandboxes; prefer `--webpack` for CI parity when needed.
+## What is complete
 
-## Product and PRD alignment
+- Supabase-backed appointments, invoices, finance, and feedback domains
+- Service layer for appointments, invoices, finance, feedback, and integrations
+- Query layer for dashboard, appointments, invoices, finance, and feedback
+- API routes for the main reservation, payment, review, and webhook flows
+- Dashboard, appointments, invoices, finance, feedback, integrations, workflow pages
+- Customer service agent and review recovery logic
+- Shared theme system and polished theme toggle
 
-- **PRD / architecture** describe **Ember Table** as the demo restaurant; several UI strings and data files still say **Bistro Nova** — cosmetic drift, not a runtime bug.
-- See `context/external-review-codex-2026-04.md` for a line-by-line cross-check of a recent external audit against `origin/main` and this tree.
+## What still matters before submission
 
-## Merge and teammate sync
+1. Connect or verify the live Supabase project
+2. Rehearse the exact demo flow end to end
+3. Fix only bugs or polish issues that threaten the demo
+4. Prepare a backup recording
 
-Read **`context/remote-main-and-merge.md`** before `git merge origin/main` or `git rebase` — it lists files that will conflict and recommended ordering.
+## Accepted demo gaps
 
-## High-priority follow-through
+- No real outbound email or SMS delivery
+- No public review posting automation
+- No receipt upload UI
+- Inventory and performance agents are not fully integrated
+- n8n flows are not the demo source of truth
 
-- Merge or rebase **`origin/main`** with a deliberate choice for inventory/shipment data layer (Supabase vs static).
-- Commit `.claude/` and `supabase/` when stable so teammates and CI see the same docs and schema.
-- Add automated tests once the team picks a runner; today there is **no** `npm test` script.
-- **Phase 3 (PRD §1.2):** Keep **Feedback** + **Integrations** in primary nav and **MCP / feedback** panels on the dashboard; complete `FeedbackService`, feedback schema/APIs, and MCP dispatch coverage (`feedback.received`, etc.) per playbooks.
+## Do not rebuild
 
-## What not to rebuild
+- Invoice math and status guards
+- Finance row creation on payment
+- Webhook dedupe and dispatch
+- Feedback analysis pipeline
+- Dashboard read models
 
-See `context/architecture.md` and `decisions/decision-log.md`. In short: one ledger/invoice pipeline, one Supabase access pattern for server mutations, no duplicate webhook write paths.
+## Canonical references
+
+- Product truth: `PRD.md`
+- Quick handoff: `context/6hour-status.md`
+- Architecture: `context/architecture.md`
+- Demo sequence: `workflows/restaurant-core-demo.md`
