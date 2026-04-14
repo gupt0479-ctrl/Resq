@@ -215,15 +215,15 @@ function KpiCard({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border-t-2 border border-white/10 bg-slate-800/40 backdrop-blur-sm p-4 shadow-lg ${topBorderMap[color]} ${shadowMap[color]}`}
+      className={`relative overflow-hidden rounded-xl border-t-2 border border-border bg-card p-4 shadow-lg ${topBorderMap[color]} ${shadowMap[color]}`}
       data-animate-section
     >
       <CountUpNumber
         value={value}
         className={`text-xl font-bold tabular-nums ${valueColorMap[color]}`}
       />
-      <p className="mt-0.5 text-xs font-medium text-white">{label}</p>
-      <p className="mt-0.5 text-[11px] text-slate-400">{sub}</p>
+      <p className="mt-0.5 text-xs font-medium text-foreground">{label}</p>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>
       {/* Decorative sparkline */}
       <svg
         width="80"
@@ -263,10 +263,10 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
 
 function SectionHeader({ title, sub }: { title: string; sub: string }) {
   return (
-    <div className="sticky top-16 z-10 bg-slate-900/80 backdrop-blur-md py-3 -mx-6 px-6 border-b border-white/5">
+    <div className="sticky top-16 z-10 bg-background/80 backdrop-blur-md py-3 -mx-6 px-6 border-b border-border/50">
       <div className="border-l-4 border-blue-500 pl-3">
-        <h2 className="text-sm font-semibold text-white">{title}</h2>
-        <p className="mt-0.5 text-xs text-slate-400">{sub}</p>
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>
       </div>
     </div>
   )
@@ -287,14 +287,14 @@ function InsightCard({
 }) {
   return (
     <div
-      className={`rounded-xl border border-white/10 bg-slate-800/60 p-4 border-l-4 ${borderColor} ${fullWidth ? "lg:col-span-2" : ""} hover:bg-slate-700/60 hover:border-white/20 hover:-translate-y-0.5 transition-all duration-200`}
+      className={`rounded-xl border border-border bg-card p-4 border-l-4 ${borderColor} ${fullWidth ? "lg:col-span-2" : ""} hover:bg-muted/60 hover:border-border hover:-translate-y-0.5 transition-all duration-200`}
       data-animate-section
     >
       <div className="flex items-start gap-3">
         <div className="mt-0.5 shrink-0">{icon}</div>
         <div>
-          <p className="text-sm font-semibold text-white">{title}</p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-300">{body}</p>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{body}</p>
         </div>
       </div>
     </div>
@@ -391,22 +391,17 @@ export default async function FinancePage() {
 
   return (
     <div
-      className="space-y-5 p-6 min-h-screen"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle, rgb(148 163 184 / 0.06) 1px, transparent 1px), linear-gradient(to bottom, #020617, #0f172a, #020617)",
-        backgroundSize: "24px 24px, 100% 100%",
-      }}
+      className="space-y-5 p-6 min-h-screen bg-background"
     >
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-white">Finance</h1>
-          <p className="mt-0.5 text-xs text-slate-400">
+          <h1 className="text-xl font-semibold text-foreground">Finance</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             Invoice agent · Orders · Cash flow · Tax write-offs
           </p>
         </div>
-        <p className="shrink-0 text-xs text-slate-400">{todayLabel()}</p>
+        <p className="shrink-0 text-xs text-muted-foreground">{todayLabel()}</p>
       </div>
 
       {/* ── KPI cards ───────────────────────────────────────────────────────── */}
@@ -450,17 +445,17 @@ export default async function FinancePage() {
 
       {/* ── Weekly revenue chart ─────────────────────────────────────────────── */}
       <div
-        className="bg-slate-800/40 backdrop-blur-sm border border-white/10 rounded-xl"
+        className="bg-card border border-border rounded-xl"
         data-animate-section
       >
         <div className="flex items-center justify-between gap-4 px-6 pt-5 pb-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Weekly revenue
           </p>
-          <span className="text-xs text-slate-400">{fmtRound(summary.revenueThisWeek)} this week</span>
+          <span className="text-xs text-muted-foreground">{fmtRound(summary.revenueThisWeek)} this week</span>
         </div>
         <div className="px-2 pb-4">
-          <WeeklyRevenueChart data={weeklyChartData} />
+          <FinanceWeeklyRevenueChart data={weeklyChartData} />
         </div>
       </div>
 
@@ -516,10 +511,10 @@ export default async function FinancePage() {
           {/* Stat pills */}
           <div className="flex flex-wrap gap-2">
             {[
-              { label: "Total",   value: `${pageInvoices.length}`,                                          bg: "bg-slate-700/60 text-slate-300" },
-              { label: "Paid",    value: `${paidInvoices.length} (${fmtRound(summary.revenueThisWeek)})`,   bg: "bg-emerald-500/20 text-emerald-300" },
-              { label: "Overdue", value: `${overdueInvoices.length} (${fmt(summary.overdueReceivables)})`,   bg: "bg-red-500/20 text-red-300" },
-              { label: "Draft",   value: String(draftInvoices.length),                                        bg: "bg-slate-700/60 text-slate-400" },
+              { label: "Total",   value: `${pageInvoices.length}`,                                          bg: "bg-muted text-muted-foreground" },
+              { label: "Paid",    value: `${paidInvoices.length} (${fmtRound(summary.revenueThisWeek)})`,   bg: "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300" },
+              { label: "Overdue", value: `${overdueInvoices.length} (${fmt(summary.overdueReceivables)})`,   bg: "bg-red-500/20 text-red-600 dark:text-red-300" },
+              { label: "Draft",   value: String(draftInvoices.length),                                        bg: "bg-muted text-muted-foreground" },
             ].map(({ label, value, bg }) => (
               <span key={label} className={`rounded-full px-3 py-1 text-xs font-medium ${bg}`}>
                 {label}: {value}
@@ -529,20 +524,20 @@ export default async function FinancePage() {
 
           {/* Invoice table */}
           <div
-            className="bg-slate-800/50 rounded-xl border border-white/10 overflow-hidden"
+            className="bg-card rounded-xl border border-border overflow-hidden"
             data-animate-section
           >
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-b border-slate-700/50 hover:bg-transparent">
-                    <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Invoice #</TableHead>
-                    <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Guest</TableHead>
-                    <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider text-right">Amount</TableHead>
-                    <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Status</TableHead>
-                    <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Method</TableHead>
-                    <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Due</TableHead>
-                    <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider text-right">Days OD</TableHead>
+                  <TableRow className="border-b border-border hover:bg-transparent">
+                    <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Invoice #</TableHead>
+                    <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Guest</TableHead>
+                    <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider text-right">Amount</TableHead>
+                    <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Status</TableHead>
+                    <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Method</TableHead>
+                    <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Due</TableHead>
+                    <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider text-right">Days OD</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -551,14 +546,14 @@ export default async function FinancePage() {
                       key={inv.id}
                       className={
                         inv.status === "overdue"
-                          ? "bg-red-500/10 border-l-2 border-l-red-500 border-b border-slate-700/30 transition-all duration-150 hover:bg-red-500/20"
-                          : "text-white border-b border-slate-700/30 transition-all duration-150 hover:bg-slate-700/30 hover:border-l-2 hover:border-l-blue-500"
+                          ? "bg-red-500/10 border-l-2 border-l-red-500 border-b border-border/30 transition-all duration-150 hover:bg-red-500/20"
+                          : "text-foreground border-b border-border/30 transition-all duration-150 hover:bg-muted/30 hover:border-l-2 hover:border-l-blue-500"
                       }
                     >
-                      <TableCell className="font-mono text-[11px] text-slate-400">
+                      <TableCell className="font-mono text-[11px] text-muted-foreground">
                         {inv.number}
                       </TableCell>
-                      <TableCell className="font-medium text-white">{inv.guest}</TableCell>
+                      <TableCell className="font-medium text-foreground">{inv.guest}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${
                         inv.status === "paid"    ? "text-green-400" :
                         inv.status === "overdue" ? "text-red-400"   : "text-amber-400"
@@ -568,13 +563,13 @@ export default async function FinancePage() {
                       <TableCell>
                         <StatusBadge status={inv.status} />
                       </TableCell>
-                      <TableCell className="text-slate-400">—</TableCell>
-                      <TableCell className="text-slate-400">{inv.dueDate}</TableCell>
+                      <TableCell className="text-muted-foreground">—</TableCell>
+                      <TableCell className="text-muted-foreground">{inv.dueDate}</TableCell>
                       <TableCell className="text-right">
                         {inv.daysOverdue !== undefined ? (
                           <span className="font-medium text-red-400">{inv.daysOverdue}d</span>
                         ) : (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-muted-foreground/50">—</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -589,11 +584,11 @@ export default async function FinancePage() {
         <div className="space-y-4">
           {/* Aging buckets */}
           <div
-            className="bg-slate-800/40 backdrop-blur-sm border border-white/10 rounded-xl"
+            className="bg-card border border-border rounded-xl"
             data-animate-section
           >
-            <div className="border-b border-white/10 px-5 py-3.5">
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+            <div className="border-b border-border px-5 py-3.5">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Invoice aging
               </p>
             </div>
@@ -617,18 +612,18 @@ export default async function FinancePage() {
                 count={agingOver30.length}
                 amount={agingOver30Amt}
                 color="text-slate-400"
-                bg="bg-slate-700/30 border border-slate-700/50"
+                bg="bg-muted/30 border border-border/50"
               />
             </div>
           </div>
 
           {/* Top revenue by item */}
           <div
-            className="bg-slate-800/40 backdrop-blur-sm border border-white/10 rounded-xl"
+            className="bg-card border border-border rounded-xl"
             data-animate-section
           >
-            <div className="border-b border-white/10 px-5 py-3.5">
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+            <div className="border-b border-border px-5 py-3.5">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Top revenue by item
               </p>
             </div>
@@ -636,12 +631,12 @@ export default async function FinancePage() {
               {TOP_LINE_ITEMS.map((item) => (
                 <div key={item.name} className="space-y-1">
                   <div className="flex items-center justify-between gap-4 text-xs">
-                    <span className="text-white truncate">{item.name}</span>
-                    <span className="shrink-0 font-medium tabular-nums text-slate-300">
+                    <span className="text-foreground truncate">{item.name}</span>
+                    <span className="shrink-0 font-medium tabular-nums text-muted-foreground">
                       {fmt(item.amount)}
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-slate-700/50 overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
                     <div
                       className="h-full rounded-full bg-blue-500"
                       style={{ width: `${(item.amount / TOP_LINE_MAX) * 100}%` }}
@@ -663,17 +658,17 @@ export default async function FinancePage() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Left — current position */}
         <div
-          className="bg-slate-800/40 backdrop-blur-sm border border-white/10 rounded-xl"
+          className="bg-card border border-border rounded-xl"
           data-animate-section
         >
-          <div className="border-b border-white/10 px-5 py-3.5">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+          <div className="border-b border-border px-5 py-3.5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Current position
             </p>
           </div>
           <div className="p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">Money in this week</span>
+              <span className="text-sm text-muted-foreground">Money in this week</span>
               <span className="font-semibold text-emerald-400 tabular-nums">{fmt(summary.revenueThisWeek)}</span>
             </div>
 
@@ -693,11 +688,11 @@ export default async function FinancePage() {
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">Money out this week</span>
+              <span className="text-sm text-muted-foreground">Money out this week</span>
               <span className="font-semibold text-red-400 tabular-nums">{fmt(summary.expensesThisWeek)}</span>
             </div>
-            <div className="flex items-center justify-between border-t border-white/10 pt-3">
-              <span className="text-sm font-semibold text-white">Net</span>
+            <div className="flex items-center justify-between border-t border-border pt-3">
+              <span className="text-sm font-semibold text-foreground">Net</span>
               {summary.netCashFlowEstimate < 0 ? (
                 <span className="text-xl font-bold text-red-400 tabular-nums">
                   −{fmt(Math.abs(summary.netCashFlowEstimate))}
@@ -710,7 +705,7 @@ export default async function FinancePage() {
             </div>
 
             {/* In vs out legend */}
-            <div className="flex items-center gap-4 text-[11px] text-slate-400">
+            <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-blue-500" /> Revenue {revPct}%
               </span>
@@ -723,10 +718,10 @@ export default async function FinancePage() {
 
         {/* Right — 7-day forecast */}
         <div
-          className="bg-slate-700/40 backdrop-blur-sm border border-white/10 rounded-xl"
+          className="bg-card border border-border rounded-xl"
           data-animate-section
         >
-          <div className="border-b border-white/10 px-5 py-3.5">
+          <div className="border-b border-border px-5 py-3.5">
             <p className="text-xs font-semibold uppercase tracking-widest text-blue-400">
               Expected this week
             </p>
@@ -739,15 +734,15 @@ export default async function FinancePage() {
               { label: "Scheduled expenses (est.)",        value: "~$3,200" },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between gap-4 text-sm">
-                <span className="text-slate-400">{label}</span>
-                <span className="font-medium text-white tabular-nums">{value}</span>
+                <span className="text-muted-foreground">{label}</span>
+                <span className="font-medium text-foreground tabular-nums">{value}</span>
               </div>
             ))}
 
             {/* AI cash flow tip */}
             <div className="mt-2 flex items-start gap-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-3">
               <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-400" />
-              <p className="text-xs leading-relaxed text-blue-300">
+              <p className="text-xs leading-relaxed text-blue-400 dark:text-blue-300">
                 Your overdue invoices total {fmt(summary.overdueReceivables)}. Sending reminders
                 today could recover this before end of week. Prioritize your oldest overdue invoice.
               </p>
@@ -765,27 +760,27 @@ export default async function FinancePage() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Left — expense categories table */}
         <div
-          className="bg-slate-800/50 rounded-xl border border-white/10 overflow-hidden"
+          className="bg-card rounded-xl border border-border overflow-hidden"
           data-animate-section
         >
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-slate-700/50 hover:bg-transparent">
-                <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Category</TableHead>
-                <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider text-right">Amount</TableHead>
-                <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider text-right">% of total</TableHead>
-                <TableHead className="bg-slate-700/50 text-slate-300 text-xs uppercase tracking-wider">Tax relevant</TableHead>
+              <TableRow className="border-b border-border hover:bg-transparent">
+                <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Category</TableHead>
+                <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider text-right">Amount</TableHead>
+                <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider text-right">% of total</TableHead>
+                <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Tax relevant</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {expenseChartData.map((row) => (
                 <TableRow
                   key={row.name}
-                  className="text-white border-b border-slate-700/30 transition-all duration-150 hover:bg-slate-700/30 hover:border-l-2 hover:border-l-blue-500"
+                  className="text-foreground border-b border-border/30 transition-all duration-150 hover:bg-muted/30 hover:border-l-2 hover:border-l-blue-500"
                 >
-                  <TableCell className="font-medium text-white capitalize">{row.name}</TableCell>
+                  <TableCell className="font-medium text-foreground capitalize">{row.name}</TableCell>
                   <TableCell className="text-right tabular-nums text-red-400">{fmt(row.value)}</TableCell>
-                  <TableCell className="text-right text-slate-400 tabular-nums">
+                  <TableCell className="text-right text-muted-foreground tabular-nums">
                     {summary.expensesThisWeek > 0
                       ? ((row.value / summary.expensesThisWeek) * 100).toFixed(1)
                       : "0.0"}%
@@ -799,8 +794,8 @@ export default async function FinancePage() {
               ))}
             </TableBody>
             <tfoot>
-              <tr className="border-t border-slate-700/50">
-                <td className="p-2 font-bold text-sm text-white">Total</td>
+              <tr className="border-t border-border">
+                <td className="p-2 font-bold text-sm text-foreground">Total</td>
                 <td className="p-2 text-right font-bold text-sm text-red-400 tabular-nums">
                   {fmt(summary.expensesThisWeek)}
                 </td>
@@ -812,16 +807,16 @@ export default async function FinancePage() {
 
         {/* Right — donut chart */}
         <div
-          className="bg-slate-800/40 backdrop-blur-sm border border-white/10 rounded-xl"
+          className="bg-card border border-border rounded-xl"
           data-animate-section
         >
-          <div className="border-b border-white/10 px-5 py-3.5">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+          <div className="border-b border-border px-5 py-3.5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Expense breakdown
             </p>
           </div>
           <div className="p-5">
-            <ExpenseChart data={expenseChartData} />
+            <FinanceExpenseChart data={expenseChartData} />
           </div>
         </div>
       </div>
@@ -833,17 +828,17 @@ export default async function FinancePage() {
       />
 
       <div
-        className="bg-slate-800/40 backdrop-blur-sm border border-white/10 rounded-xl"
+        className="bg-card border border-border rounded-xl"
         data-animate-section
       >
         <div className="p-5 space-y-4">
           {/* Blue info banner */}
           <div className="flex items-center justify-between gap-4 rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3">
-            <p className="text-xs text-blue-300 leading-relaxed">
-              <span className="font-semibold text-blue-200">{fmt(taxWriteoffs)}</span> in potentially deductible
+            <p className="text-xs text-blue-400 dark:text-blue-300 leading-relaxed">
+              <span className="font-semibold text-blue-500 dark:text-blue-200">{fmt(taxWriteoffs)}</span> in potentially deductible
               expenses tracked this week. Export this list for your accountant at tax time.
             </p>
-            <button className="shrink-0 flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-500/20 transition-colors">
+            <button className="shrink-0 flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-500 dark:text-blue-300 hover:bg-blue-500/20 transition-colors">
               <Download className="h-3 w-3" />
               Export
             </button>
@@ -877,8 +872,8 @@ function AgingBucket({
   return (
     <div className={`flex items-center justify-between rounded-lg px-3 py-2 ${bg}`}>
       <div>
-        <p className="text-xs font-medium text-white">{label}</p>
-        <p className="text-[11px] text-slate-400">{count} invoice{count !== 1 ? "s" : ""}</p>
+        <p className="text-xs font-medium text-foreground">{label}</p>
+        <p className="text-[11px] text-muted-foreground">{count} invoice{count !== 1 ? "s" : ""}</p>
       </div>
       <p className={`font-semibold text-sm tabular-nums ${color}`}>{fmt(amount)}</p>
     </div>

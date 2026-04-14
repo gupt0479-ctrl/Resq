@@ -376,6 +376,7 @@ export type SpoilageAlert = {
   currentStock: number
   recommendation: string
   evidence: string
+  recoveryActions: string[]
 }
 
 export type NegotiationOpportunity = {

@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import Script from "next/script"
 import "./globals.css"
 import { ConditionalShell } from "@/components/layout/conditional-shell"
 import { ThemeProvider } from "@/components/theme/theme-provider"
@@ -13,10 +12,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full scroll-smooth antialiased" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: getThemeInitScript() }} />
+      </head>
       <body className="h-full">
-        <Script id="theme-init" strategy="beforeInteractive">
-          {getThemeInitScript()}
-        </Script>
         <ThemeProvider>
           <ConditionalShell>{children}</ConditionalShell>
         </ThemeProvider>
