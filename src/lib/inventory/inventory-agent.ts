@@ -5,6 +5,7 @@ import {
   type Part,
 } from "@google/generative-ai"
 import type { Shipment, InventoryItem, AgentReport } from "@/lib/types"
+import { z } from "zod"
 import { computeVendorPerformance } from "./vendor-performance"
 
 // ── Tool implementations ──────────────────────────────────────────────────────
@@ -56,12 +57,12 @@ function getShipmentOrderHistory(
   }
 
   const items = Array.from(byItem.values())
-    .map((item) => ({
+    .map(({ orders, ...item }) => ({
       ...item,
       avgOrderSize:
         Math.round((item.totalOrdered / item.orderCount) * 100) / 100,
       lastOrderDate:
-        [...item.orders].sort((a, b) => b.date.localeCompare(a.date))[0]
+        [...orders].sort((a, b) => b.date.localeCompare(a.date))[0]
           ?.date ?? asOfDate,
     }))
     .sort((a, b) => b.totalOrdered - a.totalOrdered)
@@ -94,7 +95,6 @@ function assessSpoilageRisk(
       const orderCount = h?.orderCount ?? 0
 
       return {
-        itemId: item.id,
         itemName: item.itemName,
         vendorName: item.vendorName,
         expiresAt: item.expiresAt,
@@ -137,6 +137,77 @@ function getVendorPerformanceDetails(
   })
 
   return { vendors }
+}
+
+const orderInsightSchema = z.object({
+  itemName: z.string(),
+  vendorName: z.string(),
+  totalOrdered30d: z.number(),
+  orderCount: z.number(),
+  avgOrderSize: z.number(),
+  lastOrderDate: z.string(),
+  recommendedQty: z.number(),
+  rationale: z.string(),
+})
+
+const spoilageAlertSchema = z.object({
+  itemName: z.string(),
+  riskLevel: z.enum(["high", "medium", "low"]),
+  expiresAt: z.string().nullable(),
+  totalOrdered30d: z.number(),
+  currentStock: z.number(),
+  recommendation: z.string(),
+  evidence: z.string(),
+  recoveryActions: z.array(z.string()).default([]),
+})
+
+const negotiationOpportunitySchema = z.object({
+  vendorName: z.string(),
+  priority: z.enum(["high", "medium", "low"]),
+  onTimePct: z.number(),
+  lateCount: z.number(),
+  totalDeliveries: z.number(),
+  hasPriceIncrease: z.boolean(),
+  totalSpend30d: z.number(),
+  tactics: z.array(z.string()).default([]),
+  evidence: z.string(),
+})
+
+const agentReportPayloadSchema = z.object({
+  summary: z.string(),
+  orderInsights: z.array(orderInsightSchema),
+  spoilageAlerts: z.array(spoilageAlertSchema),
+  negotiationOpportunities: z.array(negotiationOpportunitySchema),
+})
+
+function cleanModelJson(text: string): string {
+  return text
+    .replace(/^```(?:json)?\s*/im, "")
+    .replace(/\s*```$/m, "")
+    .trim()
+}
+
+function tryParseAgentReport(text: string): Omit<AgentReport, "generatedAt"> | null {
+  const cleaned = cleanModelJson(text)
+  if (!cleaned) return null
+
+  const candidates = [cleaned]
+  const firstBrace = cleaned.indexOf("{")
+  const lastBrace = cleaned.lastIndexOf("}")
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(cleaned.slice(firstBrace, lastBrace + 1))
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const raw = JSON.parse(candidate) as unknown
+      return agentReportPayloadSchema.parse(raw)
+    } catch {
+      continue
+    }
+  }
+
+  return null
 }
 
 // ── Function declarations for Gemini ─────────────────────────────────────────
@@ -258,6 +329,10 @@ export async function runInventoryAgent(
     model: "gemini-2.5-flash-lite",
     tools: [{ functionDeclarations }],
     systemInstruction,
+    generationConfig: {
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+    },
   })
 
   const chat = model.startChat()
@@ -296,12 +371,17 @@ Call all three tools to gather the data, then produce the JSON report.`
     result = await chat.sendMessage(responses)
   }
 
-  const finalText = result.response.text()
-  const json = finalText
-    .replace(/^```(?:json)?\s*/m, "")
-    .replace(/\s*```$/m, "")
-    .trim()
+  let parsed = tryParseAgentReport(result.response.text())
+  if (!parsed) {
+    const repair = await chat.sendMessage(
+      "Your previous response was not valid JSON. Return only valid JSON matching the required report shape. No markdown fences, no commentary."
+    )
+    parsed = tryParseAgentReport(repair.response.text())
+  }
 
-  const parsed = JSON.parse(json) as Omit<AgentReport, "generatedAt">
+  if (!parsed) {
+    throw new Error("AI returned incomplete JSON. Please retry analysis.")
+  }
+
   return { ...parsed, generatedAt: new Date().toISOString() }
 }
