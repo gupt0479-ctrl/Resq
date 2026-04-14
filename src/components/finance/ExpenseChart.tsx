@@ -21,9 +21,9 @@ function ExpenseTooltip({
   const { name, value } = payload[0]
   const pct = total > 0 ? ((value / total) * 100).toFixed(1) : "0"
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md text-xs">
-      <p className="font-medium text-white capitalize">{name}</p>
-      <p className="text-slate-400">
+    <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-md text-xs">
+      <p className="font-medium text-foreground capitalize">{name}</p>
+      <p className="text-muted-foreground">
         {value.toLocaleString("en-US", { style: "currency", currency: "USD" })} · {pct}%
       </p>
     </div>
@@ -67,7 +67,7 @@ export function ExpenseChart({ data }: { data: ExpenseSlice[] }) {
               className="h-2 w-2 shrink-0 rounded-full"
               style={{ backgroundColor: d.color }}
             />
-            <span className="truncate text-[11px] text-slate-400 capitalize">
+            <span className="truncate text-[11px] text-muted-foreground capitalize">
               {d.name}
             </span>
           </div>

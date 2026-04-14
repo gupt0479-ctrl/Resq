@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: getThemeInitScript() }} />
       </head>
-      <body className="h-full">
+      <body className="h-full" suppressHydrationWarning>
         <ThemeProvider>
           <ConditionalShell>{children}</ConditionalShell>
         </ThemeProvider>

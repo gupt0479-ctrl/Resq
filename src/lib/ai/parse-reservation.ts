@@ -167,8 +167,8 @@ clarification_needed is a string if confidence is low, otherwise null`
     }
 
     return parsed
-  } catch (error: any) {
-    console.warn("Gemini API error, falling back to rule-based parser:", error?.message?.slice(0, 120))
+  } catch (error: unknown) {
+    console.warn("Gemini API error, falling back to rule-based parser:", (error instanceof Error ? error.message : String(error)).slice(0, 120))
     return parseRules(natural_language)
   }
 }
