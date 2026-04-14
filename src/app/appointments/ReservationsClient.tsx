@@ -170,7 +170,7 @@ export function ReservationsClient({
     } finally {
       setActionLoading(false)
     }
-  }, [selectedId, completeNotes])
+  }, [selectedId, completeNotes, lineItems])
 
   // ── Cancel ───────────────────────────────────────────────────────────────
 

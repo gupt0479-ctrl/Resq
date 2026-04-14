@@ -7,6 +7,7 @@ import {
 } from "@/lib/schemas/finance"
 import { ManagerSummarySchema, type ManagerSummary } from "@/lib/schemas/ai"
 import { getFinanceSummary } from "@/lib/services/finance"
+import { countUnhappyGuestsForDashboard } from "@/lib/queries/feedback"
 
 export async function buildFinanceSummaryFacts(
   client: SupabaseClient,
@@ -36,6 +37,20 @@ export async function buildFinanceSummaryFacts(
     }
   })
 
+  let urgentFeedbackCount = 0
+  let flaggedFeedbackCount = 0
+  try {
+    urgentFeedbackCount = await countUnhappyGuestsForDashboard(client, organizationId)
+    const { count } = await client
+      .from("feedback")
+      .select("*", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("flagged", true)
+    flaggedFeedbackCount = count ?? 0
+  } catch {
+    /* feedback table may be absent until migration 004 */
+  }
+
   return FinanceSummaryFactsSchema.parse({
     revenueThisWeek:       summary.revenueThisWeek,
     pendingReceivables:    summary.pendingReceivables,
@@ -44,20 +59,25 @@ export async function buildFinanceSummaryFacts(
     expensesThisWeek:      summary.expensesThisWeek,
     netCashFlowEstimate:     summary.netCashFlowEstimate,
     largestOverdueInvoices,
+    urgentFeedbackCount,
+    flaggedFeedbackCount,
   })
 }
 
 export function buildFallbackManagerSummary(facts: FinanceSummaryFacts): ManagerSummary {
   const headline =
-    facts.overdueInvoiceCount > 0
-      ? `${facts.overdueInvoiceCount} overdue invoice(s) — collections focus`
-      : "Cash and receivables look healthy this week"
+    facts.urgentFeedbackCount > 0
+      ? `${facts.urgentFeedbackCount} guest issue(s) in the feedback queue — service recovery first`
+      : facts.overdueInvoiceCount > 0
+        ? `${facts.overdueInvoiceCount} overdue invoice(s) — collections focus`
+        : "Cash and receivables look healthy this week"
 
   const bullets: string[] = [
     `Revenue this week: $${facts.revenueThisWeek.toFixed(2)} (from ledger).`,
     `Pending receivables: $${facts.pendingReceivables.toFixed(2)}.`,
     `Overdue receivables: $${facts.overdueReceivables.toFixed(2)}.`,
     `Net cash flow (week): $${facts.netCashFlowEstimate.toFixed(2)}.`,
+    `Open guest issues (urgent / flagged feedback): ${facts.urgentFeedbackCount} attention queue, ${facts.flaggedFeedbackCount} flagged.`,
   ]
   if (facts.largestOverdueInvoices.length > 0) {
     const top = facts.largestOverdueInvoices[0]
@@ -68,9 +88,11 @@ export function buildFallbackManagerSummary(facts: FinanceSummaryFacts): Manager
     headline,
     bullets: bullets.slice(0, 5),
     riskNote:
-      facts.overdueInvoiceCount > 0
-        ? "Prioritize outreach on overdue balances; amounts are read from Postgres, not inferred."
-        : undefined,
+      facts.urgentFeedbackCount > 0
+        ? "Review urgent feedback rows in Postgres before collections; guest safety and reputation come first."
+        : facts.overdueInvoiceCount > 0
+          ? "Prioritize outreach on overdue balances; amounts are read from Postgres, not inferred."
+          : undefined,
   }
 }
 
@@ -96,7 +118,7 @@ export async function generateAndPersistManagerSummary(
         messages: [
           {
             role:    "user",
-            content: `You are summarizing finance KPIs for a restaurant GM. Use ONLY the numbers in the JSON facts. Do not invent totals or payment states. Output ONLY valid JSON matching:
+            content: `You are summarizing operations KPIs for a restaurant GM. Use ONLY the numbers in the JSON facts (finance + feedback counts). Do not invent totals or payment states. Output ONLY valid JSON matching:
 {"headline": string, "bullets": string[], "riskNote"?: string}
 
 Facts JSON:\n${JSON.stringify(facts)}`,

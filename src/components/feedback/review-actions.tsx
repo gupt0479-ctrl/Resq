@@ -1,67 +1,100 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { CheckCircle } from "lucide-react"
 
 interface ReviewActionsProps {
+  feedbackId: string
   approveLabel: string
-  draftLabel?: string
   onApprove?: () => void
 }
 
-export function ReviewActions({ approveLabel, draftLabel = "Edit Draft" }: ReviewActionsProps) {
-  const [done, setDone] = useState(false)
-
-  if (done) {
-    return (
-      <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
-        <CheckCircle className="h-3.5 w-3.5" />
-        Approved & sent
-      </div>
-    )
-  }
+export function ReviewActions({ feedbackId, approveLabel, onApprove }: ReviewActionsProps) {
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+  const [isRefreshing, startTransition] = useTransition()
+  const [err, setErr] = useState<string | null>(null)
+  const disabled = busy || isRefreshing
 
   return (
-    <div className="flex gap-2">
-      <Button size="sm" onClick={() => setDone(true)}>
-        {approveLabel}
-      </Button>
-      <Button size="sm" variant="outline">
-        {draftLabel}
-      </Button>
+    <div className="flex flex-col gap-1">
+      {err ? <p className="text-xs text-destructive">{err}</p> : null}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          disabled={disabled}
+          onClick={async () => {
+            setErr(null)
+            setBusy(true)
+            try {
+              const res = await fetch(`/api/feedback/${feedbackId}/approve-reply`, {
+                method: "POST",
+              })
+              if (!res.ok) {
+                const j = (await res.json().catch(() => ({}))) as { error?: string }
+                throw new Error(typeof j.error === "string" ? j.error : `Request failed (${res.status})`)
+              }
+              onApprove?.()
+              startTransition(() => router.refresh())
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : "Something went wrong")
+            } finally {
+              setBusy(false)
+            }
+          }}
+        >
+          {disabled ? "Saving..." : approveLabel}
+        </Button>
+      </div>
     </div>
   )
 }
 
 interface DismissActionsProps {
+  followUpActionId: string
   approveLabel: string
 }
 
-export function DismissActions({ approveLabel }: DismissActionsProps) {
-  const [state, setState] = useState<"idle" | "approved" | "dismissed">("idle")
+export function DismissActions({ followUpActionId, approveLabel }: DismissActionsProps) {
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+  const [isRefreshing, startTransition] = useTransition()
+  const [err, setErr] = useState<string | null>(null)
+  const disabled = busy || isRefreshing
 
-  if (state === "approved") {
-    return (
-      <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
-        <CheckCircle className="h-3.5 w-3.5" />
-        Approved & sending
-      </div>
-    )
-  }
-
-  if (state === "dismissed") {
-    return <p className="text-xs text-muted-foreground">Dismissed</p>
+  async function postDecision(decision: "approve" | "dismiss") {
+    setErr(null)
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/feedback/follow-ups/${followUpActionId}`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ decision }),
+      })
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(typeof j.error === "string" ? j.error : `Request failed (${res.status})`)
+      }
+      startTransition(() => router.refresh())
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Something went wrong")
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
-    <div className="flex gap-2">
-      <Button size="sm" onClick={() => setState("approved")}>
-        {approveLabel}
-      </Button>
-      <Button size="sm" variant="outline" onClick={() => setState("dismissed")}>
-        Dismiss
-      </Button>
+    <div className="flex flex-col gap-1">
+      {err ? <p className="text-xs text-destructive">{err}</p> : null}
+      <div className="flex gap-2">
+        <Button size="sm" disabled={disabled} onClick={() => void postDecision("approve")}>
+          {disabled ? "Saving..." : approveLabel}
+        </Button>
+        <Button size="sm" variant="outline" disabled={disabled} onClick={() => void postDecision("dismiss")}>
+          Dismiss
+        </Button>
+      </div>
     </div>
   )
 }

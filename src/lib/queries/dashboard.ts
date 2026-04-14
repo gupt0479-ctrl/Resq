@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { DashboardSummary } from "@/lib/schemas/dashboard"
 import { listConnectors } from "@/lib/services/integrations"
 import { getManagerSummaryForDashboard } from "@/lib/services/ai-summaries"
+import { countUnhappyGuestsForDashboard, getFeedbackSpotlightForDashboard } from "@/lib/queries/feedback"
+import { listRecentAiActions } from "@/lib/services/ai-actions"
 
 export async function getDashboardSummary(
   client: SupabaseClient,
@@ -76,8 +78,26 @@ export async function getDashboardSummary(
   const pendingInvoiceCount  = pendingInvs?.length ?? 0
   const pendingInvoiceAmount = sumRemaining(pendingInvs)
 
-  // Unhappy guests (stub — 0 until feedback module is built)
-  const unhappyGuestCount = 0
+  let unhappyGuestCount = 0
+  let feedbackSpotlight: DashboardSummary["feedbackSpotlight"] = []
+  let recentAiActivity: DashboardSummary["recentAiActivity"] = []
+  try {
+    ;[unhappyGuestCount, feedbackSpotlight, recentAiActivity] = await Promise.all([
+      countUnhappyGuestsForDashboard(client, organizationId),
+      getFeedbackSpotlightForDashboard(client, organizationId, 4),
+      listRecentAiActions(client, organizationId, 8).then((rows) =>
+        rows.map((r: Record<string, unknown>) => ({
+          id:           r.id as string,
+          actionType:   String(r.action_type ?? ""),
+          inputSummary: String(r.input_summary ?? ""),
+          status:       String(r.status ?? ""),
+          createdAt:    String(r.created_at ?? ""),
+        }))
+      ),
+    ])
+  } catch {
+    /* feedback / ai_actions tables may not exist until migration 004 is applied */
+  }
 
   // Recent reservations (last 5)
   const { data: recentAppts } = await client
@@ -154,6 +174,8 @@ export async function getDashboardSummary(
       riskNote:    managerSummary.riskNote,
       generatedAt: managerSummary.generatedAt,
     },
+    feedbackSpotlight,
+    recentAiActivity,
   }
 }
 

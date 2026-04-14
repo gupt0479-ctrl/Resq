@@ -16,9 +16,11 @@ import {
   Calendar,
   Download,
 } from "lucide-react"
-import { WeeklyRevenueChart } from "@/components/finance/WeeklyRevenueChart"
+import {
+  FinanceExpenseChart,
+  FinanceWeeklyRevenueChart,
+} from "@/components/finance/finance-charts"
 import type { WeeklyDataPoint } from "@/components/finance/WeeklyRevenueChart"
-import { ExpenseChart } from "@/components/finance/ExpenseChart"
 import type { ExpenseSlice } from "@/components/finance/ExpenseChart"
 import { TaxFilterPills } from "@/components/finance/TaxFilterPills"
 import type { TaxTransaction } from "@/components/finance/TaxFilterPills"
@@ -383,7 +385,7 @@ export default function FinancePage() {
           </div>
         </CardHeader>
         <CardContent className="pb-4">
-          <WeeklyRevenueChart data={WEEKLY_CHART_DATA} />
+          <FinanceWeeklyRevenueChart data={WEEKLY_CHART_DATA} />
         </CardContent>
       </Card>
 
@@ -665,7 +667,7 @@ export default function FinancePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4 pb-5">
-            <ExpenseChart data={EXPENSE_CHART_DATA} />
+            <FinanceExpenseChart data={EXPENSE_CHART_DATA} />
           </CardContent>
         </Card>
       </div>

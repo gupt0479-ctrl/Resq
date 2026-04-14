@@ -21,9 +21,10 @@ type TransactionRow = Record<string, unknown> & {
 }
 
 export async function getFinanceSummaryQuery(
-  client: SupabaseClient
+  client: SupabaseClient,
+  organizationId: string
 ): Promise<FinanceSummaryResponse> {
-  return getFinanceSummary(client)
+  return getFinanceSummary(client, organizationId)
 }
 
 export async function listTransactionsQuery(

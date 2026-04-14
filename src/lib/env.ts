@@ -34,12 +34,15 @@ export function getPublicEnv() {
   return parsed.data
 }
 
+const DEFAULT_DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+
+/** Ember Table demo org from seed; trim so blank .env lines do not override the default. */
 export const DEMO_ORG_ID =
-  process.env.DEMO_ORG_ID ?? "00000000-0000-0000-0000-000000000001"
+  process.env.DEMO_ORG_ID?.trim() || DEFAULT_DEMO_ORG_ID
 
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 export const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
