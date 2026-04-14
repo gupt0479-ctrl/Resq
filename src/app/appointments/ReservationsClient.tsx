@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogHeader, DialogTitle, DialogBody, DialogFooter } from "@/components/ui/dialog"
@@ -50,6 +51,7 @@ interface ParsedResult {
   raw_interpretation: string
   clarification_needed?: string | null
   starts_at?: string | null
+  ends_at?: string | null
 }
 
 interface CompleteResult {
@@ -79,11 +81,17 @@ export function ReservationsClient({
 }) {
   const [appointments, setAppointments] = useState(initialAppointments)
   const [statusFilter, setStatusFilter] = useState("all")
+  const router = useRouter()
 
   // AI
   const [aiInput, setAiInput] = useState("")
   const [aiResult, setAiResult] = useState<ParsedResult | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
+
+  // AI booking flow
+  const [aiGuestForm, setAiGuestForm] = useState({ name: "", email: "", covers: 2 })
+  const [aiBookingState, setAiBookingState] = useState<"idle" | "form" | "loading" | "success" | "error">("idle")
+  const [aiBookingError, setAiBookingError] = useState("")
 
   // Modals
   type ModalType = "complete" | "new" | "reschedule" | "followup" | null
@@ -126,6 +134,8 @@ export function ReservationsClient({
     if (!aiInput.trim()) return
     setAiLoading(true)
     setAiResult(null)
+    setAiBookingState("idle")
+    setAiBookingError("")
     try {
       const res = await fetch("/api/appointments/parse-request", {
         method: "POST",
@@ -133,11 +143,62 @@ export function ReservationsClient({
         body: JSON.stringify({ natural_language: aiInput }),
       })
       const data = await res.json()
-      setAiResult(data.parsed)
+      const parsed: ParsedResult = data.parsed
+      setAiResult(parsed)
+      // If the AI understood a booking request, show the follow-up form
+      if (
+        parsed?.intent === "book" &&
+        (parsed.confidence === "high" || parsed.confidence === "medium") &&
+        parsed.starts_at
+      ) {
+        const coversMatch = parsed.raw_interpretation?.match(/\bfor (\d+)\b/i)
+        setAiGuestForm({ name: "", email: "", covers: coversMatch ? parseInt(coversMatch[1]) : 2 })
+        setAiBookingState("form")
+      }
     } finally {
       setAiLoading(false)
     }
   }, [aiInput])
+
+  const handleAIBook = useCallback(async () => {
+    if (!aiResult?.starts_at || !aiGuestForm.name.trim() || !aiGuestForm.email.trim()) return
+    setAiBookingState("loading")
+    setAiBookingError("")
+    try {
+      const ends_at = aiResult.ends_at ??
+        new Date(new Date(aiResult.starts_at).getTime() + 2 * 3600 * 1000).toISOString()
+      const res = await fetch("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer_name:  aiGuestForm.name.trim(),
+          customer_email: aiGuestForm.email.trim(),
+          party_size:     aiGuestForm.covers,
+          starts_at:      aiResult.starts_at,
+          ends_at,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        const msg: string = data.error ?? "Booking failed"
+        setAiBookingError(
+          msg.toLowerCase().includes("overlap") || msg.toLowerCase().includes("conflict")
+            ? "That time slot is already booked — please try a different time."
+            : msg
+        )
+        setAiBookingState("error")
+        return
+      }
+      setAiBookingState("success")
+      const listRes = await fetch("/api/appointments?limit=100")
+      const listData = await listRes.json()
+      if (listData.data) setAppointments(listData.data)
+      router.refresh()
+    } catch {
+      setAiBookingError("Network error — please try again.")
+      setAiBookingState("error")
+    }
+  }, [aiResult, aiGuestForm, router])
 
   // ── Complete ─────────────────────────────────────────────────────────────
 
@@ -247,12 +308,12 @@ export function ReservationsClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customerName:  bookForm.customerName,
-          customerEmail: bookForm.customerEmail,
-          covers:        bookForm.covers,
-          startsAt:      new Date(bookForm.startsAt).toISOString(),
-          occasion:      bookForm.occasion || undefined,
-          notes:         bookForm.notes || undefined,
+          customer_name:  bookForm.customerName,
+          customer_email: bookForm.customerEmail,
+          party_size:     bookForm.covers,
+          starts_at:      new Date(bookForm.startsAt).toISOString(),
+          ends_at:        new Date(new Date(bookForm.startsAt).getTime() + 2 * 3600 * 1000).toISOString(),
+          occasion:       bookForm.occasion || undefined,
         }),
       })
       const data = await res.json()
@@ -263,6 +324,7 @@ export function ReservationsClient({
       const listData = await listRes.json()
       if (listData.data) setAppointments(listData.data)
       setModal(null)
+      router.refresh()
     } finally {
       setActionLoading(false)
     }
@@ -303,22 +365,82 @@ export function ReservationsClient({
         </div>
 
         {aiResult && (
-          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="font-medium text-foreground">Intent:</span>
-              <span className="capitalize font-semibold text-primary">{aiResult.intent}</span>
-              <span className="text-muted-foreground">·</span>
-              <span className="font-medium text-foreground">Confidence:</span>
-              <span className={`font-semibold capitalize ${
-                aiResult.confidence === "high" ? "text-green-600" :
-                aiResult.confidence === "medium" ? "text-amber-600" : "text-red-600"
-              }`}>{aiResult.confidence}</span>
+          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-3">
+            {/* ── Parse result row ── */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="font-medium text-foreground">Intent:</span>
+                <span className="capitalize font-semibold text-primary">{aiResult.intent}</span>
+                <span className="text-muted-foreground">·</span>
+                <span className="font-medium text-foreground">Confidence:</span>
+                <span className={`font-semibold capitalize ${
+                  aiResult.confidence === "high" ? "text-green-600" :
+                  aiResult.confidence === "medium" ? "text-amber-600" : "text-red-600"
+                }`}>{aiResult.confidence}</span>
+              </div>
+              <p className="text-xs text-muted-foreground italic">{aiResult.raw_interpretation}</p>
+              {aiResult.clarification_needed && (
+                <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">
+                  {aiResult.clarification_needed}
+                </p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground italic">{aiResult.raw_interpretation}</p>
-            {aiResult.clarification_needed && (
-              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">
-                {aiResult.clarification_needed}
-              </p>
+
+            {/* ── Follow-up booking flow ── */}
+            {aiBookingState !== "idle" && (
+              <div className="border-t border-border pt-3">
+                {aiBookingState === "success" ? (
+                  <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2.5">
+                    <p className="text-sm font-semibold text-green-800">Booking confirmed ✓</p>
+                    <p className="text-xs text-green-700 mt-0.5">
+                      {aiGuestForm.name} · {aiGuestForm.covers} guest{aiGuestForm.covers !== 1 ? "s" : ""} · {aiResult.starts_at ? fmtDate(aiResult.starts_at) : ""}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Complete the booking — just need your contact details:
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Your name *"
+                        value={aiGuestForm.name}
+                        onChange={e => setAiGuestForm(f => ({ ...f, name: e.target.value }))}
+                        disabled={aiBookingState === "loading"}
+                      />
+                      <Input
+                        type="email"
+                        placeholder="Email address *"
+                        value={aiGuestForm.email}
+                        onChange={e => setAiGuestForm(f => ({ ...f, email: e.target.value }))}
+                        disabled={aiBookingState === "loading"}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">Party size</span>
+                        <Input
+                          type="number" min={1} max={50}
+                          value={aiGuestForm.covers}
+                          onChange={e => setAiGuestForm(f => ({ ...f, covers: Number(e.target.value) }))}
+                          disabled={aiBookingState === "loading"}
+                          className="w-16"
+                        />
+                      </div>
+                      <Button
+                        onClick={handleAIBook}
+                        disabled={aiBookingState === "loading" || !aiGuestForm.name.trim() || !aiGuestForm.email.trim()}
+                        className="flex-1"
+                      >
+                        {aiBookingState === "loading" ? "Booking…" : "Complete Booking"}
+                      </Button>
+                    </div>
+                    {aiBookingState === "error" && aiBookingError && (
+                      <p className="text-xs text-destructive">{aiBookingError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}

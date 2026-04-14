@@ -66,12 +66,13 @@ export const CompleteAppointmentBodySchema = z.object({
 // ─── Create booking request ──────────────────────────────────────────────
 
 export const CreateBookingBodySchema = z.object({
-  customerName:  z.string().min(1),
-  customerEmail: z.string().email(),
-  customerPhone: z.string().optional(),
-  covers:        z.number().int().min(1).max(50).default(2),
-  startsAt:      z.string(),
-  occasion:      z.string().optional(),
+  customer_name:  z.string().min(1),
+  customer_email: z.string().email(),
+  customer_phone: z.string().optional(),
+  party_size:     z.number().int().min(1).max(50).default(2),
+  starts_at:      z.string(),
+  ends_at:        z.string().optional(),
+  occasion:       z.string().optional(),
   notes:         z.string().optional(),
 })
 

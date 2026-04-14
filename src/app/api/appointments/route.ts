@@ -39,18 +39,29 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Validation failed", details: parsed.error.issues }, { status: 422 })
     }
 
-    const { startsAt, ...rest } = parsed.data
-    const startsDate = new Date(startsAt)
-    const endsDate   = new Date(startsDate.getTime() + 2 * 60 * 60 * 1000)
+    const { starts_at, ends_at, customer_name, customer_email, customer_phone, party_size, occasion, notes } = parsed.data
+    const startsDate = new Date(starts_at)
+    const endsDate = ends_at ? new Date(ends_at) : new Date(startsDate.getTime() + 2 * 60 * 60 * 1000)
 
     const client = createServerSupabaseClient()
     const appointmentId = await createAppointment(client, DEMO_ORG_ID, {
-      ...rest,
-      startsAt,
+      customerName: customer_name,
+      customerEmail: customer_email,
+      customerPhone: customer_phone,
+      covers: party_size,
+      startsAt: starts_at,
       endsAt: endsDate.toISOString(),
+      occasion,
+      notes,
     })
 
-    return Response.json({ data: { appointmentId } }, { status: 201 })
+    const { data: reservation } = await client
+      .from("appointments")
+      .select("id, status, starts_at, ends_at, covers")
+      .eq("id", appointmentId)
+      .single()
+
+    return Response.json({ data: reservation || { id: appointmentId } }, { status: 201 })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error"
     return Response.json({ error: message }, { status: 500 })

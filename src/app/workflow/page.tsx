@@ -1,56 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-// TODO: replace with Supabase query
-const MOCK_TIMELINE = [
-  {
-    id: "t1",
-    agent: "customer_service",
-    action_type: "send_reminder",
-    input_summary: "INV-2025-002 overdue — Priya Nair $94.95",
-    status: "executed",
-    timestamp: "1 hour ago",
-  },
-  {
-    id: "t2",
-    agent: "performance",
-    action_type: "daily_summary_generated",
-    input_summary: "End of day performance summary",
-    status: "executed",
-    timestamp: "2 hours ago",
-  },
-  {
-    id: "t3",
-    agent: "marketing",
-    action_type: "draft_return_nudge",
-    input_summary: "Sofia Morales has not returned in 45 days",
-    status: "executed",
-    timestamp: "4 hours ago",
-  },
-  {
-    id: "t4",
-    agent: "inventory",
-    action_type: "reorder_alert",
-    input_summary: "Wagyu Ribeye at 4 portions, below reorder level",
-    status: "executed",
-    timestamp: "6 hours ago",
-  },
-  {
-    id: "t5",
-    agent: "customer_service",
-    action_type: "flag_and_draft_recovery",
-    input_summary: "Priya Nair left score 2, allergy incident",
-    status: "executed",
-    timestamp: "23 hours ago",
-  },
-  {
-    id: "t6",
-    agent: "customer_service",
-    action_type: "invoice_generated",
-    input_summary: "Reservation completed for Marcus Webb, party of 2",
-    status: "executed",
-    timestamp: "3 days ago",
-  },
-]
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+
+export const dynamic = "force-dynamic"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -92,7 +44,15 @@ function statusStyle(status: string) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default function WorkflowPage() {
+export default async function WorkflowPage() {
+  const client = createServerSupabaseClient()
+  const { data } = await client
+    .from("ai_actions")
+    .select("id, action_type, input_summary, status, created_at, entity_type")
+    .eq("organization_id", DEMO_ORG_ID)
+    .order("created_at", { ascending: false })
+    .limit(20)
+  const timeline = data ?? []
   return (
     <div className="space-y-5 p-6">
       <div>
@@ -118,51 +78,57 @@ export default function WorkflowPage() {
       <Card>
         <CardHeader className="border-b border-border pb-3 pt-4">
           <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Activity Timeline — {MOCK_TIMELINE.length} actions
+            Activity Timeline — {timeline.length} actions
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4">
-          <div className="relative">
-            {/* Vertical track */}
-            <div className="absolute bottom-0 left-[7px] top-2 w-px bg-border" />
+          {timeline.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              No workflow events yet — complete a reservation to generate the first event.
+            </div>
+          ) : (
+            <div className="relative">
+              {/* Vertical track */}
+              <div className="absolute bottom-0 left-[7px] top-2 w-px bg-border" />
 
-            <ul className="space-y-0">
-              {MOCK_TIMELINE.map((event, i) => {
-                const style = AGENT_STYLES[event.agent] ?? AGENT_STYLES.performance
-                return (
-                  <li key={event.id} className={`relative pl-7 ${i < MOCK_TIMELINE.length - 1 ? "pb-5" : ""}`}>
-                    {/* Dot */}
-                    <span
-                      className={`absolute left-0 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-background ${style.dot}`}
-                    />
+              <ul className="space-y-0">
+                {timeline.map((event, i) => {
+                  const style = AGENT_STYLES[event.entity_type] ?? AGENT_STYLES.performance
+                  return (
+                    <li key={event.id} className={`relative pl-7 ${i < timeline.length - 1 ? "pb-5" : ""}`}>
+                      {/* Dot */}
+                      <span
+                        className={`absolute left-0 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-background ${style.dot}`}
+                      />
 
-                    {/* Event card */}
-                    <div
-                      className={`rounded-lg border border-border border-l-4 bg-card px-4 py-3 ${style.border}`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${style.badge}`}>
-                            {style.label}
-                          </span>
-                          <span className="text-sm font-medium text-foreground">
-                            {event.action_type.replace(/_/g, " ")}
-                          </span>
+                      {/* Event card */}
+                      <div
+                        className={`rounded-lg border border-border border-l-4 bg-card px-4 py-3 ${style.border}`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${style.badge}`}>
+                              {style.label}
+                            </span>
+                            <span className="text-sm font-medium text-foreground">
+                              {event.action_type.replace(/_/g, " ")}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${statusStyle(event.status)}`}>
+                              {event.status}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">{new Date(event.created_at).toLocaleString()}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${statusStyle(event.status)}`}>
-                            {event.status}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">{event.timestamp}</span>
-                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{event.input_summary}</p>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{event.input_summary}</p>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
         </CardContent>
       </Card>
 
