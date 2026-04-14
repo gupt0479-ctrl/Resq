@@ -1,162 +1,147 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
-import { CreateReviewSchema } from "@/lib/schemas/feedback"
-import {
-  ingestFeedbackRow,
-  persistAgentFeedbackAnalysis,
-} from "@/lib/services/feedback"
+import { analyzeReview } from "../../../../agents/customer-service/agent.js"
 
-type CustomerSnapshot = {
-  id: string
-  full_name: string | null
-  email: string | null
-  avg_feedback_score: number | null
-  lifetime_value: number | null
-  risk_status: string | null
-  notes: string | null
-}
+const ReviewInputSchema = z.object({
+  guestName: z.string().min(1),
+  score: z.number().int().min(1).max(5),
+  comment: z.string().min(1),
+  source: z.enum(["internal", "google", "yelp", "opentable"]).default("internal"),
+  guestId: z.string().uuid().optional().nullable(),
+})
 
-type AppointmentSnapshot = {
-  starts_at: string
-  notes: string | null
-}
-
-type GuestHistoryShape = {
-  visitCount?: number
-  lifetimeSpend?: number
-  lastVisit?: string
-  vip?: boolean
-  dietaryNotes?: string | null
-}
-
-function buildGuestHistoryFromSnapshots(
-  customer: CustomerSnapshot,
-  recentAppointments: AppointmentSnapshot[],
-  visitCount: number | null
-): GuestHistoryShape {
-  const lifetimeSpend = Number(customer.lifetime_value) || 0
-  const customerNotes = customer.notes ?? ""
-  const appointmentNotes = recentAppointments.map((row) => row.notes ?? "").filter(Boolean).join(" ")
-  const combinedNotes = [customerNotes, appointmentNotes].filter(Boolean).join(" ").trim()
-
-  return {
-    visitCount: visitCount ?? undefined,
-    lifetimeSpend,
-    lastVisit: recentAppointments[0]?.starts_at ?? undefined,
-    vip: lifetimeSpend >= 1200 || /\bVIP\b/i.test(combinedNotes),
-    dietaryNotes: combinedNotes.match(/allergy|nut|gluten|dairy|shellfish/i) ? combinedNotes : null,
-  }
-}
-
-// Live demo / n8n entrypoint. Uses the customer-service agent but keeps messaging advisory-only.
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
+  // 1. Validate input
   let body: unknown
   try {
-    body = await request.json()
+    body = await req.json()
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const parsed = CreateReviewSchema.safeParse(body)
+  const parsed = ReviewInputSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsed.error.issues },
-      { status: 422 }
-    )
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 })
   }
 
   const { guestName, score, comment, source, guestId } = parsed.data
+  const supabase = createServerSupabaseClient()
 
-  try {
-    const client = createServerSupabaseClient()
+  // 2. Fetch customer and build guestHistory
+  let customerId: string | null = guestId ?? null
+  let guestHistory = null
 
-    const [customerQuery, appointmentsQuery] = await Promise.all([
-      client
-        .from("customers")
-        .select("id, full_name, email, avg_feedback_score, lifetime_value, risk_status, notes")
-        .eq("id", guestId)
-        .eq("organization_id", DEMO_ORG_ID)
-        .maybeSingle(),
-      client
-        .from("appointments")
-        .select("starts_at, notes", { count: "exact" })
-        .eq("customer_id", guestId)
-        .eq("organization_id", DEMO_ORG_ID)
-        .order("starts_at", { ascending: false })
-        .limit(3),
-    ])
+  if (guestId) {
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("id, full_name, lifetime_value, last_visit_at, avg_feedback_score, notes")
+      .eq("id", guestId)
+      .eq("organization_id", DEMO_ORG_ID)
+      .maybeSingle()
 
-    if (customerQuery.error) throw new Error(customerQuery.error.message)
-    if (!customerQuery.data) {
-      return NextResponse.json({ error: "Guest not found for this organization." }, { status: 404 })
+    if (customer) {
+      customerId = customer.id
+      guestHistory = {
+        lifetimeSpend: customer.lifetime_value,
+        lastVisit: customer.last_visit_at,
+        dietaryNotes: customer.notes ?? null,
+        // Derive vip from high lifetime value or high avg score
+        vip: (customer.lifetime_value ?? 0) > 1000 || (customer.avg_feedback_score ?? 0) >= 4.9,
+      }
     }
-    if (appointmentsQuery.error) throw new Error(appointmentsQuery.error.message)
-
-    const customer = customerQuery.data as CustomerSnapshot
-    const recentAppointments = (appointmentsQuery.data ?? []) as AppointmentSnapshot[]
-    const guestHistory = buildGuestHistoryFromSnapshots(
-      customer,
-      recentAppointments,
-      appointmentsQuery.count ?? null
-    )
-
-    const { analyzeAndRespond } = await import("../../../../agents/customer-service/agent.js")
-    const agentResult = (await analyzeAndRespond({
-      guestName: customer.full_name ?? guestName,
-      guestEmail: "",
-      score,
-      comment,
-      source,
-      guestHistory,
-      guestId,
-    })) as Record<string, unknown>
-
-    const { feedbackId, created } = await ingestFeedbackRow(client, {
-      organizationId: DEMO_ORG_ID,
-      customerId:     guestId,
-      appointmentId:  null,
-      guestName:      customer.full_name ?? guestName,
-      score,
-      comment,
-      source,
-      externalReviewId: null,
-      externalSource:   null,
-    })
-
-    const persisted = await persistAgentFeedbackAnalysis(
-      client,
-      DEMO_ORG_ID,
-      feedbackId,
-      {
-        guestName: customer.full_name ?? guestName,
-        score,
-        comment,
-        source,
-        customerId: guestId,
-        guestHistory,
-      },
-      agentResult,
-      "model"
-    )
-
-    return NextResponse.json({
-      data: {
-        feedbackId,
-        created,
-        customer: {
-          fullName: customer.full_name,
-          avgFeedbackScore: customer.avg_feedback_score,
-          lifetimeValue: customer.lifetime_value,
-          riskStatus: customer.risk_status,
-          notes: customer.notes,
-        },
-        guestHistory,
-        analysisSource: persisted.analysisSource,
-        ...persisted.analysis,
-      },
-    })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unexpected error"
-    return NextResponse.json({ error: message }, { status: 500 })
   }
+
+  // 3. Call analyzeReview
+  let analysis: Record<string, unknown>
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  analysis = await (analyzeReview as any)({ guestName, score, comment, source, guestHistory })
+  } catch (err) {
+    return NextResponse.json(
+      { error: "Analysis failed", detail: String(err) },
+      { status: 502 }
+    )
+  }
+
+  const flagged =
+    (analysis.urgency as number) >= 4 || analysis.safety_flag === true
+
+  // 4. Insert into feedback
+  const { data: feedbackRow, error: feedbackError } = await supabase
+    .from("feedback")
+    .insert({
+      organization_id: DEMO_ORG_ID,
+      customer_id: customerId,
+      source,
+      guest_name_snapshot: guestName,
+      score,
+      comment,
+      sentiment: analysis.sentiment,
+      topics: analysis.topics,
+      urgency: analysis.urgency,
+      safety_flag: analysis.safety_flag,
+      follow_up_status: analysis.follow_up_status,
+      flagged,
+      reply_draft: analysis.reply_draft ?? null,
+      internal_note: analysis.internal_note ?? null,
+      manager_summary: analysis.manager_summary ?? null,
+      analysis_json: {
+        churn_risk: analysis.churn_risk,
+        recovery_action: analysis.recovery_action,
+      },
+      analysis_source: "claude_api",
+      received_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single()
+
+  if (feedbackError) {
+    return NextResponse.json(
+      { error: "Failed to save feedback", detail: feedbackError.message },
+      { status: 500 }
+    )
+  }
+
+  const feedbackId = feedbackRow.id
+
+  // 5. Insert into ai_actions
+  await supabase.from("ai_actions").insert({
+    organization_id: DEMO_ORG_ID,
+    entity_type: "feedback",
+    entity_id: feedbackId,
+    trigger_type: "feedback.received",
+    action_type: "customer_service.analyze_review",
+    input_summary: `${guestName} · score ${score} · ${source}`,
+    output_payload_json: {
+      urgency: analysis.urgency,
+      sentiment: analysis.sentiment,
+      safety_flag: analysis.safety_flag,
+      churn_risk: analysis.churn_risk,
+      recovery_action: (analysis.recovery_action as Record<string, unknown>)?.type,
+    },
+    status: "executed",
+  })
+
+  // 6. PATCH customers.risk_status (only if we have a customer)
+  if (customerId && analysis.risk_status_update) {
+    const riskMap: Record<string, string> = {
+      healthy: "none",
+      at_risk: "at_risk",
+      churned: "churned",
+    }
+    const newRisk = riskMap[analysis.risk_status_update as string]
+    if (newRisk) {
+      await supabase
+        .from("customers")
+        .update({ risk_status: newRisk })
+        .eq("id", customerId)
+        .eq("organization_id", DEMO_ORG_ID)
+    }
+  }
+
+  return NextResponse.json({
+    feedbackId,
+    ...analysis,
+  })
 }
