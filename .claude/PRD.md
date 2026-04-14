@@ -1146,12 +1146,12 @@ The codebase now contains a substantial part of the first operational milestone:
 
 | Module | Status | Notes |
 |--------|--------|-------|
-| **Automated Tests** | ❌ Not Started | No `npm test` script — tests can be added post-hackathon |
+| **Automated Tests** | 🟡 Partial | `npm test` exists (Vitest) and there are `src/**/*.test.ts` files, but coverage is still limited and should be expanded post-hackathon |
 | **Real Email/SMS Sending** | ❌ Not Started | Message drafts are generated but not sent — acceptable for demo |
 | **Public Review Posting** | ❌ Not Started | Google/Yelp reply approval updates DB state only — manual posting is fine for demo |
 | **Receipt Upload/OCR** | ❌ Not Started | `receipts` table exists but no upload UI — not required for core demo |
-| **Inventory Predictions** | ❌ Not Started | Teammate's `Agent.py` not integrated — inventory page uses mock alerts |
-| **Performance Analyzer** | ❌ Not Started | Teammate's Python model not wired — can demo with static cards |
+| **Inventory Predictions** | ❌ Not Started | Inventory prediction model not yet integrated — inventory page uses mock alerts |
+| **Performance Analyzer** | ❌ Not Started | Performance analysis model not yet wired — can demo with static cards |
 | **n8n Workflow Integration** | ❌ Not Started | Webhook routes exist but n8n flows not configured — can simulate with direct POST |
 
 #### E.4 — Demo-Ready Workflow (Can Execute Live)
@@ -1187,7 +1187,7 @@ The codebase now contains a substantial part of the first operational milestone:
 
 ```bash
 # 1. Create Supabase project (if not done)
-# 2. Copy .env.local.example → .env.local
+# 2. Copy .env.example → .env.local (or create .env.local manually)
 # 3. Fill in:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
@@ -1205,7 +1205,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 #    - supabase/seed_feedback_addon.sql (if core data already exists)
 
 # 6. Verify:
-npm run lint && npx tsc --noEmit && npx next build --webpack
+npm run lint && npx tsc --noEmit && npm run build
 ```
 
 #### E.6 — Known Gaps vs. PRD Requirements
@@ -1226,7 +1226,7 @@ npm run lint && npx tsc --noEmit && npx next build --webpack
 | Owner | Files | Status |
 |-------|-------|--------|
 | **Anant (you)** | Customer service agent, feedback APIs, dashboard, finance, integrations, MCP bridge | ✅ Complete |
-| **Teammate** | `Agent.py` (performance analyzer), inventory prediction model | 🟡 Not yet integrated |
+| **Teammate** | Performance analyzer (archived / not included in this repo), inventory prediction model | 🟡 Not yet integrated |
 | **Shared** | Supabase schema, seed data, base UI components | ✅ Complete |
 
 #### E.8 — Recommended Final 6-Hour Plan
