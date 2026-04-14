@@ -30,7 +30,7 @@ export interface Invoice {
   number: string
   guest: string
   amount: number
-  status: "paid" | "overdue" | "pending" | "draft"
+  status: "paid" | "overdue" | "pending" | "draft" | "sent"
   date: string
   dueDate?: string
   reminderCount?: number
@@ -194,6 +194,7 @@ function statusStyle(status: string) {
     case "paid":    return "bg-emerald-100 text-emerald-700"
     case "overdue": return "bg-red-100 text-red-600"
     case "pending": return "bg-amber-100 text-amber-700"
+    case "sent":    return "bg-blue-100 text-blue-700"
     default:        return "bg-muted text-muted-foreground"
   }
 }
@@ -457,6 +458,11 @@ function GuestContact({ customer }: { customer: InvoiceCustomer }) {
 
 // ── Expanded detail row ───────────────────────────────────────────────────────
 
+// Minneapolis combined sales tax: MN state 6.875% + Hennepin county 0.15% + Minneapolis city 0.5%
+const MN_TAX_RATE = 0.07525
+
+type MenuItem = { id: string; name: string; category: string; price: number }
+
 function InvoiceDetail({
   inv,
   onSave,
@@ -466,10 +472,20 @@ function InvoiceDetail({
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<Invoice>(inv)
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
+  const [taxOverride, setTaxOverride] = useState<string>("")
+
+  useEffect(() => {
+    fetch("/api/menu-items")
+      .then(r => r.json())
+      .then(d => { if (d.data) setMenuItems(d.data) })
+      .catch(() => {})
+  }, [])
 
   function startEdit(e: React.MouseEvent) {
     e.stopPropagation()
     setDraft(inv)
+    setTaxOverride("")
     setEditing(true)
   }
 
@@ -480,10 +496,11 @@ function InvoiceDetail({
 
   function save(e: React.MouseEvent) {
     e.stopPropagation()
-    // Recompute amount from line items + tax + tip
+    // Recompute amount from line items + MN auto-tax (or override) + tip
     const subtotal = draft.lineItems.reduce((s, li) => s + li.amount, 0)
-    const newAmount = Math.round((subtotal + draft.tax + draft.tip) * 100) / 100
-    onSave({ ...draft, amount: newAmount })
+    const tax = taxOverride !== "" ? Number(taxOverride) : Math.round(subtotal * MN_TAX_RATE * 100) / 100
+    const newAmount = Math.round((subtotal + tax + draft.tip) * 100) / 100
+    onSave({ ...draft, tax, amount: newAmount })
     setEditing(false)
   }
 
@@ -511,8 +528,10 @@ function InvoiceDetail({
     setDraft((d) => ({ ...d, lineItems: d.lineItems.filter((_, idx) => idx !== i) }))
   }
 
-  const subtotal = (editing ? draft : inv).lineItems.reduce((s, li) => s + li.amount, 0)
-  const display  = editing ? draft : inv
+  const subtotal  = (editing ? draft : inv).lineItems.reduce((s, li) => s + li.amount, 0)
+  const autoTax   = Math.round(subtotal * MN_TAX_RATE * 100) / 100
+  const effectiveTax = taxOverride !== "" ? Number(taxOverride) : autoTax
+  const display   = editing ? { ...draft, tax: effectiveTax } : inv
 
   const inputCls = "w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
 
@@ -617,11 +636,38 @@ function InvoiceDetail({
                   <tr key={i} className="border-b border-border/40 last:border-0">
                     <td className="py-1.5">
                       {editing ? (
-                        <input
-                          className={inputCls}
+                        <select
+                          className={`${inputCls} pr-6`}
                           value={li.description}
-                          onChange={(e) => setLine(i, "description", e.target.value)}
-                        />
+                          onChange={(e) => {
+                            const chosen = menuItems.find(m => m.name === e.target.value)
+                            if (chosen) {
+                              setDraft(d => ({
+                                ...d,
+                                lineItems: d.lineItems.map((l, idx) =>
+                                  idx === i
+                                    ? { ...l, description: chosen.name, amount: Math.round(chosen.price * l.qty * 100) / 100 }
+                                    : l
+                                ),
+                              }))
+                            } else {
+                              setLine(i, "description", e.target.value)
+                            }
+                          }}
+                        >
+                          <option value="">Select item…</option>
+                          {/* If existing description isn't in the menu list, show it as a selectable option */}
+                          {li.description && !menuItems.some(m => m.name === li.description) && (
+                            <option value={li.description}>{li.description}</option>
+                          )}
+                          {Array.from(new Set(menuItems.map(m => m.category))).map(cat => (
+                            <optgroup key={cat} label={cat}>
+                              {menuItems.filter(m => m.category === cat).map(m => (
+                                <option key={m.id} value={m.name}>{m.name} — ${m.price}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
                       ) : (
                         <span className="text-foreground">{li.description}</span>
                       )}
@@ -688,15 +734,19 @@ function InvoiceDetail({
                   <span>Subtotal</span><span>${subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Tax</span>
+                  <span className="flex items-center gap-1">
+                    Tax
+                    {editing && <span className="text-[10px] text-muted-foreground/60">(MN 7.525%)</span>}
+                  </span>
                   {editing ? (
                     <input
                       className={`${inputCls} w-24 text-right`}
                       type="number"
                       step="0.01"
                       min={0}
-                      value={draft.tax}
-                      onChange={(e) => setDraft((d) => ({ ...d, tax: Number(e.target.value) }))}
+                      placeholder={autoTax.toFixed(2)}
+                      value={taxOverride}
+                      onChange={(e) => setTaxOverride(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
@@ -722,7 +772,7 @@ function InvoiceDetail({
                 <Separator className="my-1.5" />
                 <div className="flex justify-between font-semibold text-foreground">
                   <span>Total</span>
-                  <span>${(subtotal + display.tax + display.tip).toFixed(2)}</span>
+                  <span>${(subtotal + effectiveTax + display.tip).toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -756,9 +806,6 @@ function InvoiceDetail({
 }
 
 // ── New Invoice Modal ─────────────────────────────────────────────────────────
-
-// Minneapolis combined sales tax: MN state 6.875% + Hennepin county 0.15% + Minneapolis city 0.5%
-const MN_TAX_RATE = 0.07525
 
 function NewInvoiceModal({
   nextNumber,

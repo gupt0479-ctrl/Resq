@@ -52,8 +52,15 @@ export type AppointmentResponse = z.infer<typeof AppointmentResponseSchema>
 
 // ─── Complete appointment request ────────────────────────────────────────
 
+export const CompleteLineItemSchema = z.object({
+  description: z.string().min(1),
+  qty:         z.number().int().min(1).default(1),
+  unitPrice:   z.number().min(0),
+})
+
 export const CompleteAppointmentBodySchema = z.object({
-  notes: z.string().optional(),
+  notes:     z.string().optional(),
+  lineItems: z.array(CompleteLineItemSchema).optional(),
 })
 
 // ─── Create booking request ──────────────────────────────────────────────

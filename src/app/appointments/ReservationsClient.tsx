@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogHeader, DialogTitle, DialogBody, DialogFooter } from "@/components/ui/dialog"
@@ -41,7 +41,8 @@ function fmtDate(iso: string) {
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type LineItem = { description: string; qty: number; unitPrice: number }
+type LineItem  = { description: string; qty: number; unitPrice: number }
+type MenuItem  = { id: string; name: string; category: string; price: number }
 
 interface ParsedResult {
   intent: string
@@ -96,6 +97,15 @@ export function ReservationsClient({
   const [lineItems, setLineItems] = useState<LineItem[]>([{ description: "", qty: 1, unitPrice: 0 }])
   const [completeResult, setCompleteResult] = useState<CompleteResult | null>(null)
 
+  // Menu items for line item dropdown
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
+  useEffect(() => {
+    fetch("/api/menu-items")
+      .then(r => r.json())
+      .then(d => { if (d.data) setMenuItems(d.data) })
+      .catch(() => {})
+  }, [])
+
   // New booking modal
   const [bookForm, setBookForm] = useState({
     customerName: "", customerEmail: "", covers: 2, startsAt: "", occasion: "", notes: "",
@@ -146,7 +156,10 @@ export function ReservationsClient({
       const res = await fetch(`/api/appointments/${selectedId}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes: completeNotes }),
+        body: JSON.stringify({
+          notes: completeNotes,
+          lineItems: lineItems.filter(li => li.description.trim() && li.unitPrice > 0),
+        }),
       })
       const data = await res.json()
       if (!res.ok) { alert(data.error ?? "Error completing"); return }
@@ -157,7 +170,7 @@ export function ReservationsClient({
     } finally {
       setActionLoading(false)
     }
-  }, [selectedId, completeNotes])
+  }, [selectedId, completeNotes, lineItems])
 
   // ── Cancel ───────────────────────────────────────────────────────────────
 
@@ -474,32 +487,60 @@ export function ReservationsClient({
                   <label className="text-xs font-medium text-muted-foreground">Line Items</label>
                   <button onClick={addLineItem} className="text-xs text-primary hover:underline">+ Add item</button>
                 </div>
+                {/* Column headers */}
+                <div className="mb-1 grid grid-cols-[1fr_56px_80px_20px] gap-2 px-0.5">
+                  <span className="text-[10px] font-medium text-muted-foreground">Product / Description</span>
+                  <span className="text-[10px] font-medium text-muted-foreground text-center">Qty</span>
+                  <span className="text-[10px] font-medium text-muted-foreground text-right">Amount ($)</span>
+                  <span />
+                </div>
                 <div className="space-y-2">
-                  {lineItems.map((li, i) => (
-                    <div key={i} className="flex gap-2 items-center">
-                      <Input
-                        placeholder="Description"
+                  {lineItems.map((li, i) => {
+                    // Group menu items by category for <optgroup>
+                    const categories = Array.from(new Set(menuItems.map(m => m.category)))
+                    return (
+                    <div key={i} className="grid grid-cols-[1fr_56px_80px_20px] gap-2 items-center">
+                      <select
                         value={li.description}
-                        onChange={e => updateLineItem(i, "description", e.target.value)}
-                        className="flex-1"
-                      />
+                        onChange={e => {
+                          const chosen = menuItems.find(m => m.name === e.target.value)
+                          if (chosen) {
+                            setLineItems(prev => prev.map((l, idx) =>
+                              idx === i ? { ...l, description: chosen.name, unitPrice: chosen.price } : l
+                            ))
+                          } else {
+                            updateLineItem(i, "description", e.target.value)
+                          }
+                        }}
+                        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        <option value="">e.g. Wagyu Ribeye</option>
+                        {categories.map(cat => (
+                          <optgroup key={cat} label={cat}>
+                            {menuItems.filter(m => m.category === cat).map(m => (
+                              <option key={m.id} value={m.name}>{m.name} — ${m.price}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
                       <Input
                         type="number" min={1} placeholder="Qty"
                         value={li.qty}
                         onChange={e => updateLineItem(i, "qty", Number(e.target.value))}
-                        className="w-14"
+                        className="w-full text-center"
                       />
                       <Input
-                        type="number" min={0} step={0.01} placeholder="Price"
-                        value={li.unitPrice}
+                        type="number" min={0} step={0.01} placeholder="0.00"
+                        value={li.unitPrice === 0 ? "" : li.unitPrice}
                         onChange={e => updateLineItem(i, "unitPrice", Number(e.target.value))}
-                        className="w-20"
+                        className="w-full text-right"
                       />
-                      {lineItems.length > 1 && (
+                      {lineItems.length > 1 ? (
                         <button onClick={() => removeLineItem(i)} className="text-muted-foreground hover:text-destructive text-xs">✕</button>
-                      )}
+                      ) : <span />}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
                 {lineTotal > 0 && (
                   <p className="text-xs text-muted-foreground mt-2 text-right">
@@ -507,7 +548,7 @@ export function ReservationsClient({
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">
-                  Invoice will be auto-generated from the service catalog.
+                  Leave empty to use the default service price.
                 </p>
               </div>
             </div>

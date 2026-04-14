@@ -97,9 +97,11 @@ export default async function IntegrationsPage() {
             Mutating events (<code className="font-mono text-xs">reservation.completed</code>,{" "}
             <code className="font-mono text-xs">invoice.sent</code>,{" "}
             <code className="font-mono text-xs">invoice.paid</code>) require{" "}
-            <code className="font-mono text-xs">externalEventId</code> for deduplication. Configure{" "}
-            <code className="font-mono text-xs">INTEGRATIONS_WEBHOOK_SECRET</code> (or{" "}
-            <code className="font-mono text-xs">INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED=true</code> locally).
+            <code className="font-mono text-xs">externalEventId</code> for deduplication. Production requires{" "}
+            <code className="font-mono text-xs">INTEGRATIONS_WEBHOOK_SECRET</code>; under{" "}
+            <code className="font-mono text-xs">next dev</code> with no secret, unsigned test POSTs are allowed (set the
+            secret or <code className="font-mono text-xs">INTEGRATIONS_WEBHOOK_ALLOW_UNSIGNED=false</code> to enforce
+            signing in dev).
           </p>
         </CardContent>
       </Card>

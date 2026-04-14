@@ -86,6 +86,33 @@ export type ProcessingStatus = (typeof PROCESSING_STATUS)[number]
 
 // ─── Domain event strings — canonical names per restaurant-core-demo.md ───
 
+export const FEEDBACK_SOURCE = ["internal", "google", "yelp", "opentable", "manual"] as const
+export type FeedbackSource = (typeof FEEDBACK_SOURCE)[number]
+
+export const FEEDBACK_FOLLOW_UP_STATUS = [
+  "none",
+  "thankyou_sent",
+  "callback_needed",
+  "resolved",
+] as const
+export type FeedbackFollowUpStatus = (typeof FEEDBACK_FOLLOW_UP_STATUS)[number]
+
+export const FEEDBACK_TOPIC = [
+  "food_quality",
+  "service_speed",
+  "staff_attitude",
+  "noise_level",
+  "wait_time",
+  "allergy_safety",
+  "value",
+  "ambiance",
+  "cleanliness",
+] as const
+export type FeedbackTopic = (typeof FEEDBACK_TOPIC)[number]
+
+export const FOLLOW_UP_ACTION_STATUS = ["pending", "approved", "sent", "dismissed"] as const
+export type FollowUpActionStatus = (typeof FOLLOW_UP_ACTION_STATUS)[number]
+
 export const DOMAIN_EVENT = {
   RESERVATION_CREATED:    "reservation.created",
   RESERVATION_CONFIRMED:  "reservation.confirmed",

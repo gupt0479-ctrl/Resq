@@ -23,7 +23,9 @@ export async function POST(
     }
 
     const client = createServerSupabaseClient()
-    const result = await completeAppointment(client, id, DEMO_ORG_ID, parsed.data.notes)
+    const result = await completeAppointment(
+      client, id, DEMO_ORG_ID, parsed.data.notes, parsed.data.lineItems
+    )
 
     // Fetch customer for personalised follow-up
     const { data: customer } = await client

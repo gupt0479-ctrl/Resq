@@ -17,9 +17,11 @@ import {
   Calendar,
   Download,
 } from "lucide-react"
-import { WeeklyRevenueChart } from "@/components/finance/WeeklyRevenueChart"
+import {
+  FinanceExpenseChart,
+  FinanceWeeklyRevenueChart,
+} from "@/components/finance/finance-charts"
 import type { WeeklyDataPoint } from "@/components/finance/WeeklyRevenueChart"
-import { ExpenseChart } from "@/components/finance/ExpenseChart"
 import type { ExpenseSlice } from "@/components/finance/ExpenseChart"
 import { TaxFilterPills } from "@/components/finance/TaxFilterPills"
 import type { TaxTransaction } from "@/components/finance/TaxFilterPills"

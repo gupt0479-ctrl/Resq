@@ -20,57 +20,6 @@ import {
 
 export const dynamic = "force-dynamic"
 
-const MOCK_AI_ACTIONS = [
-  {
-    id: "1",
-    agent: "customer_service",
-    action_type: "send_reminder",
-    input_summary: "INV-2025-002 overdue — Priya Nair $94.95",
-    status: "executed",
-    created_at: "2026-04-12T08:10:00Z",
-  },
-  {
-    id: "2",
-    agent: "performance",
-    action_type: "daily_summary_generated",
-    input_summary: "End of day performance summary — Apr 11",
-    status: "executed",
-    created_at: "2026-04-12T07:00:00Z",
-  },
-  {
-    id: "3",
-    agent: "marketing",
-    action_type: "draft_return_nudge",
-    input_summary: "Sofia Morales has not returned in 45 days",
-    status: "executed",
-    created_at: "2026-04-12T05:00:00Z",
-  },
-  {
-    id: "4",
-    agent: "inventory",
-    action_type: "reorder_alert",
-    input_summary: "Wagyu Ribeye at 4 portions, below reorder level",
-    status: "executed",
-    created_at: "2026-04-12T03:10:00Z",
-  },
-  {
-    id: "5",
-    agent: "customer_service",
-    action_type: "flag_and_draft_recovery",
-    input_summary: "Priya Nair left score 2, allergy incident",
-    status: "executed",
-    created_at: "2026-04-11T10:15:00Z",
-  },
-  {
-    id: "6",
-    agent: "customer_service",
-    action_type: "invoice_generated",
-    input_summary: "Reservation completed for Marcus Webb, party of 2",
-    status: "executed",
-    created_at: "2026-04-09T21:30:00Z",
-  },
-]
-
 const MOCK_INVENTORY_ALERTS = [
   { name: "Wagyu Ribeye", qty: 4, unit: "portions", status: "critical" },
   { name: "Braised Short Rib", qty: 7, unit: "portions", status: "low" },
@@ -102,6 +51,16 @@ function agentBadgeClass(agent: string) {
 
 function agentLabel(agent: string) {
   return agent.replace(/_/g, " ")
+}
+
+function agentKeyFromActionType(actionType: string): string {
+  if (actionType.includes("customer_service") || actionType.includes("analyze_review")) {
+    return "customer_service"
+  }
+  if (actionType.includes("inventory")) return "inventory"
+  if (actionType.includes("marketing")) return "marketing"
+  if (actionType.includes("performance")) return "performance"
+  return "customer_service"
 }
 
 function timeAgo(iso: string) {
@@ -167,6 +126,8 @@ export default async function DashboardPage() {
     kpis,
     managerSummary,
     recentReservations,
+    feedbackSpotlight,
+    recentAiActivity,
   } = summary
   const cashTrend =
     financeSnapshot.netCashFlow > 0
@@ -182,7 +143,7 @@ export default async function DashboardPage() {
         <p className="text-xs text-muted-foreground">{today()} · Ember Table</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           title="Today's Reservations"
           value={String(kpis.todayReservationCount)}
@@ -210,6 +171,13 @@ export default async function DashboardPage() {
           sub={`${kpis.pendingInvoiceCount} invoice${kpis.pendingInvoiceCount !== 1 ? "s" : ""}`}
           icon={<Clock className="h-4 w-4" />}
           color="amber"
+        />
+        <KpiCard
+          title="Guests needing attention"
+          value={String(kpis.unhappyGuestCount)}
+          sub="flagged reviews or urgency ≥ 4"
+          icon={<MessageSquare className="h-4 w-4" />}
+          color={kpis.unhappyGuestCount > 0 ? "red" : "green"}
         />
       </div>
 
@@ -281,16 +249,24 @@ export default async function DashboardPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-2 pb-4">
-            <ul className="list-disc space-y-1 pl-4 text-xs text-foreground">
-              <li>
-                <span className="font-medium">Priya Nair</span> — score 2, allergy incident (needs owner follow-up)
-              </li>
-              <li>
-                <span className="font-medium">Google review</span> — follow-up still pending on prior complaint
-              </li>
-            </ul>
+            {feedbackSpotlight.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No urgent feedback in queue — great service week.</p>
+            ) : (
+              <ul className="list-disc space-y-1 pl-4 text-xs text-foreground">
+                {feedbackSpotlight.map((f) => (
+                  <li key={f.id}>
+                    <span className="font-medium">{f.guestName}</span> — {f.score}★
+                    {f.safetyFlag ? " · safety" : ""}
+                    {f.urgency >= 4 ? ` · urgency ${f.urgency}/5` : ""}
+                    <span className="text-muted-foreground"> — {f.summary.slice(0, 90)}
+                      {f.summary.length > 90 ? "…" : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="text-[10px] text-muted-foreground">
-              Full queue uses demo data on the Feedback page until persistence ships (Phase 3).
+              Data from Supabase feedback table. Open the queue for full detail and drafts.
             </p>
             <Link
               href="/feedback"
@@ -369,24 +345,31 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent className="pb-2">
               <ul className="divide-y divide-border">
-                {MOCK_AI_ACTIONS.map((action) => (
-                  <li key={action.id} className="flex items-center gap-3 py-2.5">
-                    <span
-                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold capitalize ${agentBadgeClass(action.agent)}`}
-                    >
-                      {agentLabel(action.agent)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs text-foreground">{action.input_summary}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {action.action_type.replace(/_/g, " ")}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
-                      {timeAgo(action.created_at)}
-                    </span>
-                  </li>
-                ))}
+                {recentAiActivity.length === 0 ? (
+                  <li className="py-3 text-xs text-muted-foreground">No AI actions recorded yet.</li>
+                ) : (
+                  recentAiActivity.map((action) => {
+                    const agent = agentKeyFromActionType(action.actionType)
+                    return (
+                      <li key={action.id} className="flex items-center gap-3 py-2.5">
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold capitalize ${agentBadgeClass(agent)}`}
+                        >
+                          {agentLabel(agent)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs text-foreground">{action.inputSummary}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {action.actionType.replace(/_/g, " ")} · {action.status}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {timeAgo(action.createdAt)}
+                        </span>
+                      </li>
+                    )
+                  })
+                )}
               </ul>
             </CardContent>
           </Card>

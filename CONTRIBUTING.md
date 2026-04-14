@@ -2,37 +2,33 @@
 
 ## Branching
 
-- Never commit directly to `main`.
-- Create feature branches from `main` using this format:
-  - `feat/<short-description>`
-  - `fix/<short-description>`
-  - `chore/<short-description>`
+- Do not commit directly to `main`
+- Use focused branches: `feat/...`, `fix/...`, `chore/...`
 
-## Local Setup
+## Before opening a PR
 
 ```bash
-npm ci
 npm run lint
+npx tsc --noEmit
+npm run test
 npm run build
 ```
 
-## Pull Request Rules
+## PR standard
 
-- Keep PRs focused and reasonably small.
-- Rebase your branch on latest `main` before opening PR.
-- Ensure CI is green before requesting review.
-- At least 1 teammate review before merge.
+- Keep the change small and reviewable
+- Explain user-visible impact clearly
+- Call out demo-critical risk explicitly
+- Do not mix refactors with deadline-critical fixes
 
-## Commit Message Style
+## Commit style
 
-Use clear imperative messages, for example:
+- `feat: add feedback recovery approval flow`
+- `fix: make mark-paid create finance row idempotently`
+- `docs: align demo handoff docs`
 
-- `feat: add incident timeline panel`
-- `fix: handle empty table state`
-- `chore: update eslint config`
+## Secrets
 
-## Secrets Safety
-
-- Never commit `.env` files or API keys.
-- Use `.env.local` for local development.
-- Rotate any key immediately if it was exposed.
+- Never commit `.env.local`
+- Never expose service-role or API keys to client code
+- Rotate any leaked credential immediately
