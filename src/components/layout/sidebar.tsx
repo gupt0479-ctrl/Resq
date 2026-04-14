@@ -7,12 +7,12 @@ import {
   LayoutDashboard,
   GitBranch,
   MessageSquare,
+  Plug,
   FileText,
   Package,
   CalendarDays,
   DollarSign,
   Truck,
-  Plug,
 } from "lucide-react"
 
 const coreItems = [
@@ -91,7 +91,6 @@ export function Sidebar() {
           </Link>
         ))}
       </nav>
-
     </aside>
   )
 }
