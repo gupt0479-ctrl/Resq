@@ -392,6 +392,10 @@ export default async function FinancePage() {
   return (
     <div
       className="space-y-5 p-6 min-h-screen bg-background"
+      style={{
+        backgroundImage: "radial-gradient(circle, hsl(var(--muted-foreground) / 0.08) 1px, transparent 1px)",
+        backgroundSize: "24px 24px",
+      }}
     >
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">

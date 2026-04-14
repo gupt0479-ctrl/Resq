@@ -3,7 +3,6 @@ import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-serve
 import { listAppointmentsQuery } from "@/lib/queries/appointments"
 import { isSupabaseConfigured } from "@/lib/env"
 import { ReservationsClient } from "./ReservationsClient"
-import type { AppointmentResponse } from "@/lib/schemas/appointment"
 
 async function ReservationsData() {
   const client = createServerSupabaseClient()
