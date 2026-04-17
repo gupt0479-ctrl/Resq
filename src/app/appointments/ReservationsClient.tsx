@@ -510,11 +510,13 @@ export function ReservationsClient({
                       <td className="py-2.5 pr-4">
                         <div className="flex flex-col gap-0.5">
                           <span className="font-medium text-foreground">{appt.customerName}</span>
-                          {appt.occasion && (
+                          {appt.occasion ? (
                             <span className={`self-start rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${occasionBadge(appt.occasion) ?? ""}`}>
                               {appt.occasion}
                             </span>
-                          )}
+                          ) : appt.notes ? (
+                            <span className="text-[11px] text-muted-foreground leading-tight">{appt.notes}</span>
+                          ) : null}
                         </div>
                       </td>
                       <td className="py-2.5 pr-4 text-muted-foreground">{appt.serviceName}</td>

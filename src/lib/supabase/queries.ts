@@ -269,7 +269,23 @@ export type CreateInventoryItemPayload = {
   vendorName?: string
   quantityOnHand?: number
   reorderLevel?: number
+  previousUnitCost?: number
   expiresAt?: string | null
+  issueStatus?: InventoryItem["issueStatus"]
+  priceTrendStatus?: InventoryItem["priceTrendStatus"]
+}
+
+export type UpdateInventoryItemPayload = {
+  itemName: string
+  category: string
+  unitCost: number
+  vendorName?: string
+  quantityOnHand?: number
+  reorderLevel?: number
+  previousUnitCost?: number | null
+  expiresAt?: string | null
+  issueStatus?: InventoryItem["issueStatus"]
+  priceTrendStatus?: InventoryItem["priceTrendStatus"]
 }
 
 export async function createInventoryItem(input: CreateInventoryItemPayload): Promise<InventoryItem> {
@@ -285,18 +301,67 @@ export async function createInventoryItem(input: CreateInventoryItemPayload): Pr
       item_name: input.itemName,
       category: input.category,
       unit_cost: input.unitCost,
+      previous_unit_cost: input.previousUnitCost ?? null,
       vendor_name: input.vendorName ?? "Unknown Vendor",
       quantity_on_hand: input.quantityOnHand ?? 0,
       reorder_level: input.reorderLevel ?? 0,
       expires_at: input.expiresAt ?? null,
-      issue_status: "none",
-      price_trend_status: "stable",
+      issue_status: input.issueStatus ?? "none",
+      price_trend_status: input.priceTrendStatus ?? "stable",
     })
     .select("id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status")
     .single()
 
   if (error) throw new Error(error.message)
   return mapInventoryItem(data as Record<string, unknown>)
+}
+
+export async function updateInventoryItem(
+  id: string,
+  input: UpdateInventoryItemPayload
+): Promise<InventoryItem | null> {
+  const { createServerSupabaseClient: createSvc } = await import("@/lib/db/supabase-server")
+  const svc = createSvc()
+
+  const payload: Record<string, unknown> = {
+    item_name: input.itemName,
+    category: input.category,
+    unit_cost: input.unitCost,
+    vendor_name: input.vendorName ?? "Unknown Vendor",
+    quantity_on_hand: input.quantityOnHand ?? 0,
+    reorder_level: input.reorderLevel ?? 0,
+    previous_unit_cost: input.previousUnitCost ?? null,
+    expires_at: input.expiresAt ?? null,
+    issue_status: input.issueStatus ?? "none",
+    price_trend_status: input.priceTrendStatus ?? "stable",
+  }
+
+  const { data, error } = await svc
+    .from("inventory_items")
+    .update(payload)
+    .eq("id", id)
+    .select(
+      "id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status"
+    )
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  return mapInventoryItem(data as Record<string, unknown>)
+}
+
+export async function deleteInventoryItem(id: string): Promise<boolean> {
+  const { createServerSupabaseClient: createSvc } = await import("@/lib/db/supabase-server")
+  const svc = createSvc()
+
+  const { data, error } = await svc
+    .from("inventory_items")
+    .delete()
+    .eq("id", id)
+    .select("id")
+
+  if (error) throw new Error(error.message)
+  return Array.isArray(data) && data.length > 0
 }
 
 export async function cancelShipment(id: string): Promise<void> {

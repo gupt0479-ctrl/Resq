@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { ConditionalShell } from "@/components/layout/conditional-shell"
 import { ThemeProvider } from "@/components/theme/theme-provider"

@@ -18,7 +18,18 @@ export function getExpiringItems(
   return items.filter((item) => {
     if (!item.expiresAt) return false
     const daysUntilExpiry = daysBetween(now, new Date(item.expiresAt))
-    return daysUntilExpiry >= 0 && daysUntilExpiry <= withinDays
+    return daysUntilExpiry > 0 && daysUntilExpiry <= withinDays
+  })
+}
+
+export function getExpiredItems(
+  items: InventoryItem[],
+  now: Date = new Date()
+): InventoryItem[] {
+  return items.filter((item) => {
+    if (!item.expiresAt) return false
+    const daysUntilExpiry = daysBetween(now, new Date(item.expiresAt))
+    return daysUntilExpiry <= 0
   })
 }
 
@@ -61,7 +72,16 @@ export function getAlerts(
     // Expiry
     if (item.expiresAt) {
       const daysUntil = daysBetween(now, new Date(item.expiresAt))
-      if (daysUntil >= 0 && daysUntil <= EXPIRY_WARNING_DAYS) {
+      if (daysUntil <= 0) {
+        alerts.push({
+          id: `alert-exp-${item.id}`,
+          itemId: item.id,
+          itemName: item.itemName,
+          alertType: "expiry_soon",
+          message: "Expired",
+          severity: "critical",
+        })
+      } else if (daysUntil <= EXPIRY_WARNING_DAYS) {
         alerts.push({
           id: `alert-exp-${item.id}`,
           itemId: item.id,
@@ -114,6 +134,7 @@ export function getAlertSummary(items: InventoryItem[], now: Date = new Date()) 
     totalItems: items.length,
     lowStockCount: getLowStockItems(items).length,
     expiringCount: getExpiringItems(items, EXPIRY_WARNING_DAYS, now).length,
+    expiredCount: getExpiredItems(items, now).length,
     issueCount: getIssueItems(items).length,
     priceSpikeCount: getPriceSpikeItems(items).length,
     totalAlerts: getAlerts(items, now).length,

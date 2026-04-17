@@ -78,7 +78,7 @@ export async function POST(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error"
     const status =
-      message.includes("externalEventId") ? 400 :
+      message.includes("requires") || message.includes("externalEventId") ? 400 :
       message.includes("not found") ? 404 :
       500
     return Response.json({ error: message }, { status })

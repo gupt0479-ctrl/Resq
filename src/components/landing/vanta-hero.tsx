@@ -5,10 +5,14 @@ import { ArrowRight } from "lucide-react"
 
 export function VantaHero() {
   return (
-    <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0e0a07] pt-24">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.25),_transparent_35%),linear-gradient(135deg,_rgba(120,53,15,0.9),_rgba(14,10,7,0.98)_45%,_rgba(10,10,10,1))]" />
-      <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:56px_56px]" />
-      <div className="absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-500/10 blur-3xl dark:bg-violet-400/12" />
+    <section
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0e0a07] pt-24"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(234,88,12,0.28),_transparent_38%),radial-gradient(circle_at_20%_80%,_rgba(217,119,6,0.2),_transparent_30%),linear-gradient(135deg,_#120c08_0%,_#22130b_48%,_#090909_100%)]" />
+      <div className="absolute inset-x-[-10%] top-[-12%] h-[34rem] rounded-full bg-orange-500/18 blur-3xl motion-safe:animate-pulse" />
+      <div className="absolute inset-x-[18%] bottom-[-22%] h-[28rem] rounded-full bg-amber-300/10 blur-3xl motion-safe:animate-pulse" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:72px_72px] opacity-[0.08]" />
+      <div className="absolute inset-0 bg-black/45" />
       <div className="relative z-10 mx-auto max-w-3xl px-6 text-center text-white">
         <p className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-white/70">
           Ember Table · Minneapolis

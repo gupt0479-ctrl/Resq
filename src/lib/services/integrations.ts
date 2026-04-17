@@ -14,6 +14,7 @@ import {
 import { logWebhookProcessed } from "@/lib/logging/server-log"
 import {
   MUTATING_INTEGRATION_EVENTS,
+  getWebhookDispatchValidationError,
   normalizeDomainEvent,
   getString,
   getNumber,
@@ -21,7 +22,7 @@ import {
 
 export { MUTATING_INTEGRATION_EVENTS, normalizeDomainEvent } from "@/lib/integrations/webhook-domain"
 
-// â”€â”€â”€ List connectors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// List connectors
 
 export async function listConnectors(
   client: SupabaseClient,
@@ -37,7 +38,7 @@ export async function listConnectors(
   return data ?? []
 }
 
-// â”€â”€â”€ Get connector by provider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Get connector by provider
 
 export async function getConnectorByProvider(
   client: SupabaseClient,
@@ -55,7 +56,37 @@ export async function getConnectorByProvider(
   return data
 }
 
-// â”€â”€â”€ Ingest webhook payload (MCP bridge) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export async function clearConnectorError(
+  client: SupabaseClient,
+  organizationId: string,
+  provider: string
+) {
+  const connector = await getConnectorByProvider(client, organizationId, provider)
+  if (!connector) {
+    throw new Error(`Connector not found for provider: ${provider}`)
+  }
+
+  const nextStatus = connector.last_sync_at ? "connected" : "disabled"
+  const { data, error } = await client
+    .from("integration_connectors")
+    .update({
+      status: nextStatus,
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", connector.id)
+    .eq("organization_id", organizationId)
+    .select("*")
+    .single()
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Failed to clear connector error")
+  }
+
+  return data
+}
+
+// Ingest webhook payload (MCP bridge)
 
 export interface IngestWebhookResult {
   syncEventId:            string
@@ -129,7 +160,7 @@ export async function ingestWebhookPayload(
     .single()
 
   if (insertErr) {
-    // Unique constraint violation â†’ duplicate event, skip silently
+    // Unique constraint violation -> duplicate event, skip silently
     if (insertErr.code === "23505") {
       if (payload.externalEventId && connector) {
         const { data: existing } = await client
@@ -271,7 +302,7 @@ export async function ingestWebhookPayload(
   }
 }
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Helpers
 
 async function dispatchWebhookCommand(
   client: SupabaseClient,
@@ -283,17 +314,24 @@ async function dispatchWebhookCommand(
 ) {
   if (!normalizedEvent) return
 
+  const validationError = getWebhookDispatchValidationError(normalizedEvent, payload.data)
+  if (validationError) {
+    throw new Error(validationError)
+  }
+
   const invoiceId = getString(payload.data, "invoiceId", "invoice_id")
   const appointmentId = getString(payload.data, "appointmentId", "appointment_id")
 
-  if (normalizedEvent === "reservation.cancelled" && appointmentId) {
+  if (normalizedEvent === "reservation.cancelled") {
+    if (!appointmentId) throw new Error("reservation.cancelled requires appointmentId in webhook data.")
     await cancelAppointment(client, appointmentId, organizationId)
     return
   }
 
-  if (normalizedEvent === "reservation.rescheduled" && appointmentId) {
+  if (normalizedEvent === "reservation.rescheduled") {
     const startsAt = getString(payload.data, "startsAt", "starts_at", "startAt")
     const endsAt = getString(payload.data, "endsAt", "ends_at", "endAt")
+    if (!appointmentId) throw new Error("reservation.rescheduled requires appointmentId in webhook data.")
     if (!startsAt || !endsAt) {
       throw new Error("reservation.rescheduled requires startsAt and endsAt in webhook data.")
     }
@@ -301,7 +339,8 @@ async function dispatchWebhookCommand(
     return
   }
 
-  if (normalizedEvent === "reservation.completed" && appointmentId) {
+  if (normalizedEvent === "reservation.completed") {
+    if (!appointmentId) throw new Error("reservation.completed requires appointmentId in webhook data.")
     await completeAppointment(
       client,
       appointmentId,
@@ -311,12 +350,14 @@ async function dispatchWebhookCommand(
     return
   }
 
-  if (normalizedEvent === "invoice.sent" && invoiceId) {
+  if (normalizedEvent === "invoice.sent") {
+    if (!invoiceId) throw new Error("invoice.sent requires invoiceId in webhook data.")
     await sendInvoice(client, invoiceId, organizationId, `Sent by ${provider} webhook`)
     return
   }
 
-  if (normalizedEvent === "invoice.paid" && invoiceId) {
+  if (normalizedEvent === "invoice.paid") {
+    if (!invoiceId) throw new Error("invoice.paid requires invoiceId in webhook data.")
     let amountPaid = getNumber(payload.data, "amountPaid", "amount_paid", "amount")
     const { data: inv } = await client
       .from("invoices")
