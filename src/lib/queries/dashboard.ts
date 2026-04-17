@@ -78,6 +78,20 @@ export async function getDashboardSummary(
   const pendingInvoiceCount  = pendingInvs?.length ?? 0
   const pendingInvoiceAmount = sumRemaining(pendingInvs)
 
+  // Active rescue actions (investigating or action_taken state)
+  let activeRescueActionsCount = 0
+  try {
+    const { data: rescueRows } = await client
+      .from("ai_actions")
+      .select("entity_id", { count: "exact" })
+      .eq("organization_id", organizationId)
+      .in("action_type", ["receivable_risk_detected", "customer_followup_sent", "financing_options_scouted", "payment_plan_suggested"])
+      .neq("action_type", "escalation_triggered")
+    // Count distinct invoices with an active rescue action
+    const seen = new Set((rescueRows ?? []).map((r: Record<string, unknown>) => r.entity_id))
+    activeRescueActionsCount = seen.size
+  } catch { /* ignore */ }
+
   let unhappyGuestCount = 0
   let feedbackSpotlight: DashboardSummary["feedbackSpotlight"] = []
   let recentAiActivity: DashboardSummary["recentAiActivity"] = []
@@ -163,6 +177,7 @@ export async function getDashboardSummary(
       pendingInvoiceCount,
       pendingInvoiceAmount,
       unhappyGuestCount,
+      activeRescueActionsCount,
     },
     recentReservations,
     financeSnapshot: { weeklyRevenue, weeklyExpenses, netCashFlow },

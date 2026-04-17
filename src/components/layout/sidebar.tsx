@@ -13,11 +13,13 @@ import {
   DollarSign,
   Truck,
   Plug,
+  Zap,
 } from "lucide-react"
 
 const coreItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/appointments", label: "Reservations", icon: CalendarDays },
+  { href: "/rescue", label: "Rescue", icon: Zap },
+  { href: "/appointments", label: "Bookings", icon: CalendarDays },
   { href: "/workflow", label: "Workflow", icon: GitBranch },
 ]
 

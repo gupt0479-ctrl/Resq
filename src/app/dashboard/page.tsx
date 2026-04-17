@@ -10,21 +10,15 @@ import { Badge } from "@/components/ui/badge"
 import {
   AlertTriangle,
   ArrowRight,
-  CalendarDays,
   Clock,
   DollarSign,
   MessageSquare,
   Plug,
   TrendingUp,
+  Zap,
 } from "lucide-react"
 
 export const dynamic = "force-dynamic"
-
-const MOCK_INVENTORY_ALERTS = [
-  { name: "Wagyu Ribeye", qty: 4, unit: "portions", status: "critical" },
-  { name: "Braised Short Rib", qty: 7, unit: "portions", status: "low" },
-  { name: "Heirloom Beets", qty: 2.5, unit: "kg", status: "low" },
-]
 
 function fmt(n: number) {
   return n.toLocaleString("en-US", {
@@ -125,7 +119,6 @@ export default async function DashboardPage() {
     integrationConnectors,
     kpis,
     managerSummary,
-    recentReservations,
     feedbackSpotlight,
     recentAiActivity,
   } = summary
@@ -140,40 +133,40 @@ export default async function DashboardPage() {
     <div className="space-y-5 p-6">
       <div>
         <h1 className="text-xl font-semibold text-foreground">Good morning, Sarah</h1>
-        <p className="text-xs text-muted-foreground">{today()} · Ember Table</p>
+        <p className="text-xs text-muted-foreground">{today()} · OpsPilot Rescue</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
-          title="Today's Reservations"
-          value={String(kpis.todayReservationCount)}
-          sub={`${kpis.upcomingReservationCount} upcoming`}
-          icon={<CalendarDays className="h-4 w-4" />}
-          color="blue"
-        />
-        <KpiCard
-          title="Today's Revenue"
-          value={fmt(kpis.todayRevenue)}
-          sub="from finance_transactions"
-          icon={<DollarSign className="h-4 w-4" />}
-          color="green"
-        />
-        <KpiCard
-          title="Overdue Invoices"
+          title="Overdue Receivables"
           value={String(kpis.overdueInvoiceCount)}
-          sub={`${fmt(kpis.overdueInvoiceAmount)} outstanding`}
+          sub={`${fmt(kpis.overdueInvoiceAmount)} total owed`}
           icon={<AlertTriangle className="h-4 w-4" />}
           color={kpis.overdueInvoiceCount > 0 ? "red" : "green"}
         />
         <KpiCard
+          title="At-Risk Cash"
+          value={fmt(kpis.overdueInvoiceAmount + kpis.pendingInvoiceAmount)}
+          sub={`${kpis.pendingInvoiceCount} pending + ${kpis.overdueInvoiceCount} overdue`}
+          icon={<DollarSign className="h-4 w-4" />}
+          color={kpis.overdueInvoiceAmount > 0 ? "amber" : "green"}
+        />
+        <KpiCard
+          title="Active Rescue Cases"
+          value={String(kpis.activeRescueActionsCount)}
+          sub="invoices with recovery in progress"
+          icon={<Zap className="h-4 w-4" />}
+          color={kpis.activeRescueActionsCount > 0 ? "blue" : "green"}
+        />
+        <KpiCard
           title="Pending Receivables"
           value={fmt(kpis.pendingInvoiceAmount)}
-          sub={`${kpis.pendingInvoiceCount} invoice${kpis.pendingInvoiceCount !== 1 ? "s" : ""}`}
+          sub={`${kpis.pendingInvoiceCount} invoice${kpis.pendingInvoiceCount !== 1 ? "s" : ""} sent`}
           icon={<Clock className="h-4 w-4" />}
           color="amber"
         />
         <KpiCard
-          title="Guests needing attention"
+          title="Customers Needing Attention"
           value={String(kpis.unhappyGuestCount)}
           sub="flagged reviews or urgency ≥ 4"
           icon={<MessageSquare className="h-4 w-4" />}
@@ -374,128 +367,82 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Recent Reservations
-              </CardTitle>
+          <Card className="border-primary/15 bg-primary/[0.03]">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-primary" />
+                <CardTitle className="text-sm font-semibold">Cashflow Rescue</CardTitle>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                AI-powered recovery for overdue receivables — follow-up, financing, and payment plans.
+              </p>
             </CardHeader>
-            <CardContent className="space-y-3 pb-5">
-              {recentReservations.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No reservations found.</p>
-              ) : (
-                recentReservations.map((reservation) => (
-                  <div
-                    key={reservation.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {reservation.customerName}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {reservation.serviceName} · {reservation.covers} cover
-                        {reservation.covers === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-foreground">
-                        {new Date(reservation.startsAt).toLocaleString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {reservation.status}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
+            <CardContent className="space-y-3 pb-4">
+              <div className="flex items-center gap-3 text-xs">
+                <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 font-semibold text-red-700">
+                  {kpis.overdueInvoiceCount} overdue
+                </span>
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-semibold text-blue-700">
+                  {kpis.activeRescueActionsCount} in recovery
+                </span>
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
+                  {fmt(kpis.overdueInvoiceAmount)} at risk
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Each case moves through: detect → follow-up → financing → payment plan → escalate.
+                All steps are AI-generated and logged for audit.
+              </p>
+              <Link
+                href="/rescue"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Open rescue queue
+                <ArrowRight className="h-3 w-3" />
+              </Link>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Financial Snapshot
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-5">
-            <div className="grid grid-cols-3 divide-x divide-border">
-              {[
-                {
-                  label: "Revenue this week",
-                  value: fmt(financeSnapshot.weeklyRevenue),
-                  color: "text-emerald-600",
-                },
-                {
-                  label: "Expenses this week",
-                  value: fmt(financeSnapshot.weeklyExpenses),
-                  color: "text-blue-600",
-                },
-                {
-                  label: "Net cash flow",
-                  value: fmt(financeSnapshot.netCashFlow),
-                  color:
-                    financeSnapshot.netCashFlow >= 0 ? "text-emerald-600" : "text-red-600",
-                },
-              ].map(({ color, label, value }) => (
-                <div key={label} className="px-4 text-center first:pl-0 last:pr-0">
-                  <p className={`text-xl font-bold ${color}`}>{value}</p>
-                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{label}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
-              {cashTrend}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Inventory Alerts
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 pb-5">
-            {MOCK_INVENTORY_ALERTS.map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className={`h-2 w-2 rounded-full ${item.status === "critical" ? "bg-red-500" : "bg-amber-400"}`}
-                  />
-                  <span className="text-sm text-foreground">{item.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {item.qty} {item.unit}
-                  </span>
-                  <Badge
-                    variant={item.status === "critical" ? "destructive" : "outline"}
-                    className="text-[10px]"
-                  >
-                    {item.status}
-                  </Badge>
-                </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Financial Snapshot
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-5">
+          <div className="grid grid-cols-3 divide-x divide-border">
+            {[
+              {
+                label: "Revenue this week",
+                value: fmt(financeSnapshot.weeklyRevenue),
+                color: "text-emerald-600",
+              },
+              {
+                label: "Expenses this week",
+                value: fmt(financeSnapshot.weeklyExpenses),
+                color: "text-blue-600",
+              },
+              {
+                label: "Net cash flow",
+                value: fmt(financeSnapshot.netCashFlow),
+                color:
+                  financeSnapshot.netCashFlow >= 0 ? "text-emerald-600" : "text-red-600",
+              },
+            ].map(({ color, label, value }) => (
+              <div key={label} className="px-4 text-center first:pl-0 last:pr-0">
+                <p className={`text-xl font-bold ${color}`}>{value}</p>
+                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{label}</p>
               </div>
             ))}
-            <a href="/inventory" className="block pt-1 text-center text-xs text-primary hover:underline">
-              View all inventory →
-            </a>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+          <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+            {cashTrend}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
