@@ -2,52 +2,71 @@
 
 ## Product shape
 
-OpsPilot is a restaurant operations app for the Ember Table demo. The app is built to prove one believable operational loop, not a general chatbot.
+OpsPilot Rescue is an agentic fintech product built on top of an existing
+small-business operations codebase. The app is not a generic chatbot and not a
+full ERP. It is a focused survival decision system.
 
 ## System rules
 
-- Supabase/Postgres is the source of truth
-- Route handlers validate and delegate
-- Services own deterministic mutations and side effects
-- Queries shape UI-ready read models
-- AI is downstream of facts, never upstream of money or workflow truth
+- Supabase/Postgres is the source of truth.
+- Route handlers validate and delegate.
+- Services own deterministic mutations and side effects.
+- Queries shape UI-ready read models.
+- AI works downstream of facts.
 
-## Main flow
+## Main survival flow
 
-1. Reservation exists
-2. Reservation completes
-3. Invoice is created deterministically
-4. Payment marks the invoice paid
-5. Finance ledger updates exactly once
-6. Feedback is analyzed and surfaced for action
-7. Dashboard summarizes what needs attention
+1. internal financial context indicates pressure
+2. the system identifies a rescue case
+3. the agent investigates using internal data plus external tools
+4. the product surfaces financing / collections / vendor / insurance actions
+5. the outcome is written back into `ai_actions` and related views
 
-## Core code paths
+## Code layers
 
 - `src/lib/domain/`
   Deterministic business rules
 - `src/lib/services/`
-  Mutation logic and side effects
+  Mutation logic and financial truth
 - `src/lib/queries/`
-  Read models for pages and APIs
+  UI-facing read-model shaping
+- `src/lib/tinyfish/`
+  TinyFish client, schemas, and mock fixtures
+- `src/lib/aws/`
+  Optional artifact storage helpers
 - `src/app/api/`
-  Route handlers
-- `agents/customer-service/`
-  Review analysis and recovery drafting
+  Route handlers, including agent scaffolding
 
 ## Forbidden AI ownership
 
-- Invoice totals
-- Amount calculations
-- Reservation status transitions
-- Invoice status transitions
-- Finance ledger writes
+- invoice totals
+- finance ledger writes
+- invoice status truth
+- deterministic payment math
+- irreversible business truth without deterministic validation
+
+## Allowed AI ownership
+
+- investigation
+- summarization
+- ranking and prioritization
+- option comparison
+- demo-safe external tool orchestration
+
+## TinyFish rule
+
+TinyFish is a first-class part of the hackathon architecture, but the system
+must remain demo-safe:
+
+1. mock mode available at all times
+2. live mode fully env-gated
+3. route handlers must not crash if live config is incomplete
 
 ## Integration rule
 
-External webhooks must:
+External inputs and agent outputs must remain auditable:
 
-1. Store raw payloads
-2. Dedupe retries
-3. Normalize into internal commands
-4. Call the same services as first-party UI actions
+1. log connector state
+2. normalize incoming or outgoing actions
+3. write auditable `ai_actions`
+4. preserve deterministic service boundaries

@@ -1,0 +1,34 @@
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "obsidian-api-key",
+      "description": "Obsidian API key",
+      "password": true
+    }
+  ],
+  "mcpServers": {
+    "aws-diagram": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "awslabs.aws-diagram-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "aws-knowledge-mcp-server": {
+      "type": "http",
+      "url": "https://knowledge-mcp.global.api.aws"
+    },
+    "obsidian": {
+      "command": "npx",
+      "args": ["-y", "obsidian-mcp-server"],
+      "env": {
+        "OBSIDIAN_API_KEY": "bb7145f6d6c2d0684869f3b8f4d7a6bd342e47329194bbf117d503f42bd639a1",
+        "OBSIDIAN_BASE_URL": "http://127.0.0.1:27123"
+      }
+    }
+  }
+}

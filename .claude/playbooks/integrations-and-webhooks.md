@@ -1,39 +1,40 @@
-# Integrations And Webhooks Playbook
+# Integrations and Webhooks Playbook
 
-Use for connector state, webhook routes, MCP ingress, or external payload normalization.
+## Integration philosophy
 
-## Required flow
+Integrations exist to strengthen the survival-agent story, not to prove the app
+can connect to everything.
 
-1. Receive payload
-2. Validate payload
-3. Store raw payload
-4. Dedupe retries
-5. Normalize into internal meaning
-6. Dispatch through the same services used by UI actions
+## Keep
 
-## Hard rules
+- connector health and status
+- webhook dedupe
+- normalized event handling
+- auditable integration behavior
 
-- External systems do not own domain truth
-- Webhooks must not write invoices or finance rows directly
-- Provider-specific shape stays at the edge
-- Dispatch results should be auditable
+## Add
 
-## Important files
+- TinyFish as a first-class connector in the product story
+- demo-safe health and demo-run routes
+- clear live vs mock behavior
 
-```text
-src/app/api/integrations/webhooks/[provider]/route.ts
-src/lib/services/integrations.ts
-src/lib/schemas/integrations.ts
-```
+## Connector rules
 
-## Accepted input aliases
+- `integration_connectors` is unique on `(organization_id, provider)`
+- seed add-ons must upsert using that uniqueness
+- display names should render correctly even if rows are created programmatically
 
-- `externalEventId` or `external_event_id`
-- `eventType` or `event_type`
-- `data` or `payload`
+## Webhook rules
 
-## Common mistakes
+- store raw payloads
+- dedupe retries
+- normalize provider events
+- dispatch through deterministic services when they change business truth
 
-- Treating webhook payload shape as the internal contract
-- Bypassing the service layer
-- Marking events processed without real dispatch or audit data
+## Demo guidance
+
+The integrations page should help a judge understand:
+
+- what external systems the agent depends on
+- whether the system is in mock or live mode
+- that failures degrade safely

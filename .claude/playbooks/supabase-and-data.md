@@ -1,43 +1,36 @@
-# Supabase And Data Playbook
+# Supabase and Data Playbook
 
-Use for migrations, seeds, schema changes, or environment setup.
+## Data strategy
 
-## Data rules
+Use the existing Supabase schema as the foundation. Additive change is the
+default. Broad renames are not worth the risk during the hackathon.
 
-- Supabase/Postgres is the source of truth
-- Business tables should carry `organization_id` where appropriate
-- `finance_transactions` is first-class, not derived later
-- Seed data must reflect believable demo states
-- Status vocabulary must match the real workflow
+## Seed order
 
-## Important files
+1. base migrations
+2. base seed
+3. survival-agent addon seed
 
-```text
-supabase/migrations/0001_core_ledger.sql
-supabase/migrations/002_invoice_reminders.sql
-supabase/migrations/004_feedback_domain.sql
-supabase/seed.sql
-supabase/seed_feedback_addon.sql
-src/lib/seed/run.ts
-```
+Canonical demo addon:
 
-## Migration rules
+- `supabase/seed_survival_demo.sql`
 
-- Prefer additive changes
-- Add indexes for real query paths
-- Encode uniqueness and idempotency in SQL when possible
-- Keep SQL, Zod contracts, and services aligned
+## Demo data goals
 
-## Seed rules
+- obvious cash pressure
+- at least one overdue receivable
+- financing option outputs
+- vendor or insurance optimization outputs
+- a believable agent timeline
 
-- Include real demo states, not filler rows
-- Include a completed finance-proof path
-- Keep README examples aligned with seed behavior
+## Data safety rules
 
-## Before calling the app ready
+- do not create fragile FK chains unnecessarily
+- prefer additive ai-action rows over risky invoice rewrites
+- keep seeds idempotent where possible
 
-- `.env.local` is valid
-- Migrations are applied to the target Supabase project
-- Seed data is loaded
-- Pages render against live data
-- Writes hit the same project that was seeded
+## Environment rules
+
+- `DEMO_ORG_ID` must match seeded data
+- TinyFish mock mode should work with zero external secrets
+- live mode must be explicit, never assumed

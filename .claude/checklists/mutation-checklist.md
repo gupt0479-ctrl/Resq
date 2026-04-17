@@ -1,20 +1,28 @@
 # Mutation Checklist
 
-Run this after changing any route, service, webhook, or SQL path that mutates business state.
+Use this before changing data or deterministic service logic.
 
-## Verify
+## Must stay deterministic
 
-- request input is validated
-- `organization_id` scope is preserved
-- status transitions are explicit
-- deterministic side effects happen in the service layer
-- idempotency is handled where retries are realistic
-- audit/event rows are written when the workflow depends on them
-- routes stay thin and reusable services do the real work
-- no AI call was introduced into a deterministic mutation path
+- [ ] invoice generation
+- [ ] payment marking
+- [ ] finance transaction creation
+- [ ] webhook dedupe
 
-## Extra Checks For Finance
+## Questions to answer
 
-- paid invoice still produces exactly one revenue row
-- empty/fresh DB states still return safe summary output
-- no duplicate ledger write can happen from retry paths
+- [ ] Is this change truly required for the survival-agent demo?
+- [ ] Can the same effect be achieved with a read model or seeded data instead?
+- [ ] Does this introduce any hidden risk into money-related flows?
+
+## If AI is involved
+
+- [ ] AI is not deciding financial truth
+- [ ] AI output is advisory or auditably orchestrated
+- [ ] failure mode is explicit and recoverable
+
+## Before merge
+
+- [ ] Added or updated tests if behavior changed materially
+- [ ] Verified affected route manually
+- [ ] Confirmed the demo path still works

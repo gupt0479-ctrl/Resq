@@ -451,6 +451,7 @@ function providerDisplayName(provider: string): string {
     yelp:           "Yelp",
     gmail:          "Gmail",
     manual:         "Manual / Webhook",
+    tinyfish:       "TinyFish Web Agent",
   }
   return names[provider] ?? provider
 }

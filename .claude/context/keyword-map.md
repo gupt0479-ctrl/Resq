@@ -1,35 +1,33 @@
 # Keyword Map
 
-Use this file when a prompt is broad or ambiguous.
+Use this when translating the legacy codebase into the new product narrative.
 
-## Routing
+## Product terms
 
-- Supabase, migration, seed, schema, SQL, RLS
-  Read: `context/current-state.md`, `playbooks/supabase-and-data.md`, `playbooks/backend-and-api.md`
+| Legacy term | New narrative term | Notes |
+|-------------|--------------------|-------|
+| Ops dashboard | Survival agent | Prefer “survival agent” in pitch copy |
+| restaurant ops | SMB survival | Use “small business” unless a route is explicitly legacy |
+| reservation / appointment | job / customer engagement / legacy appointment | Keep DB names as-is |
+| guest | customer | Prefer customer everywhere visible |
+| feedback recovery | support signal | Secondary story, not the headline |
+| inventory | cost pressure | Only if it supports vendor optimization |
+| workflow | agent runs / audit trail | Stronger for judges |
 
-- Invoice, payment, paid, revenue, ledger, finance, overdue
-  Read: `workflows/restaurant-core-demo.md`, `playbooks/invoice-and-finance.md`, `checklists/mutation-checklist.md`
+## Technical terms
 
-- Dashboard, KPI, page wiring, real data, mock removal
-  Read: `context/current-state.md`, `playbooks/ui-and-read-models.md`, `checklists/demo-readiness.md`
+| Term | Meaning |
+|------|---------|
+| deterministic | business truth not decided by AI |
+| rescue case | a survival-priority item that needs action |
+| survival scan | combined collections + financing + optimization run |
+| mock mode | demo-safe mode with no external dependencies |
+| live mode | real external calls, only when verified |
 
-- Webhook, connector, MCP, n8n, OpenTable, Square, dedupe
-  Read: `playbooks/integrations-and-webhooks.md`, `playbooks/backend-and-api.md`
+## Copy rules
 
-- AI, summary, classification, feedback, recovery
-  Read: `playbooks/ai-features.md`, `context/architecture.md`, `checklists/ai-change-checklist.md`
-
-- Bug, refactor, cleanup, rewrite
-  Read: `context/current-state.md`, `context/architecture.md`, `decisions/decision-log.md`, `checklists/change-planning.md`
-
-- Demo, judge, story, pitch
-  Read: `workflows/restaurant-core-demo.md`, `context/current-state.md`, `checklists/demo-readiness.md`
-
-- Merge, `origin/main`, teammate sync
-  Read: `context/remote-main-and-merge.md`, `context/current-state.md`
-
-## Tie-breakers
-
-- Finance rules beat convenience
-- Real-data rules beat mock speed
-- Deterministic workflow rules beat AI experimentation
+- Prefer “small business” over “restaurant” unless a screen is clearly legacy.
+- Prefer “customer” over “guest”.
+- Prefer “agent run” over “workflow event”.
+- Prefer “cash stress”, “receivables risk”, and “survival action” over generic
+  “performance” wording.
