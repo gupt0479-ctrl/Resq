@@ -348,7 +348,7 @@ export function ReservationsClient({
       <div className="rounded-xl border border-border bg-card p-4 space-y-3">
         <div className="flex items-center gap-2">
           <div className="size-6 rounded-md bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">AI</div>
-          <h2 className="text-sm font-semibold text-foreground">Reservation Assistant</h2>
+          <h2 className="text-sm font-semibold text-foreground">Booking Assistant</h2>
           <span className="text-xs text-muted-foreground">— type any request in natural language</span>
         </div>
         <div className="flex gap-2">
@@ -393,7 +393,7 @@ export function ReservationsClient({
                   <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2.5">
                     <p className="text-sm font-semibold text-green-800">Booking confirmed ✓</p>
                     <p className="text-xs text-green-700 mt-0.5">
-                      {aiGuestForm.name} · {aiGuestForm.covers} guest{aiGuestForm.covers !== 1 ? "s" : ""} · {aiResult.starts_at ? fmtDate(aiResult.starts_at) : ""}
+                      {aiGuestForm.name} · {aiGuestForm.covers} attendee{aiGuestForm.covers !== 1 ? "s" : ""} · {aiResult.starts_at ? fmtDate(aiResult.starts_at) : ""}
                     </p>
                   </div>
                 ) : (
@@ -449,7 +449,7 @@ export function ReservationsClient({
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Reservations</h1>
+          <h1 className="text-xl font-semibold text-foreground">Bookings</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {appointments.length} total · {appointments.filter(a => a.status === "confirmed" || a.status === "scheduled").length} upcoming
           </p>
@@ -484,20 +484,20 @@ export function ReservationsClient({
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">
-            {statusFilter === "all" ? "All Reservations" : APPOINTMENT_STATUS_LABEL[statusFilter as AppointmentStatus]} ({filtered.length})
+            {statusFilter === "all" ? "All Bookings" : APPOINTMENT_STATUS_LABEL[statusFilter as AppointmentStatus]} ({filtered.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No reservations found.</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">No bookings found.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-xs text-muted-foreground text-left">
-                    <th className="pb-2 pr-4 font-medium">Guest</th>
+                    <th className="pb-2 pr-4 font-medium">Customer</th>
                     <th className="pb-2 pr-4 font-medium">Experience</th>
-                    <th className="pb-2 pr-4 font-medium">Covers</th>
+                    <th className="pb-2 pr-4 font-medium">Party Size</th>
                     <th className="pb-2 pr-4 font-medium">Date & Time</th>
                     <th className="pb-2 pr-4 font-medium">Server</th>
                     <th className="pb-2 pr-4 font-medium">Status</th>
@@ -575,7 +575,7 @@ export function ReservationsClient({
       <Dialog open={modal === "complete"} onClose={() => { setModal(null); setCompleteResult(null) }}>
         <DialogHeader>
           <DialogTitle>
-            {completeResult ? "Reservation Completed" : `Complete — ${selectedAppt?.customerName ?? ""}`}
+            {completeResult ? "Booking Completed" : `Complete — ${selectedAppt?.customerName ?? ""}`}
           </DialogTitle>
         </DialogHeader>
         <DialogBody>
@@ -695,7 +695,7 @@ export function ReservationsClient({
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Guest Name *</label>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Customer Name *</label>
                 <Input
                   placeholder="Full name"
                   value={bookForm.customerName}
@@ -706,7 +706,7 @@ export function ReservationsClient({
                 <label className="text-xs font-medium text-muted-foreground block mb-1">Email *</label>
                 <Input
                   type="email"
-                  placeholder="guest@email.com"
+                  placeholder="customer@example.com"
                   value={bookForm.customerEmail}
                   onChange={e => setBookForm(f => ({ ...f, customerEmail: e.target.value }))}
                 />
@@ -757,7 +757,7 @@ export function ReservationsClient({
         <DialogFooter>
           <Button variant="outline" onClick={() => setModal(null)}>Cancel</Button>
           <Button onClick={handleBook} disabled={actionLoading}>
-            {actionLoading ? "Booking…" : "Book Reservation"}
+            {actionLoading ? "Booking…" : "Book Appointment"}
           </Button>
         </DialogFooter>
       </Dialog>

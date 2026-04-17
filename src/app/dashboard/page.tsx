@@ -140,12 +140,12 @@ export default async function DashboardPage() {
     <div className="space-y-5 p-6">
       <div>
         <h1 className="text-xl font-semibold text-foreground">Good morning, Sarah</h1>
-        <p className="text-xs text-muted-foreground">{today()} · Ember Table</p>
+        <p className="text-xs text-muted-foreground">{today()} · OpsPilot Rescue</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
-          title="Today's Reservations"
+          title="Open Invoices"
           value={String(kpis.todayReservationCount)}
           sub={`${kpis.upcomingReservationCount} upcoming`}
           icon={<CalendarDays className="h-4 w-4" />}
@@ -173,7 +173,7 @@ export default async function DashboardPage() {
           color="amber"
         />
         <KpiCard
-          title="Guests needing attention"
+          title="At-Risk Accounts"
           value={String(kpis.unhappyGuestCount)}
           sub="flagged reviews or urgency ≥ 4"
           icon={<MessageSquare className="h-4 w-4" />}
@@ -245,7 +245,7 @@ export default async function DashboardPage() {
               <CardTitle className="text-sm font-semibold">Feedback &amp; recovery</CardTitle>
             </div>
             <p className="text-xs text-muted-foreground">
-              Flagged reviews and guest recovery drafts. Low scores and safety-related notes surface here first.
+              Flagged reviews and customer recovery drafts. Low scores and safety-related notes surface here first.
             </p>
           </CardHeader>
           <CardContent className="space-y-2 pb-4">
@@ -377,12 +377,12 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Recent Reservations
+                Recent Bookings
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 pb-5">
               {recentReservations.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No reservations found.</p>
+                <p className="text-sm text-muted-foreground">No bookings found.</p>
               ) : (
                 recentReservations.map((reservation) => (
                   <div
@@ -394,7 +394,7 @@ export default async function DashboardPage() {
                         {reservation.customerName}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {reservation.serviceName} · {reservation.covers} cover
+                        {reservation.serviceName} · {reservation.covers} seat
                         {reservation.covers === 1 ? "" : "s"}
                       </p>
                     </div>

@@ -165,7 +165,7 @@ export default async function ShipmentsPage() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Procurement</h1>
         <p className="text-xs text-muted-foreground">
-          Ledger inventory purchases (last 7 days through next 7) · Ember Table
+          Ledger inventory purchases (last 7 days through next 7) · OpsPilot Rescue
         </p>
       </div>
 

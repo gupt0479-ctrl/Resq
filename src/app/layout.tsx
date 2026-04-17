@@ -5,8 +5,8 @@ import { ThemeProvider } from "@/components/theme/theme-provider"
 import { getThemeInitScript } from "@/components/theme/theme-shared"
 
 export const metadata: Metadata = {
-  title: "OpsPilot · Ember Table",
-  description: "AI-powered restaurant operations for Ember Table, Minneapolis",
+  title: "OpsPilot Rescue",
+  description: "Autonomous cashflow recovery for small businesses",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
