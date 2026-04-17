@@ -100,10 +100,10 @@ function buildExpenseChartData(
     byCat[t.category] = (byCat[t.category] ?? 0) + t.amount
   }
   let extra = 0
-  return Object.entries(byCat).map(([name, value]) => ({
-    name,
+  return Object.entries(byCat).map(([cat, value]) => ({
+    name:  cat === "dining_revenue" ? "Revenue" : cat,
     value: Math.round(value * 100) / 100,
-    color: CATEGORY_COLORS[name] ?? EXTRA_COLORS[extra++ % EXTRA_COLORS.length],
+    color: CATEGORY_COLORS[cat] ?? EXTRA_COLORS[extra++ % EXTRA_COLORS.length],
   }))
 }
 
@@ -486,7 +486,7 @@ export default async function FinancePage() {
           borderColor="border-l-blue-400"
           icon={<Lightbulb className="h-4 w-4 text-blue-500" />}
           title="Labor is 74% of weekly expenses"
-          body="Industry benchmark for restaurants is 28-35%. Your labor cost ratio suggests either a slow week for revenue or an opportunity to review scheduling."
+          body="Industry benchmark for businesses is 28-35%. Your labor cost ratio suggests either a slow week for revenue or an opportunity to review scheduling."
         />
         <InsightCard
           borderColor="border-l-green-400"
@@ -498,7 +498,7 @@ export default async function FinancePage() {
           borderColor="border-l-purple-400"
           icon={<Calendar className="h-4 w-4 text-purple-500" />}
           title="Cash flow forecast: watch next 7 days"
-          body={`You have 5 confirmed reservations worth an estimated $400-600 in revenue. Combined with ${fmt(summary.overdueReceivables)} in overdue invoices if collected, next week could close positive. Key risk: if costs stay elevated and covers stay below 10/day, the week runs negative.`}
+          body={`You have 5 confirmed bookings worth an estimated $400-600 in revenue. Combined with ${fmt(summary.overdueReceivables)} in overdue invoices if collected, next week could close positive. Key risk: if costs stay elevated and bookings stay below 10/day, the week runs negative.`}
           fullWidth
         />
       </div>
@@ -506,7 +506,7 @@ export default async function FinancePage() {
       {/* ── Invoice agent panel ──────────────────────────────────────────────── */}
       <SectionHeader
         title="From the invoice agent"
-        sub="Live data from completed reservations"
+        sub="Live data from completed bookings"
       />
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -536,7 +536,7 @@ export default async function FinancePage() {
                 <TableHeader>
                   <TableRow className="border-b border-border hover:bg-transparent">
                     <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Invoice #</TableHead>
-                    <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Guest</TableHead>
+                    <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Customer</TableHead>
                     <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider text-right">Amount</TableHead>
                     <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Status</TableHead>
                     <TableHead className="bg-muted text-muted-foreground text-xs uppercase tracking-wider">Method</TableHead>
@@ -732,7 +732,7 @@ export default async function FinancePage() {
           </div>
           <div className="p-5 space-y-3">
             {[
-              { label: "Confirmed reservations (5): est.", value: "$400–600" },
+              { label: "Confirmed bookings (5): est.", value: "$400–600" },
               { label: "Pending receivables",              value: fmt(summary.pendingReceivables) },
               { label: "Overdue to collect",               value: fmt(summary.overdueReceivables) },
               { label: "Scheduled expenses (est.)",        value: "~$3,200" },

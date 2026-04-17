@@ -244,7 +244,7 @@ export default function InventoryPage({
       <div>
         <h1 className="text-xl font-semibold text-foreground">Inventory</h1>
         <p className="text-xs text-muted-foreground">
-          Stock levels, alerts, and reorder signals · Ember Table
+          Stock levels, alerts, and reorder signals · OpsPilot Rescue
         </p>
       </div>
 
