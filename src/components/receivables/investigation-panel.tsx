@@ -143,6 +143,7 @@ interface InvestigationPanelProps {
   customerName: string
   balance:      number
   daysOverdue:  number
+  fullWidth?:   boolean
 }
 
 export function InvestigationPanel({
@@ -151,6 +152,7 @@ export function InvestigationPanel({
   customerName,
   balance,
   daysOverdue,
+  fullWidth = false,
 }: InvestigationPanelProps) {
   const [open, setOpen]             = useState(false)
   const [loading, setLoading]       = useState(false)
@@ -235,15 +237,25 @@ export function InvestigationPanel({
   return (
     <>
       {/* Trigger button */}
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => { setOpen(true); if (!result) runInvestigation() }}
-        className="gap-1.5"
-      >
-        <Search className="size-3.5" />
-        Investigate
-      </Button>
+      {fullWidth ? (
+        <button
+          onClick={() => { setOpen(true); if (!result) runInvestigation() }}
+          className="w-full flex items-center justify-center gap-2 rounded-md bg-foreground text-background px-4 py-3 text-[13.5px] font-medium hover:opacity-90 transition-opacity"
+        >
+          Run collections agent
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => { setOpen(true); if (!result) runInvestigation() }}
+          className="gap-1.5"
+        >
+          <Search className="size-3.5" />
+          Investigate
+        </Button>
+      )}
 
       {/* Slide-over panel */}
       {open && (
