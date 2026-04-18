@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import { recordAiAction } from "@/lib/services/ai-actions"
+import type { AiActionType } from "@/lib/constants/enums"
 
 const anthropic = new Anthropic()
 
@@ -62,9 +63,18 @@ async function getPreviousActions(
   return (data ?? []).map((r) => r.action_type as string)
 }
 
-function decideNextAction(previousActions: string[]): string {
-  if (previousActions.includes("escalation_triggered")) return "already_escalated"
-  if (previousActions.includes("payment_plan_suggested")) return "payment_plan_suggested"
+// Maps our state machine steps to valid AiActionType values
+const RESCUE_STEPS: AiActionType[] = [
+  "receivable_risk_detected",
+  "customer_followup_sent",
+  "financing_options_scouted",
+  "payment_plan_suggested",
+  "rescue_case_resolved",
+]
+
+function decideNextAction(previousActions: string[]): AiActionType | "already_resolved" {
+  if (previousActions.includes("rescue_case_resolved")) return "already_resolved"
+  if (previousActions.includes("payment_plan_suggested")) return "rescue_case_resolved"
   if (previousActions.includes("financing_options_scouted")) return "payment_plan_suggested"
   if (previousActions.includes("customer_followup_sent")) return "financing_options_scouted"
   if (previousActions.includes("receivable_risk_detected")) return "customer_followup_sent"
@@ -87,17 +97,12 @@ export async function POST(
   const previousActions = await getPreviousActions(client, invoiceId)
   const nextActionType = decideNextAction(previousActions)
 
-  if (nextActionType === "already_escalated") {
+  if (nextActionType === "already_resolved") {
     return NextResponse.json({
-      actionType: "already_escalated",
-      message: "This case has already been escalated. No further automated actions available.",
-    })
-  }
-
-  if (nextActionType === "payment_plan_suggested" && previousActions.includes("payment_plan_suggested")) {
-    return NextResponse.json({
-      actionType: "resolved",
-      message: "All automated recovery steps have been taken for this invoice.",
+      actionType: "already_resolved",
+      summary: "All recovery steps complete.",
+      detail: "This case has been fully processed. No further automated actions are needed.",
+      nextRecommendedStep: "Review outcome and close the case.",
     })
   }
 
@@ -143,7 +148,7 @@ Respond with a JSON object with these fields:
     aiOutput = JSON.parse(jsonMatch[0])
   } catch {
     // Fallback deterministic output
-    const fallbacks: Record<string, typeof aiOutput> = {
+    const fallbacks: Partial<Record<AiActionType, typeof aiOutput>> = {
       receivable_risk_detected: {
         summary: `$${invoice.amount.toFixed(0)} receivable from ${invoice.customerName} is ${invoice.daysOverdue} days overdue — flagged for recovery.`,
         detail: `Invoice #${invoice.invoiceNumber} for $${invoice.amount.toFixed(2)} was due ${invoice.dueDate ?? "recently"} and remains unpaid after ${invoice.daysOverdue} days. Customer: ${invoice.customerName}.`,
@@ -164,13 +169,13 @@ Respond with a JSON object with these fields:
         detail: `Proposed payment plan for Invoice #${invoice.invoiceNumber} ($${invoice.amount.toFixed(2)}):\n\n- Option A: 50% now ($${(invoice.amount * 0.5).toFixed(0)}), remainder in 30 days\n- Option B: 3 equal payments of $${(invoice.amount / 3).toFixed(0)} over 90 days\n- Option C: Full payment with 5% early-payment discount if settled this week\n\nAll options waive any late fees if accepted within 3 business days.`,
         nextRecommendedStep: "If no acceptance in 5 business days, escalate to collections.",
       },
-      escalation_triggered: {
-        summary: `Case escalated to collections for ${invoice.customerName} — $${invoice.amount.toFixed(0)} outstanding.`,
-        detail: `ESCALATION NOTICE\nInvoice #${invoice.invoiceNumber} | Customer: ${invoice.customerName} | Amount: $${invoice.amount.toFixed(2)} | ${invoice.daysOverdue} days overdue\n\nAll automated recovery steps exhausted. Prior actions: ${previousActions.join(", ")}. Recommend external collections or legal review.`,
-        nextRecommendedStep: "Assign to collections team or legal counsel.",
+      rescue_case_resolved: {
+        summary: `Case resolved for ${invoice.customerName} — $${invoice.amount.toFixed(0)} recovery complete.`,
+        detail: `RECOVERY COMPLETE\nInvoice #${invoice.invoiceNumber} | Customer: ${invoice.customerName} | Amount: $${invoice.amount.toFixed(2)} | ${invoice.daysOverdue} days overdue\n\nAll automated recovery steps exhausted. Prior actions: ${previousActions.join(", ")}. Mark as resolved or assign to collections.`,
+        nextRecommendedStep: "Close the case or escalate to legal counsel.",
       },
     }
-    aiOutput = fallbacks[nextActionType] ?? {
+    aiOutput = fallbacks[nextActionType as AiActionType] ?? {
       summary: "Recovery step executed.",
       detail: "See invoice record for details.",
       nextRecommendedStep: "Review manually.",

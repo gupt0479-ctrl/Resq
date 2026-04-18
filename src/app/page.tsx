@@ -6,8 +6,7 @@ export const metadata: Metadata = {
   description: "Autonomous cashflow recovery for small businesses",
 }
 
-// /rescue is in the sidebar but not yet built — fall back to /dashboard for all CTAs.
-const CTA_HREF = "/dashboard"
+const CTA_HREF = "/rescue"
 
 // ── Stat chips shown below hero CTA ──────────────────────────────────────────
 
@@ -100,7 +99,44 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── 4. How the agent works ───────────────────────────────────────────── */}
+      {/* ── 4. Problem section ───────────────────────────────────────────────── */}
+      <section className="border-y border-border px-6 py-20">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="mb-12 text-center text-2xl font-bold tracking-tight text-foreground">
+            The cash flow crisis is manual — and it&apos;s getting worse.
+          </h2>
+          <div className="grid gap-8 sm:grid-cols-3">
+            {[
+              {
+                stat: "60%",
+                label: "of small business failures are caused by cash flow problems, not lack of profit.",
+                accent: "text-red-600",
+              },
+              {
+                stat: "14 days",
+                label: "average time an owner spends monthly chasing late invoices manually.",
+                accent: "text-amber-600",
+              },
+              {
+                stat: "$90K",
+                label: "average outstanding receivables for a service SMB at any given time.",
+                accent: "text-blue-600",
+              },
+            ].map(({ stat, label, accent }) => (
+              <div key={stat} className="text-center">
+                <p className={`mb-2 text-4xl font-bold ${accent}`}>{stat}</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">{label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mx-auto mt-10 max-w-2xl text-center text-sm leading-relaxed text-muted-foreground">
+            Owners juggle overdue invoices, payment follow-ups, financing options, and vendor costs —
+            all manually, with no tools designed for the job. OpsPilot Rescue changes that.
+          </p>
+        </div>
+      </section>
+
+      {/* ── 5. How the agent works (4 steps) ────────────────────────────────── */}
       <section className="bg-muted/40 px-6 py-24">
         <div className="mx-auto max-w-5xl">
           <h2 className="mb-14 text-center text-2xl font-bold tracking-tight text-foreground">
@@ -123,7 +159,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── 5. Where TinyFish comes in ───────────────────────────────────────── */}
+      {/* ── 6. Where TinyFish comes in ───────────────────────────────────────── */}
       <section className="px-6 py-24">
         <div className="mx-auto grid max-w-5xl items-center gap-14 lg:grid-cols-2">
 
@@ -173,7 +209,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── 6. CTA footer ────────────────────────────────────────────────────── */}
+      {/* ── 7. CTA footer ────────────────────────────────────────────────────── */}
       <section className="bg-foreground px-6 py-28 text-center">
         <h2 className="mb-8 text-3xl font-bold tracking-tight text-background sm:text-4xl">
           One click to recover what you&apos;re owed.
