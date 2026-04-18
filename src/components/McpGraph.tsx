@@ -1,48 +1,103 @@
-const NODES = [
-  { id: "opspilot", label: "OpsPilot",  x: 200, y: 130, r: 28, primary: true },
-  { id: "tinyfish", label: "TinyFish",  x: 60,  y: 45,  r: 20 },
-  { id: "stripe",   label: "Stripe",    x: 340, y: 45,  r: 20 },
-  { id: "gmail",    label: "Gmail",     x: 60,  y: 215, r: 20 },
-  { id: "vendor",   label: "Vendors",   x: 340, y: 215, r: 20 },
-  { id: "claude",   label: "Claude AI", x: 200, y: 265, r: 20 },
+type Node = { id: string; label: string; sub: string[]; x: number; y: number; w: number; h: number; primary?: boolean }
+type Edge = { from: string; to: string; label: string }
+
+const NODES: Node[] = [
+  { id: "gmail",   label: "Gmail",          sub: ["Outreach"],                                            x: 310, y: 55,  w: 110, h: 44 },
+  { id: "vendor",  label: "Vendor Sources", sub: ["Catalog"],                                             x: 490, y: 80,  w: 130, h: 44 },
+  { id: "tinyfish",label: "TinyFish",       sub: ["Web agent"],                                           x: 100, y: 160, w: 110, h: 44 },
+  { id: "opspilot",label: "OpsPilot Rescue",sub: ["Agent core"],                                          x: 310, y: 210, w: 150, h: 50, primary: true },
+  { id: "stripe",  label: "Stripe",         sub: ["Ledger"],                                              x: 100, y: 305, w: 110, h: 44 },
+  { id: "insurance",label: "Insurance",     sub: ["Autonomous multi-step tool use", "Mock-safe and live-ready"], x: 490, y: 290, w: 160, h: 58 },
 ]
 
-const EDGES = [
-  ["opspilot", "tinyfish"],
-  ["opspilot", "stripe"],
-  ["opspilot", "gmail"],
-  ["opspilot", "vendor"],
-  ["opspilot", "claude"],
+const EDGES: Edge[] = [
+  { from: "tinyfish",  to: "opspilot", label: "fetch offers" },
+  { from: "gmail",     to: "opspilot", label: "draft outreach" },
+  { from: "vendor",    to: "opspilot", label: "compare pricing" },
+  { from: "opspilot",  to: "stripe",   label: "inspect invoice state" },
+  { from: "opspilot",  to: "insurance",label: "check renewal terms" },
 ]
 
 const nodeMap = Object.fromEntries(NODES.map(n => [n.id, n]))
 
+function midpoint(ax: number, ay: number, bx: number, by: number) {
+  return { x: (ax + bx) / 2, y: (ay + by) / 2 }
+}
+
 export function McpGraph() {
   return (
-    <svg viewBox="0 20 400 270" className="w-full" aria-hidden="true">
-      {EDGES.map(([a, b]) => {
-        const na = nodeMap[a], nb = nodeMap[b]
+    <svg viewBox="20 20 600 360" className="w-full" aria-hidden="true">
+      <defs>
+        <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="hsl(38 92% 52%)" opacity="0.7" />
+        </marker>
+      </defs>
+
+      {/* Edges */}
+      {EDGES.map(({ from, to, label }) => {
+        const a = nodeMap[from], b = nodeMap[to]
+        const x1 = a.x, y1 = a.y
+        const x2 = b.x, y2 = b.y
+        const mid = midpoint(x1, y1, x2, y2)
         return (
-          <line key={`${a}-${b}`}
-            x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}
-            stroke="hsl(220 13% 91%)" strokeWidth="1.5" strokeDasharray="5 4"
-          />
+          <g key={`${from}-${to}`}>
+            <line
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="hsl(38 92% 52%)" strokeWidth="1" strokeDasharray="5 4" opacity="0.55"
+              markerEnd="url(#arr)"
+            />
+            <text
+              x={mid.x} y={mid.y - 4}
+              textAnchor="middle"
+              fontSize="9"
+              fill="hsl(38 92% 52%)"
+              fontFamily="Inter, sans-serif"
+              opacity="0.9"
+            >
+              {label}
+            </text>
+          </g>
         )
       })}
-      {NODES.map(n => (
-        <g key={n.id} transform={`translate(${n.x},${n.y})`}>
-          <circle r={n.r} fill={n.primary ? "hsl(0 0% 10%)" : "white"} stroke="hsl(220 13% 91%)" strokeWidth="1.5" />
-          <text
-            textAnchor="middle" dy="4"
-            fontSize={n.primary ? 9 : 7.5}
-            fill={n.primary ? "white" : "hsl(0 0% 10%)"}
-            fontFamily="Inter, sans-serif"
-            fontWeight="600"
-          >
-            {n.label}
-          </text>
-        </g>
-      ))}
+
+      {/* Nodes */}
+      {NODES.map(n => {
+        const rx = n.x - n.w / 2
+        const ry = n.y - n.h / 2
+        return (
+          <g key={n.id}>
+            <rect
+              x={rx} y={ry} width={n.w} height={n.h} rx="6"
+              fill={n.primary ? "hsl(0 0% 10%)" : "white"}
+              stroke={n.primary ? "hsl(0 0% 10%)" : "hsl(220 13% 85%)"}
+              strokeWidth={n.primary ? 0 : 1}
+            />
+            <text
+              x={n.x} y={n.y - (n.sub.length > 1 ? 10 : 6)}
+              textAnchor="middle"
+              fontSize={n.primary ? 10.5 : 10}
+              fontWeight="600"
+              fill={n.primary ? "white" : "hsl(0 0% 10%)"}
+              fontFamily="Inter, sans-serif"
+            >
+              {n.label}
+            </text>
+            {n.sub.map((s, i) => (
+              <text
+                key={i}
+                x={n.x}
+                y={n.y + (n.sub.length > 1 ? (i === 0 ? 5 : 16) : 8)}
+                textAnchor="middle"
+                fontSize="8"
+                fill={n.primary ? "rgba(255,255,255,0.6)" : "hsl(220 9% 52%)"}
+                fontFamily="Inter, sans-serif"
+              >
+                {s}
+              </text>
+            ))}
+          </g>
+        )
+      })}
     </svg>
   )
 }
