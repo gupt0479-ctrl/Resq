@@ -6,15 +6,15 @@ import {
   Flame,
   LayoutDashboard,
   GitBranch,
-  AlertTriangle,
   FileText,
   DollarSign,
   Plug,
+  Zap,
 } from "lucide-react"
 
 const navItems = [
   { href: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
-  { href: "/rescue",       label: "Rescue Queue", icon: AlertTriangle },
+  { href: "/rescue",       label: "Rescue Queue", icon: Zap },
   { href: "/finance",      label: "Cashflow",     icon: DollarSign },
   { href: "/invoices",     label: "Invoices",     icon: FileText },
   { href: "/workflow",     label: "Agent Runs",   icon: GitBranch },
