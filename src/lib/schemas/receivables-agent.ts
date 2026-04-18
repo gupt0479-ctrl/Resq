@@ -40,6 +40,37 @@ export const AgentStepSchema = z.object({
   result:  z.unknown(),
 })
 
+export const WATCHLIST_IDS = [
+  "ofac", "interpol", "fatf", "eu_sanctions",
+  "sdl", "un_security_council", "world_bank", "bis_entity",
+] as const
+export type WatchlistId = typeof WATCHLIST_IDS[number]
+
+export const WATCHLIST_LABELS: Record<WatchlistId, string> = {
+  ofac:                "OFAC Sanctions List",
+  interpol:            "Interpol Most Wanted",
+  fatf:                "FATF High-Risk Jurisdictions",
+  eu_sanctions:        "EU Consolidated Sanctions",
+  sdl:                 "SDN List (US Treasury)",
+  un_security_council: "UN Security Council Sanctions",
+  world_bank:          "World Bank Debarred Entities",
+  bis_entity:          "U.S. BIS Entity List",
+}
+
+export const WatchlistHitSchema = z.object({
+  list:   z.enum(WATCHLIST_IDS),
+  label:  z.string(),
+  status: z.enum(["clear", "flagged", "inconclusive"]),
+  detail: z.string(),
+})
+
+export const WatchlistScreeningSchema = z.object({
+  screenedNames: z.array(z.string()),
+  hits:          z.array(WatchlistHitSchema),
+  overallStatus: z.enum(["clear", "review_required", "flagged"]),
+  dataSource:    z.enum(["live", "mock", "not_run"]),
+})
+
 export const CompanyInfoSchema = z.object({
   companyName: z.string().optional(),
   email:       z.string().optional(),
@@ -73,6 +104,7 @@ export const ReceivablesInvestigationResultSchema = z.object({
   companyInfo:        CompanyInfoSchema.optional(),
   verificationChecks: VerificationChecksSchema,
   creditReport:       CreditReportSchema,
+  watchlistScreening: WatchlistScreeningSchema.optional(),
   externalSignals:    ExternalSignalsSchema.optional(),
   riskFactors:        z.array(RiskFactorSchema),
   recommendedAction:  z.enum(["reminder", "payment_plan", "escalation", "write_off"]),
@@ -81,6 +113,8 @@ export const ReceivablesInvestigationResultSchema = z.object({
   agentSteps:         z.array(AgentStepSchema),
 })
 
+export type WatchlistHit = z.infer<typeof WatchlistHitSchema>
+export type WatchlistScreening = z.infer<typeof WatchlistScreeningSchema>
 export type CompanyInfo = z.infer<typeof CompanyInfoSchema>
 export type CreditRedFlag = z.infer<typeof CreditRedFlagSchema>
 export type CreditReport  = z.infer<typeof CreditReportSchema>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
   ShieldCheck,
+  ShieldAlert,
   Loader2,
   CheckSquare,
   MinusSquare,
@@ -439,6 +440,75 @@ export function InvestigationPanel({
                       </div>
                     </div>
                   </div>
+
+                  {/* Watchlist screening */}
+                  {result.watchlistScreening && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                        {result.watchlistScreening.overallStatus === "flagged"
+                          ? <ShieldAlert className="size-3.5 text-red-500" />
+                          : <ShieldCheck className="size-3.5 text-emerald-500" />}
+                        Watchlist Screening
+                        <span className={cn(
+                          "px-1.5 py-0.5 rounded text-xs font-semibold normal-case tracking-normal",
+                          result.watchlistScreening.dataSource === "live"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                            : "bg-muted text-muted-foreground",
+                        )}>
+                          {result.watchlistScreening.dataSource}
+                        </span>
+                      </p>
+
+                      {/* Overall status banner */}
+                      <div className={cn(
+                        "rounded-lg border px-4 py-2.5 mb-3 flex items-center gap-2",
+                        result.watchlistScreening.overallStatus === "flagged"
+                          ? "border-red-200 bg-red-50/60 dark:border-red-800 dark:bg-red-950/20"
+                          : result.watchlistScreening.overallStatus === "review_required"
+                          ? "border-amber-200 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/20"
+                          : "border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/20",
+                      )}>
+                        <span className={cn(
+                          "text-xs font-semibold",
+                          result.watchlistScreening.overallStatus === "flagged"   && "text-red-700 dark:text-red-300",
+                          result.watchlistScreening.overallStatus === "review_required" && "text-amber-700 dark:text-amber-300",
+                          result.watchlistScreening.overallStatus === "clear"     && "text-emerald-700 dark:text-emerald-300",
+                        )}>
+                          {result.watchlistScreening.overallStatus === "flagged"        ? "⚠ Flag Detected — Manual Review Required"
+                           : result.watchlistScreening.overallStatus === "review_required" ? "⚠ Review Required"
+                           : "✓ All Clear"}
+                        </span>
+                        {result.watchlistScreening.screenedNames.length > 0 && (
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            Screened: {result.watchlistScreening.screenedNames.join(", ")}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Per-list rows */}
+                      <div className="rounded-lg border border-border bg-card px-4 divide-y divide-border/50">
+                        {result.watchlistScreening.hits.map((hit) => (
+                          <div key={hit.list} className="flex items-center justify-between gap-3 py-2">
+                            <span className="text-xs text-muted-foreground">{hit.label}</span>
+                            <span className={cn(
+                              "shrink-0 flex items-center gap-1 text-xs font-medium",
+                              hit.status === "flagged"      && "text-red-600 dark:text-red-400",
+                              hit.status === "inconclusive" && "text-amber-600 dark:text-amber-400",
+                              hit.status === "clear"        && "text-emerald-600 dark:text-emerald-400",
+                            )}>
+                              <span className={cn(
+                                "size-1.5 rounded-full",
+                                hit.status === "flagged"      && "bg-red-500",
+                                hit.status === "inconclusive" && "bg-amber-500",
+                                hit.status === "clear"        && "bg-emerald-500",
+                              )} />
+                              {hit.status === "flagged" ? "Flagged" : hit.status === "inconclusive" ? "Inconclusive" : "Clear"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Credit report red flags */}
                   {result.creditReport && result.creditReport.redFlags.length > 0 && (

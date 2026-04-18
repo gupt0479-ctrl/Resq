@@ -290,6 +290,27 @@ export function mockSearch(query: string): TinyFishSearchResult {
   }
 }
 
+export function mockWatchlistSearch(name: string, query: string): TinyFishSearchResult {
+  return {
+    query,
+    mode: "mock",
+    results: [
+      {
+        title:   `Sanctions search — no records found for "${name}"`,
+        url:     "https://example.com/sanctions-search",
+        snippet: `Automated watchlist search returned no matching records for "${name}" across OFAC SDN, Interpol, EU consolidated sanctions, UN Security Council, World Bank debarred entities, and U.S. BIS entity list as of April 2026.`,
+        score:   0.97,
+      },
+      {
+        title:   "How to interpret a clean sanctions screening result",
+        url:     "https://example.com/sanctions-guide",
+        snippet: "A clean result means no exact or close matches were found in the screened databases. Ongoing monitoring is still recommended for high-value counterparties.",
+        score:   0.72,
+      },
+    ],
+  }
+}
+
 export function mockFetch(url: string): TinyFishFetchResult {
   return {
     url,

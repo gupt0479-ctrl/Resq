@@ -11,9 +11,13 @@ import {
   type CreditRedFlag,
   type ExternalSignals,
   type CompanyInfo,
+  type WatchlistHit,
+  type WatchlistScreening,
+  type WatchlistId,
+  WATCHLIST_LABELS,
 } from "@/lib/schemas/receivables-agent"
 import { search as tinyFishSearch } from "@/lib/tinyfish/client"
-import { mockCollectionsSearch } from "@/lib/tinyfish/mock-data"
+import { mockCollectionsSearch, mockWatchlistSearch } from "@/lib/tinyfish/mock-data"
 
 // ── Tool implementations (query Supabase, never modify) ───────────────────────
 
@@ -532,11 +536,26 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
       required: ["customer_name"],
     },
   },
+  {
+    name: "screen_watchlists",
+    description: "Screen key people and the company name against 8 major international sanctions and watchlists: OFAC, Interpol Most Wanted, FATF, EU Consolidated Sanctions, SDN, UN Security Council, World Bank Debarred, and U.S. BIS Entity List.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        names: {
+          type: SchemaType.ARRAY,
+          items: { type: SchemaType.STRING },
+          description: "Names of people or the company entity to screen",
+        },
+      },
+      required: ["names"],
+    },
+  },
 ]
 
 const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for OpsPilot, an SMB cashflow recovery system.
 
-REQUIRED: Call ALL EIGHT tools before writing any conclusions.
+REQUIRED: Call ALL NINE tools before writing any conclusions.
 
 Call tools in this order:
 1. get_invoice_status — understand what is owed
@@ -547,6 +566,7 @@ Call tools in this order:
 6. run_verification_checks — generate the KYC checklist
 7. evaluate_credit_report — check for credit red flags (late payments, charge-offs, fraud signals)
 8. search_external_signals — search for news, bankruptcy filings, and market conditions affecting this customer
+9. screen_watchlists — screen the customer and key people against OFAC, Interpol, SDN, EU, UN, World Bank, BIS watchlists
 
 After gathering all data, write a concise investigation summary that references exact figures ("$450 overdue for 23 days, 60% on-time rate"), identifies the key risk factors, and states your recommended action and why.`
 
@@ -576,7 +596,8 @@ export async function runReceivablesInvestigation(
   let openInvData:  Record<string, unknown> | null = null
   let verData:      VerificationChecks | null = null
   let creditData:   CreditReport | null = null
-  let externalData: ExternalSignals | null = null
+  let externalData:  ExternalSignals | null = null
+  let watchlistData: WatchlistScreening | null = null
 
   // ── Phase 1: gather data via tool calls ──────────────────────────────────
   const toolModel = genAI.getGenerativeModel({
@@ -654,6 +675,70 @@ export async function runReceivablesInvestigation(
           dataSource: mode === "live" ? "live" : "mock",
         }
         toolResult = externalData
+      } else if (call.name === "screen_watchlists") {
+        const { names } = call.args as { names: string[] }
+        const namesToScreen = names.slice(0, 3)
+
+        const LIST_CLUSTERS: Array<{ ids: WatchlistId[]; buildQuery: (n: string) => string }> = [
+          {
+            ids: ["ofac", "sdl"],
+            buildQuery: n => `"${n}" OFAC SDN sanctions blocked designated Treasury`,
+          },
+          {
+            ids: ["interpol", "un_security_council", "fatf"],
+            buildQuery: n => `"${n}" Interpol most wanted UN Security Council sanctions FATF`,
+          },
+          {
+            ids: ["eu_sanctions", "world_bank", "bis_entity"],
+            buildQuery: n => `"${n}" EU consolidated sanctions "World Bank" debarred BIS entity list`,
+          },
+        ]
+
+        const allHits: WatchlistHit[] = []
+        let wlDataSource: "live" | "mock" = "mock"
+
+        for (const name of namesToScreen) {
+          const clusterResults = await Promise.all(
+            LIST_CLUSTERS.map(async ({ ids, buildQuery }) => {
+              const q = buildQuery(name)
+              const r = await tinyFishSearch(q, { limit: 5 })
+              if (r.mode === "live") wlDataSource = "live"
+              const usedResult = r.degradedFromLive ? mockWatchlistSearch(name, q) : r
+              return { ids, usedResult, screenedName: name }
+            })
+          )
+
+          for (const { ids, usedResult, screenedName } of clusterResults) {
+            const combined = usedResult.results
+              .map(r => `${r.title} ${r.snippet}`)
+              .join(" ")
+              .toLowerCase()
+            const nameLower = screenedName.toLowerCase()
+            const isMatch =
+              combined.includes(nameLower) &&
+              /sanction|wanted|debarred|designated|blocked|prohibited/.test(combined)
+
+            for (const listId of ids) {
+              allHits.push({
+                list:   listId,
+                label:  WATCHLIST_LABELS[listId],
+                status: isMatch ? "flagged" : "clear",
+                detail: isMatch
+                  ? `Potential match found for "${screenedName}" — manual review required`
+                  : `No match found for "${screenedName}"`,
+              })
+            }
+          }
+        }
+
+        const flaggedCount = allHits.filter(h => h.status === "flagged").length
+        watchlistData = {
+          screenedNames: namesToScreen,
+          hits:          allHits,
+          overallStatus: flaggedCount > 0 ? "flagged" : "clear",
+          dataSource:    wlDataSource,
+        }
+        toolResult = watchlistData
       } else {
         toolResult = { error: `Unknown tool: ${call.name}` }
       }
@@ -727,6 +812,11 @@ export async function runReceivablesInvestigation(
     if (people.length) companyInfo.keyPeople = people
   }
 
+  // Override watchlistsClear in verificationChecks with actual screening result
+  if (watchlistData && verData) {
+    verData = { ...verData, watchlistsClear: watchlistData.overallStatus === "clear" }
+  }
+
   return ReceivablesInvestigationResultSchema.parse({
     customerId:         input.customerId,
     customerName,
@@ -738,6 +828,7 @@ export async function runReceivablesInvestigation(
     companyInfo,
     verificationChecks: verData,
     creditReport:       creditData ?? { redFlags: [], flagCount: 0, overallStatus: "clean" },
+    watchlistScreening: watchlistData ?? undefined,
     externalSignals:    externalData ?? undefined,
     riskFactors,
     recommendedAction,
