@@ -59,6 +59,7 @@ export const TinyFishAgentStepSchema = z.object({
 export type TinyFishAgentStep = z.infer<typeof TinyFishAgentStepSchema>
 
 export const TinyFishScenarioSchema = z.enum([
+  "collections",
   "financing",
   "vendor",
   "insurance",
