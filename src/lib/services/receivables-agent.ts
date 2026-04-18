@@ -10,6 +10,7 @@ import {
   type CreditReport,
   type CreditRedFlag,
   type ExternalSignals,
+  type CompanyInfo,
 } from "@/lib/schemas/receivables-agent"
 import { search as tinyFishSearch } from "@/lib/tinyfish/client"
 import { mockCollectionsSearch } from "@/lib/tinyfish/mock-data"
@@ -700,6 +701,32 @@ export async function runReceivablesInvestigation(
   const totalOverdue = (openInv.totalOpenAmount as number | undefined) ?? 0
   const daysOverdue  = (invoice.daysOverdue as number | undefined) ?? 0
 
+  // Build companyInfo from profile data (address/keyPeople enriched by TinyFish if available)
+  const companyInfo: CompanyInfo = {
+    companyName: customerName,
+    email:       (profile.email as string | undefined) || undefined,
+    phone:       (profile.phone as string | undefined) || undefined,
+    address:     undefined,
+    keyPeople:   undefined,
+  }
+
+  // Try to extract address and key people from TinyFish article snippets
+  if (externalData?.articles.length) {
+    const snippets = externalData.articles.map(a => a.snippet).join(" ")
+    // Look for address-like patterns (City, ST or "headquartered in City")
+    const addrMatch = snippets.match(/headquartered in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
+      ?? snippets.match(/based in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
+      ?? snippets.match(/located in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
+    if (addrMatch) companyInfo.address = addrMatch[1]
+
+    // Look for named people (Title + Name patterns)
+    const peopleMatches = snippets.matchAll(
+      /(?:CEO|founder|owner|president|director|CFO|COO)\s+([A-Z][a-z]+ [A-Z][a-z]+)/gi,
+    )
+    const people = [...new Set([...peopleMatches].map(m => m[1]))].slice(0, 3)
+    if (people.length) companyInfo.keyPeople = people
+  }
+
   return ReceivablesInvestigationResultSchema.parse({
     customerId:         input.customerId,
     customerName,
@@ -708,6 +735,7 @@ export async function runReceivablesInvestigation(
     overdueDays:        daysOverdue,
     riskScore:          score,
     riskLevel,
+    companyInfo,
     verificationChecks: verData,
     creditReport:       creditData ?? { redFlags: [], flagCount: 0, overallStatus: "clean" },
     externalSignals:    externalData ?? undefined,

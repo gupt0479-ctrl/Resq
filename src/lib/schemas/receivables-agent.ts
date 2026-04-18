@@ -40,6 +40,14 @@ export const AgentStepSchema = z.object({
   result:  z.unknown(),
 })
 
+export const CompanyInfoSchema = z.object({
+  companyName: z.string().optional(),
+  email:       z.string().optional(),
+  phone:       z.string().optional(),
+  address:     z.string().optional(),
+  keyPeople:   z.array(z.string()).optional(),
+})
+
 export const ExternalSignalArticleSchema = z.object({
   title:     z.string(),
   url:       z.string(),
@@ -62,6 +70,7 @@ export const ReceivablesInvestigationResultSchema = z.object({
   overdueDays:        z.number(),
   riskScore:          z.number().min(0).max(100),
   riskLevel:          z.enum(["low", "medium", "high", "critical"]),
+  companyInfo:        CompanyInfoSchema.optional(),
   verificationChecks: VerificationChecksSchema,
   creditReport:       CreditReportSchema,
   externalSignals:    ExternalSignalsSchema.optional(),
@@ -72,6 +81,7 @@ export const ReceivablesInvestigationResultSchema = z.object({
   agentSteps:         z.array(AgentStepSchema),
 })
 
+export type CompanyInfo = z.infer<typeof CompanyInfoSchema>
 export type CreditRedFlag = z.infer<typeof CreditRedFlagSchema>
 export type CreditReport  = z.infer<typeof CreditReportSchema>
 export type ExternalSignalArticle = z.infer<typeof ExternalSignalArticleSchema>

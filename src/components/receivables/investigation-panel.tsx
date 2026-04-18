@@ -14,6 +14,9 @@ import {
   MapPin,
   Hash,
   Building2,
+  Mail,
+  Phone,
+  Users,
   X,
   Search,
 } from "lucide-react"
@@ -308,21 +311,75 @@ export function InvestigationPanel({
 
                   {/* Customer details + risk factors */}
                   <div className="grid grid-cols-2 gap-6">
-                    {/* Left: customer details */}
+                    {/* Left: company profile */}
                     <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        Company Profile
+                      </p>
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-2">
+                          <Building2 className="size-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <p className="text-xs text-muted-foreground">Company</p>
+                            <p className="text-sm font-medium break-words">{result.companyInfo?.companyName ?? result.customerName}</p>
+                          </div>
+                        </div>
+
+                        {result.companyInfo?.address && (
+                          <div className="flex items-start gap-2">
+                            <MapPin className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <p className="text-xs text-muted-foreground">Office Address</p>
+                              <p className="text-sm font-medium break-words">{result.companyInfo.address}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {result.companyInfo?.email && (
+                          <div className="flex items-start gap-2">
+                            <Mail className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <p className="text-xs text-muted-foreground">Email</p>
+                              <p className="text-sm font-medium break-words">{result.companyInfo.email}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {result.companyInfo?.phone && (
+                          <div className="flex items-start gap-2">
+                            <Phone className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <p className="text-xs text-muted-foreground">Phone</p>
+                              <p className="text-sm font-medium">{result.companyInfo.phone}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {result.companyInfo?.keyPeople && result.companyInfo.keyPeople.length > 0 && (
+                          <div className="flex items-start gap-2">
+                            <Users className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <p className="text-xs text-muted-foreground">Key People</p>
+                              {result.companyInfo.keyPeople.map(p => (
+                                <p key={p} className="text-sm font-medium">{p}</p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Right: customer details */}
+                    {/* Right: invoice stats */}
                     <div className="space-y-4">
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                          Customer Profile
+                          Account Summary
                         </p>
                         <div className="space-y-3">
                           <div className="flex items-start gap-2">
                             <User className="size-4 text-emerald-500 shrink-0 mt-0.5" />
                             <div>
-                              <p className="text-xs text-muted-foreground">Name</p>
+                              <p className="text-xs text-muted-foreground">Contact</p>
                               <p className="text-sm font-medium">{result.customerName}</p>
                             </div>
                           </div>
@@ -354,7 +411,7 @@ export function InvestigationPanel({
                       </div>
 
                       {/* Risk factors */}
-                      <div>
+                      <div className="mt-4">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                           Risk Factors
                         </p>
@@ -444,9 +501,9 @@ export function InvestigationPanel({
                               article.relevance === "medium" && "bg-amber-500",
                               article.relevance === "low"    && "bg-muted-foreground/40",
                             )} />
-                            <div>
-                              <p className="text-xs font-medium">{article.title}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">{article.snippet}</p>
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium break-words">{article.title}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5 break-words">{article.snippet}</p>
                             </div>
                           </div>
                         ))}
