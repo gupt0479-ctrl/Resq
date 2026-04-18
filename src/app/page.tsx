@@ -69,7 +69,7 @@ export default function LandingPage() {
 
       {/* ── 3. Hero ──────────────────────────────────────────────────────────── */}
       <section className="flex min-h-screen flex-col items-center justify-center px-6 py-24 text-center">
-        <h1 className="mb-6 max-w-2xl text-5xl font-bold leading-tight tracking-tight text-foreground sm:text-6xl">
+        <h1 className="mb-6 max-w-2xl font-display text-5xl font-normal leading-tight tracking-tight text-foreground sm:text-6xl">
           Cash is late.<br />OpsPilot acts.
         </h1>
         <p className="mb-10 max-w-xl text-base leading-relaxed text-muted-foreground">
