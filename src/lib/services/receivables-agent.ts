@@ -630,9 +630,11 @@ export async function runReceivablesInvestigation(
           `${customer_name} business financial difficulties`,
           ...(industry_hint ? [`${industry_hint} industry payment delays market conditions 2026`] : []),
         ]
-        const results = await Promise.all(queries.map(q =>
-          tinyFishSearch(q, { limit: 3 }).catch(() => mockCollectionsSearch(customer_name, q))
-        ))
+        const results = await Promise.all(queries.map(async q => {
+          const r = await tinyFishSearch(q, { limit: 3 })
+          // If degraded to mock, substitute collections-specific fixtures
+          return r.degradedFromLive ? mockCollectionsSearch(customer_name, q) : r
+        }))
         const allArticles = results.flatMap(r => r.results)
         const mode = results[0]?.mode ?? "mock"
         const nameLower = customer_name.toLowerCase()

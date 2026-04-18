@@ -159,18 +159,52 @@ export async function search(
   }
 
   try {
-    const { json } = await tinyFishRequest({
-      path:     TINYFISH_SEARCH_PATH,
-      method:   "POST",
-      body:     { query, limit: opts.limit ?? 10 },
-      signalMs: TINYFISH_TIMEOUT_MS,
-    })
+    // TinyFish search uses GET with query params and X-API-Key header.
+    // TINYFISH_SEARCH_PATH may be a full URL (different domain) or a path.
+    const searchUrl = /^https?:\/\//i.test(TINYFISH_SEARCH_PATH)
+      ? TINYFISH_SEARCH_PATH
+      : `${TINYFISH_BASE_URL.replace(/\/$/, "")}/${TINYFISH_SEARCH_PATH.replace(/^\//, "")}`
+    const url = new URL(searchUrl)
+    url.searchParams.set("query", query)
+    if (opts.limit) url.searchParams.set("num", String(opts.limit))
+
+    let res: Response
+    try {
+      res = await fetch(url.toString(), {
+        method:  "GET",
+        headers: {
+          "X-API-Key": TINYFISH_API_KEY,
+          "Accept":    "application/json",
+        },
+        signal: AbortSignal.timeout(TINYFISH_TIMEOUT_MS),
+        cache:  "no-store",
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown network error"
+      throw new TinyFishError("network", `TinyFish search network error: ${message}`)
+    }
+
+    let json: unknown
+    try { json = await res.json() } catch { json = {} }
+
+    if (!res.ok) {
+      throw new TinyFishError("http", `TinyFish search HTTP ${res.status}`, res.status)
+    }
+
+    // TinyFish returns { results: [{ position, title, url, snippet, site_name }] }
+    const rawResults = Array.isArray((json as { results?: unknown })?.results)
+      ? (json as { results: Record<string, unknown>[] }).results
+      : []
+
     const candidate = {
       query,
       mode: "live" as const,
-      results: Array.isArray((json as { results?: unknown })?.results)
-        ? (json as { results: unknown[] }).results
-        : [],
+      results: rawResults.map(r => ({
+        title:   String(r.title   ?? ""),
+        url:     String(r.url     ?? ""),
+        snippet: String(r.snippet ?? ""),
+        score:   typeof r.score === "number" ? r.score : undefined,
+      })),
     }
     const parsed = TinyFishSearchResultSchema.safeParse(candidate)
     if (!parsed.success) {
