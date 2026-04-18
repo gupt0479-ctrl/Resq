@@ -13,19 +13,6 @@
 
 OpsPilot is a web-based AI operations companion for small service businesses. It is designed to replace one fragmented manager workflow end-to-end: reservation event handling through invoice generation, guest follow-up, finance update, and manager action summary.
 
-**Positioning:** Small businesses cannot afford dedicated consultants, marketing teams, or finance staff. OpsPilot acts as an always-on AI operator — the equivalent of the consultant that Google or a large enterprise retains, but built for the owner running the front desk, the kitchen, and the books at the same time.
-
-### 1.0 Core Pain Points This Product Solves
-
-| Pain Point | What Owners Experience Today | How OpsPilot Addresses It |
-|------------|------------------------------|---------------------------|
-| **Unpaid and delayed invoices** | Customers pay weeks, months, or never — owners chase manually and lose track | Automated reminders, overdue flags, and cash-flow risk alerts surface what is at risk before it becomes a write-off |
-| **Cross-border communication gaps** | Language barriers, timezone confusion, and missed messages with international customers or suppliers | AI-drafted follow-ups adapt tone and clarity; flag communication delays |
-| **Affordable hiring and staffing** | Finding qualified staff at a sustainable cost is hard; owners waste time on unsuitable candidates | Future: AI-assisted job description drafts and candidate screening notes surface to the manager dashboard |
-| **Marketing and social media** | Many owners lack time or know-how to advertise on social platforms or post job listings effectively | Future: AI-drafted posting copy and suggested channels reduce the skill gap |
-| **Workflow automation** | Owners manually track reservations, invoices, payments, and follow-ups across disconnected tools | OpsPilot automates the full reservation → invoice → payment → feedback loop so no step is dropped |
-| **No access to expert guidance** | Enterprise companies employ consultants; small businesses cannot afford them | AI agents surface the same operational recommendations — flag risks, suggest next actions, draft messages — without a retainer |
-
 That direction matches the current MVP plan and page structure already produced in Lovable, including the dashboard, workflow timeline, customers, invoices, feedback, integrations, and inventory/performance preview pages.
 
 For the hackathon demo, the product is framed around a restaurant. The underlying build approach stays mostly the same, so this PRD intentionally keeps much of the existing appointment/invoice/customer system structure because it maps cleanly to reservations, table service, and guest follow-up.
@@ -64,8 +51,6 @@ Replace the manual small-business manager workflow of:
 - Sending feedback/follow-up messages
 - Reviewing what needs attention next
 
-**Elevator pitch:** Every large company has consultants, analysts, and operations staff. OpsPilot gives a single-location owner the same operational intelligence through AI agents — without the headcount cost.
-
 ### 2.2 Hackathon Success Criteria
 
 The MVP must:
@@ -101,21 +86,12 @@ The MVP must:
 
 Sarah runs a neighborhood restaurant. She manages reservations, payments, guest service, reminders, and stock ordering. She currently jumps across booking tools, texting, payment apps, and memory. This matches the current Lovable framing while making the demo easier to understand.
 
-**Sarah's specific pain points captured from founder research:**
-
-- A catering client owes $3,200 from three months ago. Sarah has sent two text messages and forgotten to follow up since.
-- A supplier communicates primarily in a second language; she is never sure her order was understood correctly.
-- She posted a hiring ad on paper in the window. She wants to post on Instagram but does not know how.
-- She has no idea whether last month was profitable after supply costs.
-- She handles everything herself and has no consultant, no bookkeeper, and no marketing staff.
-
 ### 3.2 Secondary Personas
 
-- Front-desk coordinator managing bookings and guest communication
-- Operations lead tracking vendor spend and staff scheduling
+- Front-desk coordinator
+- Operations lead
 - Floor manager or shift lead with limited admin responsibility
-- Owner of a small cross-border service business (tutoring agency, cleaning company, freelance studio) dealing with international clients or remote workers
-- Owner reviewing daily business health across multiple locations
+- Owner reviewing daily business health
 
 ### 3.3 Core Use Cases
 

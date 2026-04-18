@@ -4,12 +4,11 @@ This folder is the agent handoff layer for OpsPilot.
 
 ## Read this folder in order
 
-1. `PRD.md` — canonical product spec including pain points and positioning
-2. `context/product-vision.md` — expanded problem space and roadmap context
-3. `context/current-state.md`
-4. `context/6hour-status.md`
-5. `context/keyword-map.md`
-6. The matching `playbooks/`, `workflows/`, or `checklists/` file
+1. `PRD.md`
+2. `context/current-state.md`
+3. `context/6hour-status.md`
+4. `context/keyword-map.md`
+5. The matching `playbooks/`, `workflows/`, or `checklists/` file
 
 ## Folder purpose
 
