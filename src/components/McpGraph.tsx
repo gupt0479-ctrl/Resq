@@ -45,7 +45,9 @@ export function McpGraph() {
               x1={x1} y1={y1} x2={x2} y2={y2}
               stroke="hsl(38 92% 52%)" strokeWidth="1" strokeDasharray="5 4" opacity="0.55"
               markerEnd="url(#arr)"
-            />
+            >
+              <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="1.2s" repeatCount="indefinite" />
+            </line>
             <text
               x={mid.x} y={mid.y - 4}
               textAnchor="middle"
