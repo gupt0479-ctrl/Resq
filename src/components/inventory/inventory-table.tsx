@@ -61,6 +61,10 @@ export function InventoryTable({ items: initialItems }: InventoryTableProps) {
     setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
   }
 
+  function handleDeleted(id: string) {
+    setItems((prev) => prev.filter((i) => i.id !== id))
+  }
+
   return (
     <div className="space-y-3">
       <Input
@@ -220,6 +224,7 @@ export function InventoryTable({ items: initialItems }: InventoryTableProps) {
           open={!!editingItem}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
+          onDeleted={handleDeleted}
         />
       )}
     </div>

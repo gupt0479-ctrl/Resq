@@ -122,6 +122,7 @@ export default async function DashboardPage() {
     feedbackSpotlight,
     recentAiActivity,
   } = summary
+  const connectorErrorCount = integrationConnectors.filter((connector) => connector.status === "error").length
   const cashTrend =
     financeSnapshot.netCashFlow > 0
       ? "Revenue ahead of expenses this week"
@@ -166,7 +167,7 @@ export default async function DashboardPage() {
           color="amber"
         />
         <KpiCard
-          title="Customers Needing Attention"
+          title="At-Risk Accounts"
           value={String(kpis.unhappyGuestCount)}
           sub="flagged reviews or urgency ≥ 4"
           icon={<MessageSquare className="h-4 w-4" />}
@@ -230,15 +231,14 @@ export default async function DashboardPage() {
             </Link>
           </CardContent>
         </Card>
-
-        <Card className="border-amber-200/80 bg-amber-50/40">
+        <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-amber-700" />
+              <MessageSquare className="h-4 w-4 text-amber-700 dark:text-amber-400" />
               <CardTitle className="text-sm font-semibold">Feedback &amp; recovery</CardTitle>
             </div>
             <p className="text-xs text-muted-foreground">
-              Flagged reviews and guest recovery drafts. Low scores and safety-related notes surface here first.
+              Flagged reviews and customer recovery drafts. Low scores and safety-related notes surface here first.
             </p>
           </CardHeader>
           <CardContent className="space-y-2 pb-4">
@@ -258,16 +258,31 @@ export default async function DashboardPage() {
                 ))}
               </ul>
             )}
+            {connectorErrorCount > 0 ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                {connectorErrorCount} connector error{connectorErrorCount === 1 ? "" : "s"} may affect inbound reviews
+                or sync visibility. Check the Integrations page before the demo.
+              </div>
+            ) : null}
             <p className="text-[10px] text-muted-foreground">
               Data from Supabase feedback table. Open the queue for full detail and drafts.
             </p>
-            <Link
-              href="/feedback"
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              Open feedback queue
-              <ArrowRight className="h-3 w-3" />
-            </Link>
+            <div className="flex flex-wrap gap-4">
+              <Link
+                href="/feedback"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Open feedback queue
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+              <Link
+                href="/integrations"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Open integrations
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>

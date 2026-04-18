@@ -12,6 +12,19 @@ metadata:
 
 # Supabase Postgres Best Practices
 
+## Project overlay: OpsPilot Rescue
+
+For this repo, use these best practices primarily when they support the
+survival-agent demo's deterministic financial layer:
+
+- invoice reads and writes
+- finance transaction queries
+- `ai_actions` timeline access
+- additive seed and demo-read-model performance
+
+Do not introduce speculative schema churn or premature optimization that risks
+the hackathon demo.
+
 Comprehensive performance optimization guide for Postgres, maintained by Supabase. Contains rules across 8 categories, prioritized by impact to guide automated query optimization and schema design.
 
 ## When to Apply

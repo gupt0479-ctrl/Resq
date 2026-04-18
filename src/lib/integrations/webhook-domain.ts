@@ -13,6 +13,52 @@ export const MUTATING_INTEGRATION_EVENTS = [
   "feedback.received",
 ] as const
 
+export function getWebhookDispatchValidationError(
+  normalizedEvent: string | null,
+  data: Record<string, unknown>
+): string | null {
+  if (!normalizedEvent) return null
+
+  const invoiceId = getString(data, "invoiceId", "invoice_id")
+  const appointmentId = getString(data, "appointmentId", "appointment_id")
+
+  if (normalizedEvent === "reservation.cancelled" && !appointmentId) {
+    return "reservation.cancelled requires appointmentId in webhook data."
+  }
+
+  if (normalizedEvent === "reservation.rescheduled") {
+    if (!appointmentId) {
+      return "reservation.rescheduled requires appointmentId in webhook data."
+    }
+    const startsAt = getString(data, "startsAt", "starts_at", "startAt")
+    const endsAt = getString(data, "endsAt", "ends_at", "endAt")
+    if (!startsAt || !endsAt) {
+      return "reservation.rescheduled requires startsAt and endsAt in webhook data."
+    }
+  }
+
+  if (normalizedEvent === "reservation.completed" && !appointmentId) {
+    return "reservation.completed requires appointmentId in webhook data."
+  }
+
+  if (normalizedEvent === "invoice.sent" && !invoiceId) {
+    return "invoice.sent requires invoiceId in webhook data."
+  }
+
+  if (normalizedEvent === "invoice.paid" && !invoiceId) {
+    return "invoice.paid requires invoiceId in webhook data."
+  }
+
+  if (normalizedEvent === "feedback.received") {
+    const score = getNumber(data, "score", "rating", "stars")
+    if (score == null || score < 1 || score > 5) {
+      return "feedback.received requires numeric score between 1 and 5."
+    }
+  }
+
+  return null
+}
+
 export function normalizeDomainEvent(
   provider: string,
   externalEventType?: string

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
 import { ChevronDown, ChevronRight, Check, Bell, Copy, CheckCheck, Loader2, Pencil, Plus, Trash2, X, Download, Mail, Phone, User } from "lucide-react"
+import { InvestigationPanel } from "@/components/receivables/investigation-panel"
 
 export interface LineItem {
   description: string
@@ -834,7 +835,8 @@ function NewInvoiceModal({
     // keep override as-is
   }, [subtotal, taxOverride])
 
-  const inputCls = "w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+  const inputCls =
+    "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
 
   function setLine(i: number, field: keyof LineItem, value: string) {
     setLines((prev) =>
@@ -867,153 +869,191 @@ function NewInvoiceModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="relative mx-4 w-full max-w-xl rounded-2xl bg-card shadow-2xl ring-1 ring-border">
+      <div className="relative mx-4 w-full max-w-4xl overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-border">
         <div className="h-1 w-full rounded-t-2xl bg-gradient-to-r from-emerald-400 via-blue-500 to-violet-500" />
 
-        <div className="p-6">
+        <div className="flex max-h-[88vh] flex-col">
           {/* Header */}
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">New Invoice</p>
-              <p className="mt-0.5 text-base font-semibold text-foreground">{nextNumber}</p>
+          <div className="flex items-center justify-between border-b border-border px-6 py-5">
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                New Invoice
+              </p>
+              <p className="text-3xl font-semibold text-foreground">{nextNumber}</p>
             </div>
-            <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <button onClick={onClose} className="text-muted-foreground transition-colors hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Guest / due / status */}
-          <div className="mb-4 grid grid-cols-3 gap-3">
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Guest *</label>
-              <input className={inputCls} placeholder="Guest name" value={guest} onChange={(e) => setGuest(e.target.value)} />
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Due Date</label>
-              <input className={inputCls} placeholder="e.g. Apr 20" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Status</label>
-              <select className={inputCls} value={status} onChange={(e) => setStatus(e.target.value as Invoice["status"])}>
-                <option value="pending">pending</option>
-                <option value="overdue">overdue</option>
-                <option value="paid">paid</option>
-                <option value="draft">draft</option>
-              </select>
-            </div>
-          </div>
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="space-y-5">
+              {/* Guest / due / status */}
+              <div className="grid gap-3 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Guest *
+                  </label>
+                  <input
+                    className={inputCls}
+                    placeholder="Guest name"
+                    value={guest}
+                    onChange={(e) => setGuest(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Due Date
+                  </label>
+                  <input
+                    className={inputCls}
+                    placeholder="e.g. Apr 20"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Status
+                  </label>
+                  <select
+                    className={`${inputCls} capitalize`}
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as Invoice["status"])}
+                  >
+                    <option value="pending">pending</option>
+                    <option value="overdue">overdue</option>
+                    <option value="paid">paid</option>
+                    <option value="draft">draft</option>
+                  </select>
+                </div>
+              </div>
 
-          {/* Line items */}
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Line Items</p>
-          {/* Column headers */}
-          <div className="mb-1 grid grid-cols-[1fr_56px_88px_20px] gap-2 px-0.5">
-            <span className="text-[10px] text-muted-foreground">Product / Description</span>
-            <span className="text-center text-[10px] text-muted-foreground">Qty</span>
-            <span className="text-right text-[10px] text-muted-foreground">Amount ($)</span>
-            <span />
-          </div>
-          <div className="space-y-2">
-            {lines.map((li, i) => (
-              <div key={i} className="grid grid-cols-[1fr_56px_88px_20px] items-center gap-2">
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Wagyu Ribeye"
-                  value={li.description}
-                  onChange={(e) => setLine(i, "description", e.target.value)}
-                />
-                <input
-                  className={`${inputCls} text-center`}
-                  type="number"
-                  min={1}
-                  value={li.qty}
-                  onChange={(e) => setLine(i, "qty", e.target.value)}
-                />
-                <input
-                  className={`${inputCls} text-right`}
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  placeholder="0.00"
-                  value={li.amount || ""}
-                  onChange={(e) => setLine(i, "amount", e.target.value)}
-                />
+              {/* Line items */}
+              <div>
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Line Items
+                </p>
+                <div className="mb-1 grid grid-cols-[minmax(0,1fr)_80px_140px_36px] gap-2 px-1">
+                  <span className="text-[10px] text-muted-foreground">Product / Description</span>
+                  <span className="text-center text-[10px] text-muted-foreground">Qty</span>
+                  <span className="text-right text-[10px] text-muted-foreground">Amount ($)</span>
+                  <span />
+                </div>
+                <div className="space-y-2">
+                  {lines.map((li, i) => (
+                    <div
+                      key={i}
+                      className="grid grid-cols-[minmax(0,1fr)_80px_140px_36px] items-center gap-2"
+                    >
+                      <input
+                        className={inputCls}
+                        placeholder="e.g. Wagyu Ribeye"
+                        value={li.description}
+                        onChange={(e) => setLine(i, "description", e.target.value)}
+                      />
+                      <input
+                        className={`${inputCls} text-center`}
+                        type="number"
+                        min={1}
+                        value={li.qty}
+                        onChange={(e) => setLine(i, "qty", e.target.value)}
+                      />
+                      <input
+                        className={`${inputCls} text-right`}
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        placeholder="0.00"
+                        value={li.amount || ""}
+                        onChange={(e) => setLine(i, "amount", e.target.value)}
+                      />
+                      <button
+                        onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="flex h-10 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-30"
+                        disabled={lines.length === 1}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
                 <button
-                  onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
-                  className="shrink-0 text-muted-foreground hover:text-red-500 disabled:opacity-30"
-                  disabled={lines.length === 1}
+                  onClick={() => setLines((prev) => [...prev, { description: "", qty: 1, amount: 0 }])}
+                  className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Plus className="h-3 w-3" /> Add line
                 </button>
               </div>
-            ))}
-          </div>
-          <button
-            onClick={() => setLines((prev) => [...prev, { description: "", qty: 1, amount: 0 }])}
-            className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Plus className="h-3 w-3" /> Add line
-          </button>
 
-          {/* Tax / Tip + summary */}
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                <span>Tax</span>
-                <span className="normal-case font-normal text-muted-foreground/70">
-                  MN rate {(MN_TAX_RATE * 100).toFixed(3)}% · auto
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  className={inputCls}
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  placeholder={autoTax.toFixed(2)}
-                  value={taxOverride}
-                  onChange={(e) => setTaxOverride(e.target.value)}
-                />
-                {taxOverride === "" && (
-                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                    ${autoTax.toFixed(2)}
-                  </span>
-                )}
+              {/* Tax / Tip */}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    <span>Tax</span>
+                    <span className="normal-case font-normal text-muted-foreground/70">
+                      MN rate {(MN_TAX_RATE * 100).toFixed(3)}% · auto
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      className={inputCls}
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      placeholder={autoTax.toFixed(2)}
+                      value={taxOverride}
+                      onChange={(e) => setTaxOverride(e.target.value)}
+                    />
+                    {taxOverride === "" && (
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        ${autoTax.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Tip ($)
+                  </label>
+                  <input
+                    className={inputCls}
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    placeholder="0.00"
+                    value={tip || ""}
+                    onChange={(e) => setTip(Number(e.target.value))}
+                  />
+                </div>
               </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Tip ($)</label>
-              <input
-                className={inputCls}
-                type="number"
-                step="0.01"
-                min={0}
-                placeholder="0.00"
-                value={tip || ""}
-                onChange={(e) => setTip(Number(e.target.value))}
-              />
-            </div>
-          </div>
 
-          {/* Totals */}
-          <div className="mt-3 space-y-1 border-t border-border pt-3 text-sm">
-            <div className="flex justify-between text-muted-foreground">
-              <span>Subtotal</span><span>${subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-muted-foreground">
-              <span>Tax ({(MN_TAX_RATE * 100).toFixed(3)}%)</span><span>${tax.toFixed(2)}</span>
-            </div>
-            {tip > 0 && (
-              <div className="flex justify-between text-muted-foreground">
-                <span>Tip</span><span>${tip.toFixed(2)}</span>
+              {/* Totals */}
+              <div className="rounded-xl border border-border p-4">
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Subtotal</span><span>${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Tax ({(MN_TAX_RATE * 100).toFixed(3)}%)</span><span>${tax.toFixed(2)}</span>
+                  </div>
+                  {tip > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Tip</span><span>${tip.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="mt-1 border-t border-border pt-2">
+                    <div className="flex justify-between text-2xl font-semibold text-foreground">
+                      <span>Total</span><span>${total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
-            <div className="flex justify-between font-semibold text-foreground">
-              <span>Total</span><span>${total.toFixed(2)}</span>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="mt-5 flex justify-end gap-2">
+          <div className="flex justify-end gap-2 border-t border-border px-6 py-4">
             <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted">
               Cancel
             </button>
@@ -1252,6 +1292,7 @@ export function InvoiceTable({ invoices: initial }: { invoices: Invoice[] }) {
 
                           {/* Remind (pending) or Send Follow-up (overdue) */}
                           {inv.status === "overdue" ? (
+                            <>
                             <button
                               onClick={(e) => sendFollowUp(inv, e)}
                               disabled={loadingFollowUp === inv.id}
@@ -1260,6 +1301,21 @@ export function InvoiceTable({ invoices: initial }: { invoices: Invoice[] }) {
                               {loadingFollowUp === inv.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bell className="h-3 w-3" />}
                               Send Follow-up
                             </button>
+                            {/* Risk investigation — overdue invoices only */}
+                            <span onClick={(e) => e.stopPropagation()}>
+                              <InvestigationPanel
+                                invoiceId={inv.id}
+                                invoiceNumber={inv.number}
+                                customerName={inv.guest}
+                                balance={inv.amount}
+                                daysOverdue={
+                                  inv.dueDate
+                                    ? Math.max(0, Math.floor((Date.now() - new Date(inv.dueDate).getTime()) / (1000 * 60 * 60 * 24)))
+                                    : 0
+                                }
+                              />
+                            </span>
+                            </>
                           ) : (
                             <button
                               onClick={(e) => sendReminder(inv, e)}

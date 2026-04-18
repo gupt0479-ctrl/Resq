@@ -1,29 +1,43 @@
 # Demo Readiness Checklist
 
-## Environment
+Use this on the final rehearsal path.
 
-- Supabase project is connected
-- Required migrations are applied
-- Demo seed data is loaded
-- `.env.local` contains valid credentials
+## Product clarity
 
-## Product
+- [ ] Landing page clearly says autonomous SMB survival agent
+- [ ] Fintech value is obvious in under 30 seconds
+- [ ] Agentic behavior is visible, not implied
 
-- Dashboard loads real data
-- Appointment completion creates an invoice
-- Mark-paid creates exactly one finance row
-- Feedback submission creates a flagged issue when appropriate
-- Follow-up approval resolves the item correctly
+## Data and state
 
-## Quality
+- [ ] Supabase project is connected
+- [ ] Base seed is loaded
+- [ ] `supabase/seed_survival_demo.sql` is loaded
+- [ ] Demo org data matches the current story
 
-- `npm run lint` passes
-- `npx tsc --noEmit` passes
-- `npm run test` passes
-- `npm run build` passes
+## TinyFish
 
-## Story
+- [ ] `/api/tinyfish/health` returns healthy output
+- [ ] `/api/tinyfish/demo-run` returns a valid scenario response
+- [ ] Mock mode fallback is available
 
-- A judge can understand the workflow in under 3 minutes
-- It is obvious what the system automated
-- It is obvious what still requires manager action
+## Demo path
+
+- [ ] Rescue / dashboard view shows cash pressure
+- [ ] Financing result is understandable
+- [ ] Vendor or insurance result is understandable
+- [ ] Workflow / audit trail shows agent activity
+
+## Verification
+
+- [ ] `npm run lint`
+- [ ] `npx tsc --noEmit`
+- [ ] `npm run test`
+- [ ] `npm run build`
+- [ ] `bash scripts/demo-smoke.sh`
+
+## Logistics
+
+- [ ] Backup recording prepared
+- [ ] Live demo browser tabs prepared
+- [ ] HDMI / stage fallback plan ready

@@ -1,45 +1,41 @@
-# Restaurant Core Demo Workflow
+# Canonical Demo Workflow
 
-Use this as the canonical demo sequence.
+Legacy filename retained for continuity. The active workflow is the SMB survival
+agent demo, not the earlier restaurant-core story.
 
-## Demo story
+## Private demo flow
 
-1. Open `/dashboard`
-2. Show KPIs, feedback spotlight, and AI briefing
-3. Go to `/appointments` and complete an `in_progress` reservation
-4. Show the generated invoice on `/invoices` or `/workflow`
-5. Mark the invoice paid
-6. Show the matching finance transaction on `/finance`
-7. Submit a negative review on `/feedback`
-8. Show the flagged issue and suggested recovery action
-9. Approve the follow-up and close on the dashboard
+### Goal
 
-## Domain mapping
+Show one clear, agentic fintech product in under 5 minutes.
 
-- `appointments` = reservations
-- `customers` = guests
-- `services` = billable restaurant services or menu groupings
-- `invoice_items` = ordered charges
-- `follow_up_actions` = thank-you, callback, recovery, return-visit outreach
+### Script
 
-## Deterministic boundaries
+1. Open the app and frame the problem:
+   small businesses fail because cash arrives late while costs rise.
+2. Show the dashboard or rescue queue:
+   highlight overdue receivables and cash pressure.
+3. Run the survival scan:
+   this is the core agentic moment.
+4. Show financing options:
+   normalized, ranked, and explained.
+5. Show vendor or insurance savings opportunities:
+   concrete deltas and actions.
+6. Show the audit trail:
+   prove the system took multi-step action.
 
-Backend owns:
+## Public demo flow
 
-- invoice generation
-- totals and tax logic
-- state transitions
-- finance row creation
+Compress to:
 
-AI owns:
+1. one painful problem
+2. one click or one trigger
+3. one visible autonomous workflow
+4. one clear outcome
 
-- review analysis
-- recovery drafting
-- prioritization
-- manager summary wording
+## Demo requirements
 
-## Success condition
-
-The judge should be able to see one clear chain of cause and effect:
-
-`operational event -> system action -> AI interpretation -> manager decision`
+- mock mode must be acceptable
+- the flow must not depend on an unverified live external service
+- the audit trail must be legible
+- the product must feel fintech-first

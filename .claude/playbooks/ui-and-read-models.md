@@ -1,46 +1,42 @@
-# UI And Read Models Playbook
+# UI and Read Models Playbook
 
-Use for dashboard pages, KPI cards, list pages, or replacing mocks with live data.
+## UI principle
 
-## UI goal
+The product should read as one coherent fintech workflow, not a feature
+showcase.
 
-The UI should prove the backend workflow is real.
+## Prioritize these surfaces
 
-## Hard rules
+- landing page
+- rescue queue
+- cashflow / finance
+- invoices / receivables
+- agent runs
+- integrations
 
-- Pages should consume stable, UI-ready data
-- Repeated shaping belongs in query modules
-- Keep restaurant-specific language in the UI
-- Do not present fake AI behavior as real
-- High-attention states must be visually obvious
+## De-emphasize these surfaces
 
-## Important files
+- broad restaurant operations
+- generic support and feedback as the main story
+- anything that distracts from survival urgency
 
-```text
-src/lib/queries/dashboard.ts
-src/lib/queries/appointments.ts
-src/lib/queries/invoices.ts
-src/lib/queries/finance.ts
-src/lib/queries/feedback.ts
-src/app/dashboard/
-src/app/appointments/
-src/app/invoices/
-src/app/finance/
-src/app/feedback/
-```
+## Read-model guidance
 
-## Demo requirement
+- shape data for quick comprehension
+- prefer clear business labels over raw internal terms
+- preserve raw legacy schema names internally if needed
 
-At least one visible page should make each core workflow stage obvious:
+## Copy rules
 
-- reservation status progression
-- invoice creation and payment state
-- finance ledger truth
-- feedback issue and recovery flow
-- dashboard summary of what matters now
+- customer > guest
+- agent runs > workflow events
+- cash pressure > performance
+- survival actions > tasks
 
-## Common mistakes
+## Judge-first principle
 
-- Reintroducing ad hoc mock transforms
-- Bypassing query modules in pages
-- Empty states that hide a broken backend connection
+A page is good if a judge can understand:
+
+1. what problem exists
+2. what the agent did
+3. what action the owner can take now

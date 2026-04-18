@@ -1,38 +1,41 @@
-# Backend And API Playbook
+# Backend and API Playbook
 
-Use for route handlers, services, schemas, and deterministic mutations.
+## Style rules
 
-## Preferred order
+- Route handlers validate and delegate.
+- Services own mutations.
+- Queries own read-model shaping.
+- New agent routes should be additive, not invasive.
 
-1. Confirm enums and schema vocabulary
-2. Update domain rules if needed
-3. Implement or adjust the service layer
-4. Keep route handlers thin
-5. Update query or response contracts
-6. Re-run verification
+## Route style
 
-## Hard rules
+Follow the house pattern:
 
-- Route handlers validate early
-- Services own mutations and state transitions
-- Queries own read-model shaping
-- Preserve `organization_id` scope on every DB path
-- Return safe errors, not raw internal failures
+- success: `Response.json({ data })`
+- error: `Response.json({ error }, { status })`
 
-## Important files
+For TinyFish routes:
 
-```text
-src/app/api/
-src/lib/services/
-src/lib/queries/
-src/lib/schemas/
-src/lib/constants/enums.ts
-src/lib/domain/
-```
+- export `runtime = "nodejs"`
+- export `dynamic = "force-dynamic"`
 
-## Common mistakes
+## TinyFish route rules
 
-- Direct Supabase mutations in route handlers
-- Duplicate business logic across routes and services
-- Mixing raw DB shapes into UI contracts
-- Inventing new enum values without updating canonical files
+- never assume unverified live endpoint paths
+- keep mock mode as the default safe path
+- return typed failure or misconfiguration states
+- logging failure must not break the route
+
+## Logging
+
+Use `recordAiAction` for auditability when appropriate, but:
+
+- provide a valid UUID for `entity_id`
+- treat logging as best-effort in demo routes
+
+## What not to touch casually
+
+- invoice generation flow
+- finance row creation
+- webhook dedupe behavior
+- stable schema assumptions in Supabase

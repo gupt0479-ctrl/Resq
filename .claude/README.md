@@ -1,44 +1,41 @@
-# OpsPilot Project Memory
+# OpsPilot Rescue Project Memory
 
-This folder is the agent handoff layer for OpsPilot.
+This folder is the canonical handoff layer for the hackathon build.
 
-## Read this folder in order
+## Read order
 
 1. `PRD.md`
 2. `context/current-state.md`
 3. `context/6hour-status.md`
-4. `context/keyword-map.md`
-5. The matching `playbooks/`, `workflows/`, or `checklists/` file
+4. `context/architecture.md`
+5. matching `playbooks/`, `checklists/`, or `workflows/`
 
 ## Folder purpose
 
 - `PRD.md`
-  Canonical product truth. Preserve history and append clarifications.
+  Canonical product and build truth.
 - `context/`
-  Current implementation state, architecture, routing map, and merge notes.
+  Current status, architecture, merge notes, and vocabulary.
 - `playbooks/`
-  Task-specific guidance by domain.
+  Domain-specific implementation guidance.
 - `checklists/`
-  Short execution and quality gates.
+  Execution gates and demo readiness rules.
 - `workflows/`
-  Canonical demo and operating flows.
+  Canonical demo flow and operator sequence.
 - `decisions/`
-  Material engineering and product decisions.
+  Durable product and engineering decisions.
 
 ## Project rules
 
-- Supabase is the system of record
-- Services own deterministic business logic
-- Queries own read-model shaping
-- AI may summarize, classify, draft, and prioritize
-- AI must not own money, status transitions, or ledger truth
-- Webhooks must reuse the same services as UI actions
+- Build one sharp agentic fintech product.
+- Preserve deterministic finance logic.
+- Keep TinyFish mock mode available until live mode is verified.
+- Optimize for judge comprehension and demo stability.
 
-## Deadline posture
+## Current demo thesis
 
-Treat the project as demo-ready with limited remaining time. Optimize for:
+OpsPilot Rescue helps a small business survive cash stress by autonomously:
 
-1. Reliability
-2. Clarity
-3. Fast handoff
-4. Minimal-risk polish
+1. recovering receivables
+2. scouting financing options
+3. detecting vendor and insurance savings opportunities

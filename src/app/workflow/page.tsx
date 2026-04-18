@@ -6,6 +6,17 @@ export const dynamic = "force-dynamic"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Normalise DB action_type strings for display: replace restaurant-specific
+ *  terminology with business-neutral equivalents, then humanise underscores. */
+function formatActionLabel(actionType: string): string {
+  return actionType
+    .replace(/\bguest_/g, "customer_")
+    .replace(/\bunhappy_guest\b/g, "at_risk_customer")
+    .replace(/\bdining_/g, "")
+    .replace(/\breservation_/g, "booking_")
+    .replace(/_/g, " ")
+}
+
 const AGENT_STYLES: Record<string, { border: string; badge: string; dot: string; label: string }> = {
   customer_service: {
     border: "border-l-teal-500",
@@ -56,7 +67,7 @@ export default async function WorkflowPage() {
   return (
     <div className="space-y-5 p-6">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Workflow</h1>
+        <h1 className="text-xl font-semibold text-foreground">Agent Runs</h1>
         <p className="text-xs text-muted-foreground">
           Every action taken automatically by OpsPilot agents
         </p>
@@ -84,7 +95,7 @@ export default async function WorkflowPage() {
         <CardContent className="p-4">
           {timeline.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              No workflow events yet — complete a reservation to generate the first event.
+              No agent runs yet — complete a booking to generate the first event.
             </div>
           ) : (
             <div className="relative">
@@ -111,7 +122,7 @@ export default async function WorkflowPage() {
                               {style.label}
                             </span>
                             <span className="text-sm font-medium text-foreground">
-                              {event.action_type.replace(/_/g, " ")}
+                              {formatActionLabel(event.action_type)}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">

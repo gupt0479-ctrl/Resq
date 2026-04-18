@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { predictionDate = "2026-04-11", includeExplanation = true } = parsed.data
+  const today = new Date().toISOString().slice(0, 10)
+  const { predictionDate = today, includeExplanation = true } = parsed.data
 
   const [items, usages, reservations, shipments] = await Promise.all([
     getInventoryItems(),

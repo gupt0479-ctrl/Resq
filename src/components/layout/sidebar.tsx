@@ -6,33 +6,18 @@ import {
   Flame,
   LayoutDashboard,
   GitBranch,
-  MessageSquare,
   FileText,
-  Package,
-  CalendarDays,
   DollarSign,
-  Truck,
   Plug,
   Zap,
 } from "lucide-react"
 
-const coreItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/rescue", label: "Rescue", icon: Zap },
-  { href: "/appointments", label: "Bookings", icon: CalendarDays },
-  { href: "/workflow", label: "Workflow", icon: GitBranch },
-]
-
-const opsItems = [
-  { href: "/invoices", label: "Invoices", icon: FileText },
-  { href: "/finance", label: "Finance", icon: DollarSign },
-  { href: "/inventory", label: "Inventory", icon: Package },
-  { href: "/shipments", label: "Shipments", icon: Truck },
-]
-
-/** Phase 3: MCP bridge + feedback must stay visible in IA (PRD §4.3, §12.1). */
-const supportItems = [
-  { href: "/feedback", label: "Feedback", icon: MessageSquare },
+const navItems = [
+  { href: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/rescue",       label: "Rescue Queue", icon: Zap },
+  { href: "/finance",      label: "Cashflow",     icon: DollarSign },
+  { href: "/invoices",     label: "Invoices",     icon: FileText },
+  { href: "/workflow",     label: "Agent Runs",   icon: GitBranch },
   { href: "/integrations", label: "Integrations", icon: Plug },
 ]
 
@@ -56,37 +41,14 @@ export function Sidebar() {
           <Flame className="h-4 w-4 text-white" />
         </div>
         <div className="leading-tight">
-          <p className="text-sm font-semibold text-foreground">OpsPilot</p>
-          <p className="text-[10px] text-muted-foreground">Ember Table</p>
+          <p className="text-sm font-semibold text-foreground">OpsPilot Rescue</p>
+          <p className="text-[10px] text-muted-foreground">SMB Survival</p>
         </div>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-3 pt-4">
-        <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Core
-        </p>
-        {coreItems.map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} className={navClass(href)}>
-            <Icon className="h-4 w-4 shrink-0" />
-            {label}
-          </Link>
-        ))}
-
-        <p className="mb-2 mt-5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Operations
-        </p>
-        {opsItems.map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} className={navClass(href)}>
-            <Icon className="h-4 w-4 shrink-0" />
-            {label}
-          </Link>
-        ))}
-
-        <p className="mb-2 mt-5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Support
-        </p>
-        {supportItems.map(({ href, label, icon: Icon }) => (
+        {navItems.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className={navClass(href)}>
             <Icon className="h-4 w-4 shrink-0" />
             {label}
@@ -94,6 +56,10 @@ export function Sidebar() {
         ))}
       </nav>
 
+      {/* Footer */}
+      <div className="border-t border-border px-5 py-3">
+        <p className="text-[10px] text-muted-foreground">Powered by Claude AI</p>
+      </div>
     </aside>
   )
 }

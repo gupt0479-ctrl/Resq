@@ -9,7 +9,7 @@ export function Header() {
         <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
-          placeholder="Search guests, invoices, inventory…"
+          placeholder="Search customers, invoices, agents…"
           className="h-8 w-full rounded-lg border border-border bg-background pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
@@ -29,7 +29,7 @@ export function Header() {
           </div>
           <div className="hidden sm:block leading-tight">
             <p className="text-xs font-medium text-foreground">Sarah Chen</p>
-            <p className="text-[10px] text-muted-foreground">Manager</p>
+            <p className="text-[10px] text-muted-foreground">Operator</p>
           </div>
         </div>
       </div>

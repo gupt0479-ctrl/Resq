@@ -72,6 +72,27 @@ export type FinanceDirection = (typeof FINANCE_DIRECTION)[number]
 export const AI_ACTION_STATUS = ["pending", "executed", "failed"] as const
 export type AiActionStatus = (typeof AI_ACTION_STATUS)[number]
 
+export const AI_ACTION_TYPE = [
+  // ── existing ──────────────────────────────────────────────────────────────
+  "customer_service.analyze_review",
+  // ── cashflow recovery ─────────────────────────────────────────────────────
+  "receivable_risk_detected",
+  "customer_followup_sent",
+  "customer_followup_drafted",
+  "payment_plan_suggested",
+  "financing_options_scouted",
+  "financing_option_recommended",
+  "vendor_quote_compared",
+  "vendor_cost_spike_flagged",
+  "insurance_renewal_flagged",
+  "dispute_clarification_sent",
+  "rescue_case_opened",
+  "rescue_case_resolved",
+  "external_portal_checked",
+  "invoice_status_verified",
+] as const
+export type AiActionType = (typeof AI_ACTION_TYPE)[number]
+
 export const CONNECTOR_STATUS = ["connected", "error", "disabled"] as const
 export type ConnectorStatus = (typeof CONNECTOR_STATUS)[number]
 

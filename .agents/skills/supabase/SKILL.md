@@ -8,6 +8,17 @@ metadata:
 
 # Supabase
 
+## Project overlay: OpsPilot Rescue
+
+In this repo, Supabase is the deterministic financial backbone for a hackathon
+build called OpsPilot Rescue. When using this skill here:
+
+- preserve invoice and finance truth
+- prefer additive migrations or additive seeds
+- avoid broad renames of legacy restaurant-era tables
+- keep demo data aligned with the survival-agent story
+- update `supabase/seed_survival_demo.sql` and docs when the demo path changes
+
 ## Core Principles
 
 **1. Supabase changes frequently — verify against current docs before implementing.**

@@ -1,71 +1,71 @@
-# OpsPilot Agent Brief
+# OpsPilot Rescue Agent Brief
 
 ## Current mission
 
-Hackathon submission mode. Optimize for demo reliability, not feature expansion.
+Hackathon execution mode for O1 Summit 2026.
 
-The only story that must work end to end is:
+The product to ship is:
 
-`reservation -> invoice -> payment -> finance -> feedback -> recovery`
+`Autonomous SMB survival agent = collections + financing scout + vendor/insurance optimization`
+
+The product must feel clearly fintech, clearly agentic, and clearly worth
+paying for.
 
 ## Read order
 
 1. `.claude/PRD.md`
 2. `.claude/context/current-state.md`
 3. `.claude/context/6hour-status.md`
-4. The relevant playbook or checklist for the task
+4. `docs/rescue-demo-runbook.md`
+5. Relevant playbook / checklist
 
-## What is already done
+## Product boundaries
 
-Do not rebuild these unless there is a confirmed bug:
+AI may:
 
-- Appointment completion flow
-- Invoice generation and mark-paid path
-- Finance transaction creation
-- Feedback ingestion and AI analysis pipeline
-- Integration webhook ingress and dedupe
-- Dashboard, appointments, invoices, finance, feedback, integrations
-- Theme system and shared light/dark toggle
+- investigate
+- compare
+- prioritize
+- summarize
+- recommend next-best actions
+- trigger demo-safe agent workflows
 
-## What to prioritize
+AI must not own:
 
-1. Demo-critical bug fixes
-2. Supabase connection and seed verification
-3. UI polish that improves judge comprehension
-4. Documentation accuracy for handoff
+- invoice totals
+- invoice status truth
+- finance ledger truth
+- deterministic money mutation rules
 
-## What not to spend time on
+## What is already valuable
 
-- New modules
-- Broad refactors
-- Renaming the domain model
-- Replacing working service/query code
-- Feature-complete inventory, marketing, or performance systems
+- invoice and finance foundations
+- Supabase data model
+- integrations shell
+- AI action logging
+- dashboard shell and workflow timeline
 
-## Core rules
+## What is no longer the main story
 
-- Supabase/Postgres is the source of truth
-- Services own deterministic mutations
-- Queries own UI-facing shaping
-- AI may classify, summarize, and draft
-- AI must not own invoice totals, invoice status, reservation status, or finance ledger writes
-- Webhooks must reuse the same service layer as UI actions
+- reservation management
+- restaurant operations as the core pitch
+- feedback recovery as the headline feature
+- broad ops dashboards
 
-## Key files
+## Priorities
 
-```text
-src/lib/services/appointments.ts
-src/lib/services/invoices.ts
-src/lib/services/finance.ts
-src/lib/services/feedback.ts
-src/lib/services/integrations.ts
-src/lib/queries/dashboard.ts
-src/lib/queries/feedback.ts
-agents/customer-service/agent.js
-supabase/migrations/0001_core_ledger.sql
-supabase/migrations/002_invoice_reminders.sql
-supabase/migrations/004_feedback_domain.sql
-```
+1. Demo-critical survival-agent surfaces
+2. TinyFish scaffolding and reliability
+3. Demo data consistency
+4. Deployment and submission readiness
+5. Documentation accuracy
+
+## Do not spend time on
+
+- large schema renames
+- broad refactors
+- polishing non-demo routes
+- speculative features outside the three core survival pillars
 
 ## Verification baseline
 
@@ -74,21 +74,5 @@ npm run lint
 npx tsc --noEmit
 npm run test
 npm run build
+bash scripts/demo-smoke.sh
 ```
-
-## Demo script
-
-1. Show `/dashboard`
-2. Complete an appointment on `/appointments`
-3. Show the resulting invoice
-4. Mark it paid
-5. Show the finance ledger update
-6. Submit a negative review on `/feedback`
-7. Show the flagged issue and approve the follow-up
-
-## If you are changing docs
-
-- Keep `PRD.md` as the canonical product source of truth
-- Keep supporting docs concise
-- Prefer status clarity over exhaustive history
-- Update only the files a teammate or agent would realistically read next

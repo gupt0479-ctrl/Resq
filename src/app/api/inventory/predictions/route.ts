@@ -17,7 +17,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { riskLevel, limit = 50, asOfDate = "2026-04-11" } = parsed.data
+  const today = new Date().toISOString().slice(0, 10)
+  const { riskLevel, limit = 50, asOfDate = today } = parsed.data
 
   const [items, usages, reservations, shipments] = await Promise.all([
     getInventoryItems(),

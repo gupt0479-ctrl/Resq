@@ -298,11 +298,20 @@ export function AiAdvisorPanel() {
       body: JSON.stringify({}),
     })
       .then(async (r) => {
-        const data = await r.json()
+        const raw = await r.text()
+        let data: { error?: string; report?: AgentReport } | null = null
+        if (raw.length > 0) {
+          try {
+            data = JSON.parse(raw) as { error?: string; report?: AgentReport }
+          } catch {
+            throw new Error("Shipment analysis returned malformed data. Please retry.")
+          }
+        }
         if (!r.ok) throw new Error(data?.error ?? `HTTP ${r.status}`)
-        return data
+        if (!data?.report) throw new Error("Shipment analysis returned an invalid response.")
+        return data.report
       })
-      .then((d) => setAgentReport(d.report as AgentReport))
+      .then((report) => setAgentReport(report))
       .catch((e) => setAgentError(e instanceof Error ? e.message : "Agent error"))
       .finally(() => setAgentLoading(false))
 
@@ -327,10 +336,10 @@ export function AiAdvisorPanel() {
   const lowItems    = report?.predictions.filter((p) => p.riskLevel === "low")    ?? []
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+    <div className="fixed bottom-6 right-6 z-50 flex max-h-[calc(100vh-3rem)] flex-col items-end gap-3">
       {/* Popup panel */}
       {isOpen && (
-        <div className="w-[380px] max-h-[600px] flex flex-col rounded-2xl border bg-white shadow-2xl overflow-hidden">
+        <div className="flex w-[380px] max-h-[calc(100vh-3rem)] flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl">
           {/* Header */}
           <div className="flex items-center justify-between gap-2 border-b bg-gradient-to-r from-violet-600 to-violet-500 px-4 py-3">
             <div className="flex items-center gap-2">
@@ -358,7 +367,7 @@ export function AiAdvisorPanel() {
           </div>
 
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto space-y-4 px-4 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto space-y-4 px-4 py-4">
             {error && (
               <div className="flex items-center gap-1.5 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -461,12 +470,14 @@ export function AiAdvisorPanel() {
       )}
 
       {/* Floating trigger button */}
-      <button
-        onClick={() => setIsOpen((v: boolean) => !v)}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg hover:bg-violet-700 transition-colors"
-      >
-        {isOpen ? <X className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
-      </button>
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition-colors hover:bg-violet-700"
+        >
+          <Sparkles className="h-6 w-6" />
+        </button>
+      )}
     </div>
   )
 }

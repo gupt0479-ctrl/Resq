@@ -1,44 +1,49 @@
 # AI Features Playbook
 
-Use for AI summaries, review analysis, recovery drafting, or prompt changes.
+This playbook defines how AI is allowed to behave in OpsPilot Rescue.
 
-## AI is allowed to own
+## AI is here to do
 
-- Feedback classification
-- Recovery and follow-up drafting
-- Manager summary wording
-- Prioritization based on existing facts
+- investigate context
+- compare options
+- summarize risk
+- prioritize next-best actions
+- orchestrate demo-safe external agent flows
 
-## AI is not allowed to own
+## AI is not here to do
 
-- Invoice totals
-- Payment amounts
-- Reservation status
-- Invoice status
-- Finance ledger writes
+- calculate invoice totals
+- decide ledger truth
+- mutate financial facts without deterministic validation
+- become the primary product instead of the operator layer
 
-## Required contract
+## Required behavior for agentic features
 
-Every meaningful AI feature should have:
+Every meaningful AI feature should show:
 
-1. Stable input shape
-2. Zod-validated output
-3. Adapter boundary to the provider
-4. Safe failure mode
-5. Persistence if the output matters to the product
+1. a goal
+2. inputs from deterministic system state
+3. multi-step reasoning or tool use
+4. a concrete result
+5. an audit trail
 
-## Important files
+## Preferred outputs
 
-```text
-agents/customer-service/agent.js
-src/lib/services/feedback.ts
-src/lib/services/ai-actions.ts
-src/lib/services/ai-summaries.ts
-src/lib/schemas/feedback-ai.ts
-```
+- ranked financing options
+- receivables risk summaries
+- vendor spike comparisons
+- insurance renewal warnings
+- concise recommended next actions
 
-## Common mistakes
+## TinyFish usage
 
-- Building AI on mock facts
-- Calling the provider directly from route handlers
-- Letting prompts replace domain rules
+- default to mock mode for build velocity and demo safety
+- only use live mode when endpoint config is verified
+- keep results normalized into internal schemas
+
+## Acceptance test
+
+Ask:
+
+- would a judge clearly see that an autonomous system did real work?
+- would a small-business owner see why this saves time or money?

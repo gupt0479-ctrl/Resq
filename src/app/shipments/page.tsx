@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import { connection } from "next/server"
 import { Package, Truck, CalendarCheck, DollarSign } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { ShipmentTable } from "@/components/shipments/shipment-table"
 import { getShipments } from "@/lib/supabase/queries"
 
@@ -131,11 +131,6 @@ async function ShipmentsContent() {
 
       {/* Shipments table */}
       <Card className="overflow-visible">
-        <CardHeader className="border-b border-border pb-0 pt-4">
-          <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Latest Shipments
-          </CardTitle>
-        </CardHeader>
         <CardContent className="p-0">
           <ShipmentTable initialShipments={weekShipments} />
         </CardContent>
@@ -165,7 +160,7 @@ export default async function ShipmentsPage() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Procurement</h1>
         <p className="text-xs text-muted-foreground">
-          Ledger inventory purchases (last 7 days through next 7) · Ember Table
+          Ledger inventory purchases (last 7 days through next 7) · OpsPilot Rescue
         </p>
       </div>
 

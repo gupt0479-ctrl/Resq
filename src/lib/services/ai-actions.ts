@@ -1,13 +1,13 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { AiActionStatus } from "@/lib/constants/enums"
+import type { AiActionStatus, AiActionType } from "@/lib/constants/enums"
 
 export interface RecordAiActionInput {
   organizationId:   string
   entityType:       string
   entityId:         string
   triggerType:      string
-  actionType:       string
+  actionType:       AiActionType
   inputSummary:     string
   outputPayload:    Record<string, unknown> | null
   status?:          AiActionStatus
