@@ -29,7 +29,7 @@ export function McpGraph() {
     <svg viewBox="20 20 600 360" className="w-full" aria-hidden="true">
       <defs>
         <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-          <path d="M0,0 L6,3 L0,6 Z" fill="hsl(38 92% 52%)" opacity="0.7" />
+          <path d="M0,0 L6,3 L0,6 Z" fill="hsl(0 72% 51%)" opacity="0.7" />
         </marker>
       </defs>
 
@@ -43,7 +43,7 @@ export function McpGraph() {
           <g key={`${from}-${to}`}>
             <line
               x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke="hsl(38 92% 52%)" strokeWidth="1" strokeDasharray="5 4" opacity="0.55"
+              stroke="hsl(0 72% 51%)" strokeWidth="1" strokeDasharray="5 4" opacity="0.55"
               markerEnd="url(#arr)"
             >
               <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="1.2s" repeatCount="indefinite" />
@@ -52,7 +52,7 @@ export function McpGraph() {
               x={mid.x} y={mid.y - 4}
               textAnchor="middle"
               fontSize="9"
-              fill="hsl(38 92% 52%)"
+              fill="hsl(0 72% 51%)"
               fontFamily="Inter, sans-serif"
               opacity="0.9"
             >
@@ -70,16 +70,16 @@ export function McpGraph() {
           <g key={n.id}>
             <rect
               x={rx} y={ry} width={n.w} height={n.h} rx="6"
-              fill={n.primary ? "hsl(0 0% 10%)" : "white"}
-              stroke={n.primary ? "hsl(0 0% 10%)" : "hsl(220 13% 85%)"}
-              strokeWidth={n.primary ? 0 : 1}
+              fill="white"
+              stroke="hsl(0 0% 10%)"
+              strokeWidth={n.primary ? 1.5 : 1}
             />
             <text
               x={n.x} y={n.y - (n.sub.length > 1 ? 10 : 6)}
               textAnchor="middle"
               fontSize={n.primary ? 10.5 : 10}
               fontWeight="600"
-              fill={n.primary ? "white" : "hsl(0 0% 10%)"}
+              fill="hsl(0 0% 10%)"
               fontFamily="Inter, sans-serif"
             >
               {n.label}
@@ -91,7 +91,7 @@ export function McpGraph() {
                 y={n.y + (n.sub.length > 1 ? (i === 0 ? 5 : 16) : 8)}
                 textAnchor="middle"
                 fontSize="8"
-                fill={n.primary ? "rgba(255,255,255,0.6)" : "hsl(220 9% 52%)"}
+                fill="hsl(220 9% 52%)"
                 fontFamily="Inter, sans-serif"
               >
                 {s}
