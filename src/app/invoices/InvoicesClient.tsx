@@ -3,8 +3,6 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { RiskBadge, type RiskLevel } from "@/components/RiskBadge"
-import { InvestigationPanel } from "@/components/receivables/investigation-panel"
-import { ArrowRight } from "lucide-react"
 import type { InvoiceRow } from "./page"
 
 function fmt(n: number) {
@@ -172,19 +170,6 @@ export function InvoicesClient({ invoices }: { invoices: InvoiceRow[] }) {
                 </div>
               )}
 
-              {/* Run collections agent */}
-              {(selected.status === "overdue" || selected.status === "sent" || selected.status === "pending") && (
-                <div className="mt-4">
-                  <InvestigationPanel
-                    invoiceId={selected.id}
-                    invoiceNumber={selected.number}
-                    customerName={selected.customerName}
-                    balance={selected.balance}
-                    daysOverdue={selected.daysOverdue}
-                    fullWidth
-                  />
-                </div>
-              )}
             </div>
           </div>
         )}
