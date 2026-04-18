@@ -184,6 +184,85 @@ export function mockAgentRun(
   }
 }
 
+export function mockCollectionsSearch(customerName: string, query: string): TinyFishSearchResult {
+  const isMarketQuery = /market|industry|sector|conditions/i.test(query)
+  const isNewsQuery   = /news|bankruptcy|insolvency|financial|difficulties/i.test(query)
+
+  if (isMarketQuery) {
+    return {
+      query,
+      mode: "mock",
+      results: [
+        {
+          title:   "Service sector payment delays rising in Q1 2026",
+          url:     "https://example.com/service-sector-2026",
+          snippet: "Small and mid-size service businesses are reporting longer payment cycles, with average DSO up 8 days year-over-year amid tightening credit conditions.",
+          score:   0.88,
+        },
+        {
+          title:   "SMB cashflow pressure index reaches 18-month high",
+          url:     "https://example.com/smb-cashflow-index",
+          snippet: "Receivables aging is accelerating across hospitality, retail, and professional services as customers extend payment windows.",
+          score:   0.74,
+        },
+        {
+          title:   "Industry receivables benchmarks: Q1 2026 report",
+          url:     "https://example.com/receivables-benchmarks-q1",
+          snippet: "Median days-sales-outstanding climbed to 42 days in Q1 2026, up from 38 days in Q4 2025, driven by broader economic caution.",
+          score:   0.67,
+        },
+      ],
+    }
+  }
+
+  if (isNewsQuery) {
+    return {
+      query,
+      mode: "mock",
+      results: [
+        {
+          title:   `No insolvency or bankruptcy filings found for ${customerName}`,
+          url:     "https://example.com/public-records-search",
+          snippet: `Public records search returned no active bankruptcy petitions, court judgments, or insolvency notices linked to ${customerName} as of April 2026.`,
+          score:   0.91,
+        },
+        {
+          title:   `${customerName}: no major negative press coverage detected`,
+          url:     "https://example.com/news-monitor",
+          snippet: "No news articles referencing business closure, fraud, or financial distress were found in recent web index for this entity.",
+          score:   0.79,
+        },
+        {
+          title:   "How to interpret absence of negative signals in B2B collections",
+          url:     "https://example.com/collections-guide",
+          snippet: "When no derogatory public records are found, focus shifts to internal payment behavior and direct outreach strategy.",
+          score:   0.62,
+        },
+      ],
+    }
+  }
+
+  // Generic collections fallback
+  return {
+    query,
+    mode: "mock",
+    results: [
+      {
+        title:   `${customerName} — public profile overview`,
+        url:     "https://example.com/business-profiles",
+        snippet: "Business appears active with no significant public derogatory records in recent searches.",
+        score:   0.84,
+      },
+      {
+        title:   "Collections risk assessment: external data sources guide",
+        url:     "https://example.com/collections-external-data",
+        snippet: "Combining internal payment history with external news and filing searches improves recovery rate predictions by 22%.",
+        score:   0.71,
+      },
+    ],
+  }
+}
+
 export function mockSearch(query: string): TinyFishSearchResult {
   return {
     query,

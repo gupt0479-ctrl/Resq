@@ -40,6 +40,20 @@ export const AgentStepSchema = z.object({
   result:  z.unknown(),
 })
 
+export const ExternalSignalArticleSchema = z.object({
+  title:     z.string(),
+  url:       z.string(),
+  snippet:   z.string(),
+  relevance: z.enum(["high", "medium", "low"]),
+})
+
+export const ExternalSignalsSchema = z.object({
+  searched:      z.boolean(),
+  articles:      z.array(ExternalSignalArticleSchema),
+  marketContext: z.string(),
+  dataSource:    z.enum(["live", "mock", "not_run"]),
+})
+
 export const ReceivablesInvestigationResultSchema = z.object({
   customerId:         z.string(),
   customerName:       z.string(),
@@ -50,6 +64,7 @@ export const ReceivablesInvestigationResultSchema = z.object({
   riskLevel:          z.enum(["low", "medium", "high", "critical"]),
   verificationChecks: VerificationChecksSchema,
   creditReport:       CreditReportSchema,
+  externalSignals:    ExternalSignalsSchema.optional(),
   riskFactors:        z.array(RiskFactorSchema),
   recommendedAction:  z.enum(["reminder", "payment_plan", "escalation", "write_off"]),
   actionDraft:        z.string(),
@@ -59,6 +74,8 @@ export const ReceivablesInvestigationResultSchema = z.object({
 
 export type CreditRedFlag = z.infer<typeof CreditRedFlagSchema>
 export type CreditReport  = z.infer<typeof CreditReportSchema>
+export type ExternalSignalArticle = z.infer<typeof ExternalSignalArticleSchema>
+export type ExternalSignals = z.infer<typeof ExternalSignalsSchema>
 export type VerificationChecks = z.infer<typeof VerificationChecksSchema>
 export type RiskFactor = z.infer<typeof RiskFactorSchema>
 export type AgentStep = z.infer<typeof AgentStepSchema>

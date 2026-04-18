@@ -9,7 +9,10 @@ import {
   type RiskFactor,
   type CreditReport,
   type CreditRedFlag,
+  type ExternalSignals,
 } from "@/lib/schemas/receivables-agent"
+import { search as tinyFishSearch } from "@/lib/tinyfish/client"
+import { mockCollectionsSearch } from "@/lib/tinyfish/mock-data"
 
 // ── Tool implementations (query Supabase, never modify) ───────────────────────
 
@@ -516,11 +519,23 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     description: "Evaluate the customer's credit report for red flags: late payments (30/60/90 days), charged-off accounts, unfamiliar accounts, maxed-out credit, and frequent address/contact changes.",
     parameters: { type: SchemaType.OBJECT, properties: {} },
   },
+  {
+    name: "search_external_signals",
+    description: "Search the web for external signals about this customer: news about their business, bankruptcy or insolvency filings, market conditions in their industry, and payment/financial health indicators from public sources.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        customer_name: { type: SchemaType.STRING, description: "Customer name to search for" },
+        industry_hint: { type: SchemaType.STRING, description: "Industry or sector hint for market context (e.g. 'restaurant', 'retail', 'construction')" },
+      },
+      required: ["customer_name"],
+    },
+  },
 ]
 
 const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for OpsPilot, an SMB cashflow recovery system.
 
-REQUIRED: Call ALL SEVEN tools before writing any conclusions.
+REQUIRED: Call ALL EIGHT tools before writing any conclusions.
 
 Call tools in this order:
 1. get_invoice_status — understand what is owed
@@ -530,6 +545,7 @@ Call tools in this order:
 5. get_all_open_invoices — understand total exposure
 6. run_verification_checks — generate the KYC checklist
 7. evaluate_credit_report — check for credit red flags (late payments, charge-offs, fraud signals)
+8. search_external_signals — search for news, bankruptcy filings, and market conditions affecting this customer
 
 After gathering all data, write a concise investigation summary that references exact figures ("$450 overdue for 23 days, 60% on-time rate"), identifies the key risk factors, and states your recommended action and why.`
 
@@ -559,6 +575,7 @@ export async function runReceivablesInvestigation(
   let openInvData:  Record<string, unknown> | null = null
   let verData:      VerificationChecks | null = null
   let creditData:   CreditReport | null = null
+  let externalData: ExternalSignals | null = null
 
   // ── Phase 1: gather data via tool calls ──────────────────────────────────
   const toolModel = genAI.getGenerativeModel({
@@ -606,6 +623,34 @@ export async function runReceivablesInvestigation(
       } else if (call.name === "evaluate_credit_report") {
         creditData = await evaluateCreditReport(supabase, input.customerId, input.organizationId)
         toolResult = creditData
+      } else if (call.name === "search_external_signals") {
+        const { customer_name, industry_hint } = call.args as { customer_name: string; industry_hint?: string }
+        const queries = [
+          `${customer_name} bankruptcy insolvency news 2025 2026`,
+          `${customer_name} business financial difficulties`,
+          ...(industry_hint ? [`${industry_hint} industry payment delays market conditions 2026`] : []),
+        ]
+        const results = await Promise.all(queries.map(q =>
+          tinyFishSearch(q, { limit: 3 }).catch(() => mockCollectionsSearch(customer_name, q))
+        ))
+        const allArticles = results.flatMap(r => r.results)
+        const mode = results[0]?.mode ?? "mock"
+        const nameLower = customer_name.toLowerCase()
+        const industryLower = (industry_hint ?? "").toLowerCase()
+        externalData = {
+          searched: true,
+          articles: allArticles.slice(0, 6).map(a => ({
+            title:     a.title,
+            url:       a.url,
+            snippet:   a.snippet,
+            relevance: (a.title.toLowerCase().includes(nameLower) ? "high"
+                       : industryLower && a.title.toLowerCase().includes(industryLower) ? "medium"
+                       : "low") as "high" | "medium" | "low",
+          })),
+          marketContext: results.find(r => /market|industry/i.test(r.query))?.results[0]?.snippet ?? "",
+          dataSource: mode === "live" ? "live" : "mock",
+        }
+        toolResult = externalData
       } else {
         toolResult = { error: `Unknown tool: ${call.name}` }
       }
@@ -663,6 +708,7 @@ export async function runReceivablesInvestigation(
     riskLevel,
     verificationChecks: verData,
     creditReport:       creditData ?? { redFlags: [], flagCount: 0, overallStatus: "clean" },
+    externalSignals:    externalData ?? undefined,
     riskFactors,
     recommendedAction,
     actionDraft:        buildActionDraft(recommendedAction, customerName, totalOverdue, daysOverdue),

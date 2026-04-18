@@ -421,6 +421,44 @@ export function InvestigationPanel({
                     </div>
                   )}
 
+                  {/* External signals */}
+                  {result.externalSignals?.searched && result.externalSignals.articles.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                        External Signals
+                        <span className={cn(
+                          "px-1.5 py-0.5 rounded text-xs font-semibold normal-case tracking-normal",
+                          result.externalSignals.dataSource === "live"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                            : "bg-muted text-muted-foreground",
+                        )}>
+                          {result.externalSignals.dataSource}
+                        </span>
+                      </p>
+                      <div className="space-y-2">
+                        {result.externalSignals.articles.map((article, i) => (
+                          <div key={i} className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-2.5">
+                            <span className={cn(
+                              "mt-1.5 shrink-0 size-2 rounded-full",
+                              article.relevance === "high"   && "bg-red-500",
+                              article.relevance === "medium" && "bg-amber-500",
+                              article.relevance === "low"    && "bg-muted-foreground/40",
+                            )} />
+                            <div>
+                              <p className="text-xs font-medium">{article.title}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{article.snippet}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {result.externalSignals.marketContext && (
+                        <p className="text-xs text-muted-foreground italic mt-2">
+                          Market context: {result.externalSignals.marketContext}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Agent reasoning */}
                   {result.reasoning && (
                     <div className="rounded-lg bg-muted/50 border border-border p-4">
