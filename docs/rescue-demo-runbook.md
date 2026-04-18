@@ -52,12 +52,17 @@ Only enable after verifying the real TinyFish API details:
 TINYFISH_ENABLED=true
 TINYFISH_USE_MOCKS=false
 TINYFISH_API_KEY=...
-TINYFISH_BASE_URL=...
-TINYFISH_HEALTH_PATH=...
-TINYFISH_SEARCH_PATH=...
-TINYFISH_FETCH_PATH=...
-TINYFISH_AGENT_PATH=...
+TINYFISH_AGENT_BASE_URL=https://agent.tinyfish.ai
+TINYFISH_SEARCH_BASE_URL=https://api.search.tinyfish.ai
+TINYFISH_FETCH_BASE_URL=https://api.fetch.tinyfish.ai
+TINYFISH_AGENT_PATH=/v1/automation/run
 ```
+
+Notes:
+
+- TinyFish MCP auth in Kiro/Claude/Cursor is separate from app runtime auth.
+- MCP uses OAuth 2.1 against `https://agent.tinyfish.ai/mcp`.
+- App runtime uses `TINYFISH_API_KEY` over the official REST surfaces.
 
 ## 3. SQL apply order
 
@@ -82,6 +87,10 @@ npm install
 npm run dev
 ```
 
+Optional deploy path:
+
+- for the smallest AWS story, use `docs/apprunner-deploy.md`
+
 ## 5. Health probes
 
 ### TinyFish health
@@ -89,6 +98,25 @@ npm run dev
 ```bash
 curl -s http://localhost:3000/api/tinyfish/health | jq
 ```
+
+This route is a mode/config probe. It tells you whether the app is in
+`mock`, `misconfigured`, or `live` configuration state. Degraded-from-live
+truth is surfaced on executed runs, not on this probe.
+
+### Financing scout
+
+```bash
+curl -s -X POST http://localhost:3000/api/tinyfish/demo-run \
+  -H "Content-Type: application/json" \
+  -d '{"scenario":"financing"}' | jq
+```
+
+Check:
+
+- `data.mode`
+- `data.degradedFromLive`
+- `data.warning`
+- `data.result.outputs.offers`
 
 ### Full survival scan
 
@@ -104,6 +132,11 @@ Supported scenarios:
 - `vendor`
 - `insurance`
 - `full_survival_scan`
+
+Current live scope:
+
+- financing is the only required live external lane
+- vendor and insurance may remain fixture-backed during hybrid live mode
 
 ## 6. Canonical private-demo script
 

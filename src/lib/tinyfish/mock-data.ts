@@ -1,9 +1,11 @@
 import type {
   TinyFishAgentRunResult,
   TinyFishFetchResult,
+  TinyFishFinancingOutputs,
   TinyFishScenario,
   TinyFishSearchResult,
 } from "./schemas"
+import { TinyFishFinancingOutputsSchema } from "./schemas"
 
 // Deterministic timestamp so demo replays stay stable.
 const DEMO_FIXED_ISO = "2026-04-11T18:00:00.000Z"
@@ -19,6 +21,9 @@ export const FINANCING_OFFERS = [
     maxAmountUsd:    75_000,
     decisionSpeed:   "48 hours",
     notes:           "Soft credit pull. Daily ACH repayment.",
+    sourceUrl:       "https://example.com/blueharbor-working-capital",
+    sourceTitle:     "BlueHarbor Capital working capital advance",
+    confidence:      0.84,
   },
   {
     lender:          "Kabbage-Lite Line",
@@ -28,6 +33,9 @@ export const FINANCING_OFFERS = [
     maxAmountUsd:    40_000,
     decisionSpeed:   "24 hours",
     notes:           "Draw as needed, interest-only on drawn balance.",
+    sourceUrl:       "https://example.com/kabbage-lite-line",
+    sourceTitle:     "Kabbage-Lite revolving line of credit",
+    confidence:      0.76,
   },
   {
     lender:          "Backer SMB Loans",
@@ -37,6 +45,9 @@ export const FINANCING_OFFERS = [
     maxAmountUsd:    150_000,
     decisionSpeed:   "14 days",
     notes:           "Requires 2 years tax returns. Lowest APR of the three.",
+    sourceUrl:       "https://example.com/backer-sba-micro",
+    sourceTitle:     "Backer SMB Loans SBA 7(a) micro offer",
+    confidence:      0.72,
   },
 ] as const
 
@@ -99,11 +110,33 @@ function steps(labels: Array<[string, string, number]>) {
   }))
 }
 
+function buildMockFinancingOutputs(
+  overrides: Partial<TinyFishFinancingOutputs> = {}
+): TinyFishFinancingOutputs {
+  return TinyFishFinancingOutputsSchema.parse({
+    offers: FINANCING_OFFERS.map((offer) => ({ ...offer })),
+    mode: "mock",
+    degradedFromLive: false,
+    warning: null,
+    ...overrides,
+  })
+}
+
 export function mockAgentRun(
   scenario: TinyFishScenario,
   task: string
 ): TinyFishAgentRunResult {
   if (scenario === "financing") {
+    const outputs = buildMockFinancingOutputs({
+      searchQueries: [
+        "small business working capital line of credit fast approval",
+        "SMB financing offers same day funding term loan APR",
+      ],
+      sourceUrls: FINANCING_OFFERS.map((offer) => offer.sourceUrl),
+      summary:
+        "Three financing options surfaced. Recommend BlueHarbor for speed and SBA-style financing for lowest APR.",
+    })
+
     return {
       task,
       scenario,
@@ -115,9 +148,7 @@ export function mockAgentRun(
       ]),
       summary:
         "Three financing options surfaced. Recommend BlueHarbor (48h) for bridging, SBA 7(a) for long-term.",
-      outputs: {
-        offers: FINANCING_OFFERS.map((o) => ({ ...o, estMonthlySavings: undefined })),
-      },
+      outputs,
     }
   }
 
@@ -177,9 +208,27 @@ export function mockAgentRun(
     summary:
       "Survival scan complete: 3 financing offers, 2 vendor savings plays, 1 insurance renewal warning.",
     outputs: {
-      financing: financing.outputs,
-      vendor:    vendor.outputs,
-      insurance: insurance.outputs,
+      financing: {
+        ...(financing.outputs as TinyFishFinancingOutputs),
+        summary: financing.summary,
+        mode: financing.mode,
+        degradedFromLive: financing.degradedFromLive ?? false,
+        warning: financing.warning ?? null,
+      },
+      vendor: {
+        ...vendor.outputs,
+        summary: vendor.summary,
+        mode: vendor.mode,
+        degradedFromLive: vendor.degradedFromLive ?? false,
+        warning: vendor.warning ?? null,
+      },
+      insurance: {
+        ...insurance.outputs,
+        summary: insurance.summary,
+        mode: insurance.mode,
+        degradedFromLive: insurance.degradedFromLive ?? false,
+        warning: insurance.warning ?? null,
+      },
     },
   }
 }
@@ -269,15 +318,15 @@ export function mockSearch(query: string): TinyFishSearchResult {
     mode: "mock",
     results: [
       {
-        title:   "SMB working-capital options for independent restaurants",
+        title:   "SMB working-capital options for cash-constrained operators",
         url:     "https://example.com/working-capital-guide",
-        snippet: "Compare term loans, lines of credit, and SBA 7(a) programs.",
+        snippet: "Compare term loans, lines of credit, revenue-based financing, and SBA programs.",
         score:   0.91,
       },
       {
-        title:   "How to benchmark supplier pricing for produce SKUs",
+        title:   "How to benchmark supplier pricing for recurring business inputs",
         url:     "https://example.com/supplier-benchmarks",
-        snippet: "Use 30/60/90-day moving averages against market indices.",
+        snippet: "Use 30/60/90-day moving averages against market indices and invoice history.",
         score:   0.77,
       },
       {

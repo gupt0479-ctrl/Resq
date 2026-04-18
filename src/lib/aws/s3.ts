@@ -13,6 +13,9 @@ import {
  * artifacts. If AWS env is missing, every method no-ops with
  * `{ skipped: true }` instead of throwing. No existing route uses this yet —
  * it exists so future rescue agent runs can persist audit payloads.
+ *
+ * Keep artifacts private. If you later expose them outside the app, use
+ * presigned URLs rather than a public bucket policy.
  */
 
 export interface PutArtifactResult {

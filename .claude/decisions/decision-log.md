@@ -35,3 +35,21 @@ Append short factual entries here when the build learns something important.
   value.
 - Why: hackathon judges reward clarity, execution, and product sharpness more
   than feature count.
+
+## 2026-04-18 - Financing Scout Is The Hero Live Lane
+
+- Decision: make financing scout the only required live TinyFish workflow.
+- Why: it is the clearest fintech proof, the most repeatable public-web flow,
+  and the least fragile external path for the hackathon demo.
+
+## 2026-04-18 - `.claude` Is Canonical And `.kiro/steering` Mirrors It
+
+- Decision: keep `.claude` as the only canonical agent-facing source of truth.
+- Why: duplicating planning guidance across `.claude` and `.kiro` increases
+  drift and agent hallucination risk.
+
+## 2026-04-18 - Archive Stale Agent Docs Aggressively
+
+- Decision: move stale, legacy, or human-only docs out of the active read path.
+- Why: the docs were directionally correct but too noisy; reducing the active
+  surface improves agent reliability under time pressure.

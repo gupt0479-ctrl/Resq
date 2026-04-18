@@ -1,0 +1,12 @@
+{
+  "name": "Verify Build After Changes",
+  "version": "1.0.0",
+  "description": "Runs lint and type-check after agent stops to catch regressions early",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "npx tsc --noEmit && npm run lint"
+  }
+}

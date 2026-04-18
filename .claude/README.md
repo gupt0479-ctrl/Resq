@@ -1,41 +1,56 @@
-# OpsPilot Rescue Project Memory
+# OpsPilot Rescue Canonical Agent Docs
 
-This folder is the canonical handoff layer for the hackathon build.
+This folder is the **only canonical agent-facing source of truth** for the hackathon build.
 
-## Read order
+If a file is not in the read order below, it is either:
+
+- non-canonical support material
+- human reference only
+- archived historical context that agents should ignore unless explicitly asked
+
+## Canonical read order
 
 1. `PRD.md`
 2. `context/current-state.md`
-3. `context/6hour-status.md`
-4. `context/architecture.md`
-5. matching `playbooks/`, `checklists/`, or `workflows/`
+3. `context/architecture.md`
+4. `context/12hour-execution.md`
+5. `playbooks/tinyfish-and-agent.md`
+6. `playbooks/backend-and-api.md`
+7. `playbooks/ui-and-demo.md`
+8. `playbooks/supabase-and-data.md`
+9. `checklists/change-gate.md`
+10. `checklists/demo-readiness.md`
+11. `decisions/decision-log.md`
 
-## Folder purpose
+## Setup companions
 
-- `PRD.md`
-  Canonical product and build truth.
-- `context/`
-  Current status, architecture, merge notes, and vocabulary.
-- `playbooks/`
-  Domain-specific implementation guidance.
-- `checklists/`
-  Execution gates and demo readiness rules.
-- `workflows/`
-  Canonical demo flow and operator sequence.
-- `decisions/`
-  Durable product and engineering decisions.
+Read these when the task touches local operations rather than product doctrine:
 
-## Project rules
+- `../docs/rescue-demo-runbook.md`
+- `../docs/kiro-tinyfish-setup.md`
+- `../docs/apprunner-deploy.md`
 
-- Build one sharp agentic fintech product.
-- Preserve deterministic finance logic.
-- Keep TinyFish mock mode available until live mode is verified.
-- Optimize for judge comprehension and demo stability.
+## Rules for agents
 
-## Current demo thesis
+- Build **one sharp agentic fintech product**, not a broad SMB suite.
+- Treat `.claude` as canonical and `.kiro/steering` as a thin mirror only.
+- Ignore `.claude/archive/` unless a human explicitly asks for historical context.
+- Preserve deterministic finance and invoice truth.
+- Keep TinyFish mock mode available at all times.
+- Prefer the narrowest implementation that strengthens the 90-second and 5-minute demo.
 
-OpsPilot Rescue helps a small business survive cash stress by autonomously:
+## Current winner story
 
-1. recovering receivables
-2. scouting financing options
-3. detecting vendor and insurance savings opportunities
+OpsPilot Rescue helps a small business survive cash pressure by:
+
+1. exposing overdue receivables and rescue risk
+2. running a survival scan
+3. surfacing financing options with source links and warnings
+4. adding vendor or insurance savings proof
+5. logging an auditable agent timeline
+
+## What agents should not do
+
+- Do not use archived docs as active requirements.
+- Do not broaden scope beyond collections, financing scout, and vendor/insurance optimization.
+- Do not treat Kiro steering files as a second source of truth.

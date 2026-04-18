@@ -4,6 +4,8 @@ export type {
   TinyFishSearchHit,
   TinyFishSearchResult,
   TinyFishFetchResult,
+  TinyFishFinancingOffer,
+  TinyFishFinancingOutputs,
   TinyFishAgentStep,
   TinyFishAgentRunResult,
   TinyFishScenario,

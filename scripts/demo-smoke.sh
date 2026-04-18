@@ -21,8 +21,8 @@ npx tsc --noEmit
 echo "== Unit tests =="
 npm test
 
-echo "== Production build (webpack) =="
-npx next build --webpack
+echo "== Production build =="
+npm run build
 
 echo "== Optional: DB repro script (needs Supabase env) =="
 node scripts/repro-dashboard-data.mjs || true
@@ -63,14 +63,17 @@ probe_post() {
 echo ""
 echo "== Route probes (soft-fail; skipped if dev server not running) =="
 probe_get  "/api/tinyfish/health"
+probe_post "/api/tinyfish/demo-run" '{"scenario":"financing"}'
 probe_post "/api/tinyfish/demo-run" '{"scenario":"full_survival_scan"}'
 probe_get  "/api/finance/summary"
 probe_get  "/api/integrations"
+probe_get  "/workflow"
+probe_get  "/rescue"
 
 echo ""
 echo "Done."
 echo "Manual demo follow-ups:"
-echo "  - POST /api/feedback/submit"
-echo "  - POST /api/review"
-echo "  - webhook feedback.received"
-echo "  - POST /api/ai/manager-summary with CRON_SECRET"
+echo "  - open /dashboard and confirm cash stress reads clearly"
+echo "  - open /rescue and run the survival scan path"
+echo "  - open /workflow and confirm the audit timeline is legible"
+echo "  - open /integrations and confirm TinyFish mode is honest"

@@ -50,18 +50,23 @@ export function isSupabaseConfigured(): boolean {
 
 // ─── TinyFish (server-only, additive) ──────────────────────────────────────
 
-const DEFAULT_TINYFISH_BASE_URL = "https://agent.tinyfish.ai"
+const DEFAULT_TINYFISH_AGENT_BASE_URL = "https://agent.tinyfish.ai"
+const DEFAULT_TINYFISH_SEARCH_BASE_URL = "https://api.search.tinyfish.ai"
+const DEFAULT_TINYFISH_FETCH_BASE_URL = "https://api.fetch.tinyfish.ai"
+const DEFAULT_TINYFISH_AGENT_RUN_PATH = "/v1/automation/run"
 const DEFAULT_TINYFISH_TIMEOUT_MS = 30_000
 
 export const TINYFISH_API_KEY = process.env.TINYFISH_API_KEY?.trim() ?? ""
-export const TINYFISH_BASE_URL =
-  process.env.TINYFISH_BASE_URL?.trim() || DEFAULT_TINYFISH_BASE_URL
+export const TINYFISH_AGENT_BASE_URL =
+  process.env.TINYFISH_AGENT_BASE_URL?.trim() || DEFAULT_TINYFISH_AGENT_BASE_URL
+export const TINYFISH_SEARCH_BASE_URL =
+  process.env.TINYFISH_SEARCH_BASE_URL?.trim() || DEFAULT_TINYFISH_SEARCH_BASE_URL
+export const TINYFISH_FETCH_BASE_URL =
+  process.env.TINYFISH_FETCH_BASE_URL?.trim() || DEFAULT_TINYFISH_FETCH_BASE_URL
 
-/** Optional per-method paths. Required for live mode to be considered fully configured. */
-export const TINYFISH_SEARCH_PATH = process.env.TINYFISH_SEARCH_PATH?.trim() ?? ""
-export const TINYFISH_FETCH_PATH  = process.env.TINYFISH_FETCH_PATH?.trim()  ?? ""
-export const TINYFISH_AGENT_PATH  = process.env.TINYFISH_AGENT_PATH?.trim()  ?? ""
-export const TINYFISH_HEALTH_PATH = process.env.TINYFISH_HEALTH_PATH?.trim() ?? ""
+/** The Agent API uses a canonical path under the agent base URL. */
+export const TINYFISH_AGENT_PATH =
+  process.env.TINYFISH_AGENT_PATH?.trim() ?? DEFAULT_TINYFISH_AGENT_RUN_PATH
 
 /** Truthy unless explicitly set to "false" (trim + lower). Missing env => demo-safe default. */
 function parseBooleanDefaultTrue(raw: string | undefined): boolean {
@@ -88,16 +93,21 @@ export const TINYFISH_ENABLED   = parseBooleanDefaultFalse(process.env.TINYFISH_
 export const TINYFISH_USE_MOCKS = parseBooleanDefaultTrue(process.env.TINYFISH_USE_MOCKS)
 export const TINYFISH_TIMEOUT_MS = parseTimeoutMs(process.env.TINYFISH_TIMEOUT_MS)
 
-/** API key + base URL present. Does NOT require method paths. */
+/** API key + official base URLs present. Optional path overrides are not required. */
 export function isTinyFishConfigured(): boolean {
-  return Boolean(TINYFISH_API_KEY && TINYFISH_BASE_URL)
+  return Boolean(
+    TINYFISH_API_KEY &&
+    TINYFISH_AGENT_BASE_URL &&
+    TINYFISH_SEARCH_BASE_URL &&
+    TINYFISH_FETCH_BASE_URL
+  )
 }
 
 /**
  * "Live intent" = operator has explicitly asked for live mode.
  * i.e. TINYFISH_ENABLED=true AND TINYFISH_USE_MOCKS=false.
- * A missing API key or missing path env does NOT cancel live intent — the
- * operator signaled they want live, they just forgot a piece of config.
+ * A missing API key does NOT cancel live intent — the operator signaled they
+ * want live, they just forgot a piece of config.
  */
 export function hasTinyFishLiveIntent(): boolean {
   return TINYFISH_ENABLED && !TINYFISH_USE_MOCKS
@@ -112,16 +122,10 @@ export function isTinyFishMockMode(): boolean {
   return !hasTinyFishLiveIntent()
 }
 
-/** True only if configured, enabled, mocks disabled, and all required method paths present. */
+/** True only if configured, enabled, and mocks are disabled. */
 export function isTinyFishLiveReady(): boolean {
   if (!hasTinyFishLiveIntent()) return false
-  if (!isTinyFishConfigured()) return false
-  return Boolean(
-    TINYFISH_SEARCH_PATH &&
-    TINYFISH_FETCH_PATH &&
-    TINYFISH_AGENT_PATH &&
-    TINYFISH_HEALTH_PATH
-  )
+  return isTinyFishConfigured()
 }
 
 export type TinyFishMode = "mock" | "live" | "misconfigured"
@@ -129,7 +133,7 @@ export type TinyFishMode = "mock" | "live" | "misconfigured"
 /**
  * High-level classification for UI + logging:
  *   - "mock":         mocks explicitly on, or live not intended.
- *   - "live":         live intent + fully configured + all paths set.
+ *   - "live":         live intent + API key + official endpoints available.
  *   - "misconfigured": live intent but something required is missing.
  *                     Surfaces operator mistakes instead of hiding them.
  */

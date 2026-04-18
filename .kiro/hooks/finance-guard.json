@@ -1,0 +1,13 @@
+{
+  "name": "Finance Truth Guard",
+  "version": "1.0.0",
+  "description": "Reminds the agent not to mutate deterministic finance logic when writing to service files",
+  "when": {
+    "type": "preToolUse",
+    "toolTypes": ["write"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Before writing: if this file touches invoice totals, finance ledger writes, payment state, or deterministic business transitions, STOP. AI must not own financial truth. Services own mutations. Confirm this write is safe."
+  }
+}
