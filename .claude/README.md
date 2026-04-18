@@ -4,11 +4,12 @@ This folder is the canonical handoff layer for the hackathon build.
 
 ## Read order
 
-1. `PRD.md`
-2. `context/current-state.md`
-3. `context/6hour-status.md`
-4. `context/architecture.md`
-5. matching `playbooks/`, `checklists/`, or `workflows/`
+1. `PRD.md` — canonical product spec including pain points and positioning
+2. `context/product-vision.md` — expanded problem space and roadmap context
+3. `context/current-state.md`
+4. `context/6hour-status.md`
+5. `context/architecture.md`
+6. matching `playbooks/`, `checklists/`, or `workflows/`
 
 ## Folder purpose
 
