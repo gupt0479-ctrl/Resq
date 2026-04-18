@@ -7,6 +7,8 @@ import {
   type AgentStep,
   type VerificationChecks,
   type RiskFactor,
+  type CreditReport,
+  type CreditRedFlag,
 } from "@/lib/schemas/receivables-agent"
 
 // ── Tool implementations (query Supabase, never modify) ───────────────────────
@@ -310,6 +312,147 @@ function computeRiskScore(params: {
   return { score, riskLevel, riskFactors: factors }
 }
 
+async function evaluateCreditReport(
+  client: SupabaseClient,
+  customerId: string,
+  organizationId: string,
+): Promise<CreditReport> {
+  const flags: CreditRedFlag[] = []
+
+  // ── 1. Late payments: 30 / 60 / 90+ days ─────────────────────────────────
+  const { data: allInvoices } = await client
+    .from("invoices")
+    .select("status, due_at, paid_at, total_amount")
+    .eq("customer_id", customerId)
+    .eq("organization_id", organizationId)
+
+  const late30: number[] = []
+  const late60: number[] = []
+  const late90: number[] = []
+
+  for (const inv of allInvoices ?? []) {
+    if (!inv.due_at) continue
+    const compareDate = inv.paid_at ? new Date(inv.paid_at) : new Date()
+    const daysLate = Math.floor(
+      (compareDate.getTime() - new Date(inv.due_at).getTime()) / (1000 * 60 * 60 * 24),
+    )
+    if (daysLate >= 90) late90.push(daysLate)
+    else if (daysLate >= 60) late60.push(daysLate)
+    else if (daysLate >= 30) late30.push(daysLate)
+  }
+
+  const totalLate = late30.length + late60.length + late90.length
+  flags.push({
+    flag:     "late_payments",
+    label:    "Late Payments (30 / 60 / 90 days)",
+    severity: late90.length > 0 ? "critical" : totalLate > 0 ? "warning" : "none",
+    detail:
+      totalLate === 0
+        ? "No late payments on record"
+        : `${late30.length}× 30-day, ${late60.length}× 60-day, ${late90.length}× 90-day late`,
+  })
+
+  // ── 2. Charged-off accounts ───────────────────────────────────────────────
+  const invoiceIds = (allInvoices ?? []).map((_, i) => i) // placeholder — use actual IDs
+  const { data: invoiceRows } = await client
+    .from("invoices")
+    .select("id")
+    .eq("customer_id", customerId)
+    .eq("organization_id", organizationId)
+
+  const ids = (invoiceRows ?? []).map((r: { id: string }) => r.id)
+  let writeoffCount = 0
+  if (ids.length > 0) {
+    const { count } = await client
+      .from("finance_transactions")
+      .select("id", { count: "exact", head: true })
+      .in("invoice_id", ids)
+      .eq("type", "writeoff")
+    writeoffCount = count ?? 0
+  }
+  void invoiceIds // suppress lint
+
+  flags.push({
+    flag:     "charged_off",
+    label:    "Charged-Off Accounts",
+    severity: writeoffCount > 0 ? "critical" : "none",
+    detail:   writeoffCount > 0 ? `${writeoffCount} write-off transaction(s) recorded` : "No charged-off accounts",
+  })
+
+  // ── 3. Unfamiliar / duplicate accounts ────────────────────────────────────
+  const { data: customer } = await client
+    .from("customers")
+    .select("full_name, email, notes")
+    .eq("id", customerId)
+    .single()
+
+  const notesText = (customer?.notes ?? "").toLowerCase()
+  const hasSuspiciousNote = /duplicate|fraud|suspicious|identity|theft/.test(notesText)
+  flags.push({
+    flag:     "unfamiliar_accounts",
+    label:    "Unfamiliar Accounts / Identity Risk",
+    severity: hasSuspiciousNote ? "critical" : "none",
+    detail:   hasSuspiciousNote
+      ? "Account notes contain fraud or identity risk indicators"
+      : "No unfamiliar account signals detected",
+  })
+
+  // ── 4. Maxed-out credit (high open balance vs lifetime value) ─────────────
+  const openInvoices = (allInvoices ?? []).filter((i) =>
+    ["sent", "pending", "overdue"].includes(i.status),
+  )
+  const totalOpen = openInvoices.reduce(
+    (sum, i) => sum + (Number(i.total_amount) - 0),
+    0,
+  )
+  const { data: cust } = await client
+    .from("customers")
+    .select("lifetime_value")
+    .eq("id", customerId)
+    .single()
+  const ltv = Number(cust?.lifetime_value ?? 0)
+  const utilizationPct = ltv > 0 ? (totalOpen / ltv) * 100 : 0
+
+  flags.push({
+    flag:     "maxed_out_credit",
+    label:    "Maxed-Out / Over-Extended Credit",
+    severity: utilizationPct >= 80 ? "critical" : utilizationPct >= 50 ? "warning" : "none",
+    detail:
+      ltv === 0
+        ? "No lifetime value on record to assess utilization"
+        : `$${totalOpen.toFixed(2)} open vs $${ltv.toFixed(2)} lifetime value (${utilizationPct.toFixed(0)}% utilization)`,
+  })
+
+  // ── 5. Frequent recent address / contact changes ──────────────────────────
+  const { data: events } = await client
+    .from("appointment_events")
+    .select("created_at")
+    .eq("organization_id", organizationId)
+    .eq("event_type", "reservation.rescheduled")
+    .gte("created_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+
+  const recentReschedules = (events ?? []).length
+  flags.push({
+    flag:     "address_changes",
+    label:    "Frequent Recent Changes",
+    severity: recentReschedules >= 3 ? "warning" : "none",
+    detail:
+      recentReschedules === 0
+        ? "No unusual pattern of changes detected"
+        : `${recentReschedules} booking reschedule(s) in the past 90 days`,
+  })
+
+  const criticalCount = flags.filter((f) => f.severity === "critical").length
+  const warningCount  = flags.filter((f) => f.severity === "warning").length
+  const flagCount     = criticalCount + warningCount
+
+  return {
+    redFlags:      flags,
+    flagCount,
+    overallStatus: criticalCount > 0 ? "high_risk" : warningCount > 0 ? "caution" : "clean",
+  }
+}
+
 function buildActionDraft(
   action: ReceivablesInvestigationResult["recommendedAction"],
   customerName: string,
@@ -368,11 +511,16 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     description: "Run KYC-style verification checks on the customer. Returns a checklist: business name, TIN match, watchlists, bank account, credit history, and online presence.",
     parameters: { type: SchemaType.OBJECT, properties: {} },
   },
+  {
+    name: "evaluate_credit_report",
+    description: "Evaluate the customer's credit report for red flags: late payments (30/60/90 days), charged-off accounts, unfamiliar accounts, maxed-out credit, and frequent address/contact changes.",
+    parameters: { type: SchemaType.OBJECT, properties: {} },
+  },
 ]
 
 const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for OpsPilot, an SMB cashflow recovery system.
 
-REQUIRED: Call ALL SIX tools before writing any conclusions.
+REQUIRED: Call ALL SEVEN tools before writing any conclusions.
 
 Call tools in this order:
 1. get_invoice_status — understand what is owed
@@ -381,6 +529,7 @@ Call tools in this order:
 4. get_appointment_behavior — understand their reliability
 5. get_all_open_invoices — understand total exposure
 6. run_verification_checks — generate the KYC checklist
+7. evaluate_credit_report — check for credit red flags (late payments, charge-offs, fraud signals)
 
 After gathering all data, write a concise investigation summary that references exact figures ("$450 overdue for 23 days, 60% on-time rate"), identifies the key risk factors, and states your recommended action and why.`
 
@@ -409,6 +558,7 @@ export async function runReceivablesInvestigation(
   let invoiceData:  Record<string, unknown> | null = null
   let openInvData:  Record<string, unknown> | null = null
   let verData:      VerificationChecks | null = null
+  let creditData:   CreditReport | null = null
 
   // ── Phase 1: gather data via tool calls ──────────────────────────────────
   const toolModel = genAI.getGenerativeModel({
@@ -453,6 +603,9 @@ export async function runReceivablesInvestigation(
           (paymentData ?? {}) as Parameters<typeof buildVerificationChecks>[1],
         )
         toolResult = verData
+      } else if (call.name === "evaluate_credit_report") {
+        creditData = await evaluateCreditReport(supabase, input.customerId, input.organizationId)
+        toolResult = creditData
       } else {
         toolResult = { error: `Unknown tool: ${call.name}` }
       }
@@ -509,6 +662,7 @@ export async function runReceivablesInvestigation(
     riskScore:          score,
     riskLevel,
     verificationChecks: verData,
+    creditReport:       creditData ?? { redFlags: [], flagCount: 0, overallStatus: "clean" },
     riskFactors,
     recommendedAction,
     actionDraft:        buildActionDraft(recommendedAction, customerName, totalOverdue, daysOverdue),

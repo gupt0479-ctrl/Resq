@@ -383,6 +383,44 @@ export function InvestigationPanel({
                     </div>
                   </div>
 
+                  {/* Credit report red flags */}
+                  {result.creditReport && result.creditReport.redFlags.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        Credit Report
+                        <span className={cn(
+                          "ml-2 px-1.5 py-0.5 rounded text-xs font-semibold",
+                          result.creditReport.overallStatus === "high_risk" && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+                          result.creditReport.overallStatus === "caution"   && "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+                          result.creditReport.overallStatus === "clean"     && "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+                        )}>
+                          {result.creditReport.overallStatus.replace("_", " ")}
+                        </span>
+                      </p>
+                      <div className="space-y-2">
+                        {result.creditReport.redFlags.map((flag) => (
+                          <div key={flag.flag} className={cn(
+                            "rounded-lg border px-4 py-2.5 flex items-start gap-3",
+                            flag.severity === "critical" && "border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20",
+                            flag.severity === "warning"  && "border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20",
+                            flag.severity === "none"     && "border-border bg-card",
+                          )}>
+                            <span className={cn(
+                              "mt-0.5 shrink-0 size-2 rounded-full",
+                              flag.severity === "critical" && "bg-red-500",
+                              flag.severity === "warning"  && "bg-amber-500",
+                              flag.severity === "none"     && "bg-emerald-500",
+                            )} />
+                            <div>
+                              <p className="text-xs font-medium">{flag.label}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{flag.detail}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Agent reasoning */}
                   {result.reasoning && (
                     <div className="rounded-lg bg-muted/50 border border-border p-4">

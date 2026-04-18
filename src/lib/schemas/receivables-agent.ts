@@ -1,5 +1,18 @@
 import { z } from "zod"
 
+export const CreditRedFlagSchema = z.object({
+  flag:     z.enum(["late_payments", "charged_off", "unfamiliar_accounts", "maxed_out_credit", "address_changes"]),
+  label:    z.string(),
+  severity: z.enum(["none", "warning", "critical"]),
+  detail:   z.string(),
+})
+
+export const CreditReportSchema = z.object({
+  redFlags:       z.array(CreditRedFlagSchema),
+  flagCount:      z.number(),
+  overallStatus:  z.enum(["clean", "caution", "high_risk"]),
+})
+
 export const VerificationChecksSchema = z.object({
   businessNameVerified:  z.boolean(),
   addressVerified:       z.boolean(),
@@ -36,6 +49,7 @@ export const ReceivablesInvestigationResultSchema = z.object({
   riskScore:          z.number().min(0).max(100),
   riskLevel:          z.enum(["low", "medium", "high", "critical"]),
   verificationChecks: VerificationChecksSchema,
+  creditReport:       CreditReportSchema,
   riskFactors:        z.array(RiskFactorSchema),
   recommendedAction:  z.enum(["reminder", "payment_plan", "escalation", "write_off"]),
   actionDraft:        z.string(),
@@ -43,6 +57,8 @@ export const ReceivablesInvestigationResultSchema = z.object({
   agentSteps:         z.array(AgentStepSchema),
 })
 
+export type CreditRedFlag = z.infer<typeof CreditRedFlagSchema>
+export type CreditReport  = z.infer<typeof CreditReportSchema>
 export type VerificationChecks = z.infer<typeof VerificationChecksSchema>
 export type RiskFactor = z.infer<typeof RiskFactorSchema>
 export type AgentStep = z.infer<typeof AgentStepSchema>
