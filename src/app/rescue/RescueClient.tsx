@@ -207,6 +207,9 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
   const [queue, setQueue] = useState(initialQueue)
   const [running, setRunning] = useState<string | null>(null)
   const [results, setResults] = useState<Record<string, RunResult>>({})
+  const [reminderLoading, setReminderLoading] = useState<string | null>(null)
+  const [reminderDone, setReminderDone] = useState<Record<string, { hostedUrl?: string; emailSent?: boolean }>>({})
+  const [reminderError, setReminderError] = useState<Record<string, string>>({})
   const [expanded, setExpanded] = useState<string | null>(
     // Auto-expand the highest-risk item that has an existing audit trail
     initialQueue.find((i) => i.auditTrail.length > 0)?.id ?? null
@@ -218,6 +221,25 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
   const activeCount = queue.filter(
     (i) => i.rescueState === "investigating" || i.rescueState === "action_taken"
   ).length
+
+  async function sendReminder(invoiceId: string) {
+    setReminderLoading(invoiceId)
+    setReminderError(prev => { const n = { ...prev }; delete n[invoiceId]; return n })
+    try {
+      const res = await fetch("/api/receivables/send-reminder", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ invoiceId }),
+      })
+      const json = await res.json() as { ok: boolean; hostedUrl?: string; emailSent?: boolean; error?: string }
+      if (!json.ok) throw new Error(json.error ?? "Failed")
+      setReminderDone(prev => ({ ...prev, [invoiceId]: { hostedUrl: json.hostedUrl, emailSent: json.emailSent } }))
+    } catch (e) {
+      setReminderError(prev => ({ ...prev, [invoiceId]: e instanceof Error ? e.message : "Error" }))
+    } finally {
+      setReminderLoading(null)
+    }
+  }
 
   async function runAgent(invoiceId: string) {
     setRunning(invoiceId)
@@ -443,6 +465,35 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
                           balance={item.amount}
                           daysOverdue={item.daysOverdue}
                         />
+
+                        {/* Send Reminder via Stripe */}
+                        {reminderDone[item.id] ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-xs text-emerald-600 font-medium">
+                              {reminderDone[item.id].emailSent ? "✓ Reminder emailed" : "✓ Invoice created"}
+                            </span>
+                            {reminderDone[item.id].hostedUrl && (
+                              <a href={reminderDone[item.id].hostedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
+                                View invoice →
+                              </a>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-end gap-1">
+                            <button
+                              onClick={() => sendReminder(item.id)}
+                              disabled={reminderLoading === item.id}
+                              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              {reminderLoading === item.id
+                                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending…</>
+                                : "Send Reminder"}
+                            </button>
+                            {reminderError[item.id] && (
+                              <span className="text-xs text-destructive">{reminderError[item.id]}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </li>

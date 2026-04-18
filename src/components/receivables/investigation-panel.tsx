@@ -157,7 +157,7 @@ export function InvestigationPanel({
   const [result, setResult]         = useState<ReceivablesInvestigationResult | null>(null)
   const [error, setError]           = useState<string | null>(null)
   const [reminderLoading, setReminderLoading] = useState(false)
-  const [reminderSent, setReminderSent]       = useState<{ invoiceId: string; hostedUrl?: string; mode: string } | null>(null)
+  const [reminderSent, setReminderSent]       = useState<{ invoiceId: string; hostedUrl?: string; emailSent?: boolean; mode: string } | null>(null)
   const [reminderError, setReminderError]     = useState<string | null>(null)
   // Per-check animation state: index of the furthest revealed check (-1 = none yet)
   const [revealedUpto, setRevealedUpto] = useState(-1)
@@ -192,9 +192,9 @@ export function InvestigationPanel({
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ invoiceId }),
       })
-      const json = await res.json() as { ok: boolean; stripeInvoiceId?: string; hostedUrl?: string; mode?: string; error?: string }
+      const json = await res.json() as { ok: boolean; stripeInvoiceId?: string; hostedUrl?: string; emailSent?: boolean; mode?: string; error?: string }
       if (!json.ok) throw new Error(json.error ?? "Failed to send reminder")
-      setReminderSent({ invoiceId: json.stripeInvoiceId ?? "", hostedUrl: json.hostedUrl, mode: json.mode ?? "mock" })
+      setReminderSent({ invoiceId: json.stripeInvoiceId ?? "", hostedUrl: json.hostedUrl, emailSent: json.emailSent, mode: json.mode ?? "mock" })
     } catch (e) {
       setReminderError(e instanceof Error ? e.message : "Unknown error")
     } finally {
@@ -630,39 +630,6 @@ export function InvestigationPanel({
                     </p>
                   </div>
 
-                  {/* Send Reminder via Stripe */}
-                  {reminderSent ? (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/20 px-4 py-3 flex items-center gap-2">
-                      <CheckSquare className="size-4 text-emerald-600 shrink-0" />
-                      <div>
-                        <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                          Reminder sent via Stripe {reminderSent.mode === "mock" && "(mock)"}
-                        </p>
-                        {reminderSent.hostedUrl ? (
-                          <a href={reminderSent.hostedUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 underline mt-0.5 block">
-                            View invoice →
-                          </a>
-                        ) : reminderSent.invoiceId && (
-                          <p className="text-xs text-muted-foreground mt-0.5 font-mono">{reminderSent.invoiceId}</p>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      <Button
-                        onClick={sendReminder}
-                        disabled={reminderLoading}
-                        className="w-full gap-2"
-                      >
-                        {reminderLoading
-                          ? <><Loader2 className="size-4 animate-spin" /> Sending…</>
-                          : "Send Reminder via Stripe"}
-                      </Button>
-                      {reminderError && (
-                        <p className="text-xs text-destructive text-center">{reminderError}</p>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
             </div>

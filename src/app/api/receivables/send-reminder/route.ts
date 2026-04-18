@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     // Create Stripe invoice
     const dueDate = inv.due_at ? new Date(inv.due_at) : undefined
-    const { success, invoiceId: stripeInvoiceId, hostedUrl, mode, errorMessage } = await createStripeInvoice(
+    const { success, invoiceId: stripeInvoiceId, hostedUrl, emailSent, mode, errorMessage } = await createStripeInvoice(
       stripeCustomerId,
       balance,
       `Payment reminder — Invoice ${inv.invoice_number} ($${balance.toFixed(2)} overdue)`,
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       status:         "executed",
     })
 
-    return NextResponse.json({ ok: true, stripeInvoiceId, hostedUrl, stripeCustomerId, mode })
+    return NextResponse.json({ ok: true, stripeInvoiceId, hostedUrl, emailSent, stripeCustomerId, mode })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error"
     return NextResponse.json({ ok: false, error: message }, { status: 500 })

@@ -82,7 +82,7 @@ export async function createStripeInvoice(
   amount: number,
   description: string,
   dueDate?: Date
-): Promise<{ success: boolean; invoiceId: string; hostedUrl?: string; mode: "live" | "mock"; errorMessage?: string }> {
+): Promise<{ success: boolean; invoiceId: string; hostedUrl?: string; emailSent?: boolean; mode: "live" | "mock"; errorMessage?: string }> {
   if (!stripe) {
     return { success: true, invoiceId: `in_mock_${Date.now()}`, mode: "mock" }
   }
@@ -106,17 +106,19 @@ export async function createStripeInvoice(
 
     const finalized = await stripe.invoices.finalizeInvoice(invoice.id)
 
-    // Best-effort email send — some test accounts can't send, that's ok
+    let emailSent = false
     try {
       await stripe.invoices.sendInvoice(finalized.id)
+      emailSent = true
     } catch (sendErr) {
-      console.warn(`[Stripe] Invoice created but email send failed:`, sendErr instanceof Error ? sendErr.message : sendErr)
+      console.error(`[Stripe] sendInvoice failed:`, sendErr instanceof Error ? sendErr.message : sendErr)
     }
 
     return {
       success:   true,
       invoiceId: finalized.id,
       hostedUrl: finalized.hosted_invoice_url ?? undefined,
+      emailSent,
       mode:      "live",
     }
   } catch (error) {
