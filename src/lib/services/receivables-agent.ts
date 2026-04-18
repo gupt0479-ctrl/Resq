@@ -713,10 +713,12 @@ export async function runReceivablesInvestigation(
               .map(r => `${r.title} ${r.snippet}`)
               .join(" ")
               .toLowerCase()
-            const nameLower = screenedName.toLowerCase()
+            // Match any ordering of name tokens (handles "SINGH HARPREET" → "harpreet singh")
+            const nameTokens = screenedName.toLowerCase().split(/\s+/).filter(Boolean)
+            const nameFound = nameTokens.every(token => combined.includes(token))
             const isMatch =
-              combined.includes(nameLower) &&
-              /sanction|wanted|debarred|designated|blocked|prohibited/.test(combined)
+              nameFound &&
+              /sanction|wanted|debarred|designated|blocked|prohibited|bounty|criminal|fugitive/.test(combined)
 
             for (const listId of ids) {
               allHits.push({
@@ -795,21 +797,35 @@ export async function runReceivablesInvestigation(
     keyPeople:   undefined,
   }
 
-  // Try to extract address and key people from TinyFish article snippets
-  if (externalData?.articles.length) {
-    const snippets = externalData.articles.map(a => a.snippet).join(" ")
-    // Look for address-like patterns (City, ST or "headquartered in City")
-    const addrMatch = snippets.match(/headquartered in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
-      ?? snippets.match(/based in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
-      ?? snippets.match(/located in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
+  // Extract address and key people from TinyFish article snippets + customer notes
+  const snippetText = (externalData?.articles ?? []).map(a => a.snippet).join(" ")
+
+  if (snippetText) {
+    const addrMatch = snippetText.match(/headquartered in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
+      ?? snippetText.match(/based in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
+      ?? snippetText.match(/located in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
     if (addrMatch) companyInfo.address = addrMatch[1]
 
-    // Look for named people (Title + Name patterns)
-    const peopleMatches = snippets.matchAll(
+    const peopleFromSnippets = [...snippetText.matchAll(
       /(?:CEO|founder|owner|president|director|CFO|COO)\s+([A-Z][a-z]+ [A-Z][a-z]+)/gi,
+    )].map(m => m[1])
+
+    companyInfo.keyPeople = [...new Set(peopleFromSnippets)].slice(0, 3)
+  }
+
+  // Also extract key people from customer notes (handles ALL-CAPS names and last-name-first format)
+  const notes = (profile.notes as string | undefined) ?? ""
+  if (notes) {
+    const notePeopleMatches = notes.matchAll(
+      /(?:CEO|founder|owner|president|director|CFO|COO)[:\s]+([A-Z][A-Z\s]+)/gi,
     )
-    const people = [...new Set([...peopleMatches].map(m => m[1]))].slice(0, 3)
-    if (people.length) companyInfo.keyPeople = people
+    const notePeople = [...notePeopleMatches]
+      .map(m => m[1].trim().replace(/\s+/g, " "))
+      .filter(n => n.length > 3)
+      .slice(0, 3)
+    if (notePeople.length) {
+      companyInfo.keyPeople = [...new Set([...(companyInfo.keyPeople ?? []), ...notePeople])].slice(0, 3)
+    }
   }
 
   // Override watchlistsClear in verificationChecks with actual screening result
