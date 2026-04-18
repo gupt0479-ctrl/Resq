@@ -454,7 +454,7 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
       )}
 
       <p className="text-[11px] text-muted-foreground">
-        Each "Run Agent" step advances the recovery state machine: detect → follow-up → financing
+        Each &quot;Run Agent&quot; step advances the recovery state machine: detect → follow-up → financing
         → payment plan → resolve. Every action is logged to the audit trail.
       </p>
     </div>
