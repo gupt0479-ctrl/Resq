@@ -1,7 +1,6 @@
 export const dynamic   = "force-dynamic"
 export const revalidate = 0
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { InvoiceTable } from "@/components/invoices/invoice-table"
 import type { Invoice } from "@/components/invoices/invoice-table"
 import { db, DEMO_ORG_ID } from "@/lib/db"
@@ -13,7 +12,7 @@ function fmtDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
-async function fetchInvoices(): Promise<InvoiceRow[]> {
+async function fetchInvoices(): Promise<Invoice[]> {
   try {
     const rows = await db
       .select()
@@ -79,5 +78,5 @@ async function fetchInvoices(): Promise<InvoiceRow[]> {
 
 export default async function InvoicesPage() {
   const invoices = await fetchInvoices()
-  return <InvoicesClient invoices={invoices} />
+  return <InvoiceTable invoices={invoices} />
 }

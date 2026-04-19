@@ -1,16 +1,13 @@
+import { Fragment } from "react"
+import { AlertTriangle, CheckCircle2, MinusCircle, Plug, XCircle } from "lucide-react"
 import { DEMO_ORG_ID } from "@/lib/db"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
-import { listConnectors } from "@/lib/services/integrations"
 import { isDatabaseConfigured } from "@/lib/env"
+import { ClearConnectorErrorButton } from "@/components/integrations/clear-connector-error-button"
 import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
-import { ClearConnectorErrorButton } from "@/components/integrations/clear-connector-error-button"
 import { CONNECTOR_STATUS_LABEL } from "@/lib/constants/enums"
 import type { ConnectorStatus } from "@/lib/constants/enums"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
-import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
-import { isSupabaseConfigured } from "@/lib/env"
 import { listConnectors } from "@/lib/services/integrations"
 import { healthCheck } from "@/lib/tinyfish/client"
 
@@ -147,7 +144,7 @@ export default async function IntegrationsPage() {
         <CardContent className="space-y-1 pt-4 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">Why this page matters</p>
           <p>
-            Supabase and deterministic services remain the source of truth. TinyFish is the external
+            PostgreSQL and deterministic services remain the source of truth. TinyFish is the external
             investigation layer. If live dependencies degrade, the demo still works through mock fixtures and an auditable warning path.
           </p>
         </CardContent>
@@ -168,8 +165,8 @@ export default async function IntegrationsPage() {
           ) : connectors.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {isDatabaseConfigured()
-                ? "No connectors found for this organization. Run supabase/seed.sql (demo org) or register connectors via webhooks."
-                : "Supabase not configured — connect a project to see connectors."}
+                ? "No connectors found for this organization. Seed the database (supabase/seed.sql) or register connectors via webhooks."
+                : "DATABASE_URL not configured — connect a PostgreSQL database to load connectors."}
             </p>
           ) : (
             <div className="space-y-3">

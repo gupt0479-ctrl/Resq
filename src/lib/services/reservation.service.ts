@@ -1,6 +1,6 @@
-import { db } from "@/lib/db"
-import { reservations, customers, followUps } from "@/lib/db/schema"
-import { eq, ne, and, lt, gt, gte, lte, inArray } from "drizzle-orm"
+import { db, DEMO_ORG_ID } from "@/lib/db"
+import { reservations, customers, followUps, appointments } from "@/lib/db/schema"
+import { eq, ne, and, lt, gt, gte, lte, inArray, count } from "drizzle-orm"
 import type {
   BookReservationRequest,
   Customer,
@@ -12,6 +12,10 @@ import type {
 
 function isValidTimeRange(startsAt: string, endsAt: string): boolean {
   return new Date(startsAt).getTime() < new Date(endsAt).getTime()
+}
+
+function resolveOrganizationId(req?: { organizationId?: string; organization_id?: string }): string {
+  return req?.organizationId ?? req?.organization_id ?? DEMO_ORG_ID
 }
 
 export async function checkConflict(
@@ -51,13 +55,19 @@ export async function checkConflict(
 }
 
 async function findOrCreateCustomer(
-  req: BookReservationRequest
+  req: BookReservationRequest,
+  organizationId: string
 ): Promise<ServiceResult<Customer>> {
   try {
     const existing = await db
       .select()
       .from(customers)
-      .where(eq(customers.email, req.customer_email))
+      .where(
+        and(
+          eq(customers.email, req.customer_email),
+          eq(customers.organizationId, organizationId),
+        )
+      )
       .limit(1)
 
     if (existing[0]) return { data: existing[0] as unknown as Customer }
@@ -68,7 +78,7 @@ async function findOrCreateCustomer(
         fullName: req.customer_name,
         email: req.customer_email,
         phone: req.customer_phone ?? null,
-        organizationId: "00000000-0000-0000-0000-000000000001",
+        organizationId,
       })
       .returning()
 
@@ -81,6 +91,8 @@ async function findOrCreateCustomer(
 export async function bookReservation(
   req: BookReservationRequest
 ): Promise<ServiceResult<Reservation>> {
+  const organizationId = resolveOrganizationId(req as unknown as { organizationId?: string; organization_id?: string })
+
   if (!isValidTimeRange(req.starts_at, req.ends_at)) {
     return { error: "End time must be after start time." }
   }
@@ -91,7 +103,7 @@ export async function bookReservation(
     return { error: "This time slot overlaps with an existing reservation." }
   }
 
-  const customerResult = await findOrCreateCustomer(req)
+  const customerResult = await findOrCreateCustomer(req, organizationId)
   if (customerResult.error || !customerResult.data) {
     return { error: customerResult.error ?? "Could not create customer." }
   }
@@ -248,16 +260,42 @@ export async function completeReservation(id: string): Promise<ServiceResult<Res
 
     const row = rows[0]
 
-    // Update visit count
-    const visits = (existing.data as unknown as Record<string, unknown>)?.visit_count as number ?? 0
-    if (existing.data.customer_id) {
+    const customerId =
+      row?.reservations.customerId ??
+      (existing.data as unknown as { customer_id?: string; customerId?: string }).customerId ??
+      (existing.data as unknown as { customer_id?: string; customerId?: string }).customer_id
+
+    const organizationId = row?.customers?.organizationId
+    let visitCount = 0
+
+    if (customerId && organizationId) {
+      const [visitCountResult] = await db
+        .select({ count: count() })
+        .from(appointments)
+        .where(
+          and(
+            eq(appointments.customerId, customerId),
+            eq(appointments.organizationId, organizationId),
+          )
+        )
+      visitCount = Number(visitCountResult?.count ?? 0)
+
       await db
         .update(customers)
-        .set({ lifetimeValue: String(visits + 1) })
-        .where(eq(customers.id, existing.data.customer_id))
+        .set({ lastVisitAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(customers.id, customerId),
+            eq(customers.organizationId, organizationId),
+          )
+        )
     }
 
-    return { data: { ...row?.reservations, customer: row?.customers } as unknown as Reservation }
+    const customer = row?.customers
+      ? { ...row.customers, visit_count: visitCount }
+      : row?.customers
+
+    return { data: { ...row?.reservations, customer } as unknown as Reservation }
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) }
   }

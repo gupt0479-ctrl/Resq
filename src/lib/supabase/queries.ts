@@ -9,7 +9,7 @@ import {
   financeTransactions,
   menuItemInventoryUsage,
 } from "@/lib/db/schema"
-import { eq, and, desc, asc } from "drizzle-orm"
+import { eq, and, desc, asc, inArray } from "drizzle-orm"
 import type {
   InventoryItem,
   MenuItem,
@@ -206,16 +206,22 @@ export async function getShipments(): Promise<Shipment[]> {
       .from(shipments)
       .orderBy(desc(shipments.orderedAt))
 
-    const result: Shipment[] = []
-    for (const row of shipmentRows) {
-      const lineItemRows = await db
-        .select()
-        .from(shipmentLineItems)
-        .where(eq(shipmentLineItems.shipmentId, row.id))
-      const lis = lineItemRows.map(mapLineItemRow)
-      result.push(mapShipmentRow(row, lis))
+    if (shipmentRows.length === 0) return []
+
+    const shipmentIds = shipmentRows.map((row) => row.id)
+    const lineItemRows = await db
+      .select()
+      .from(shipmentLineItems)
+      .where(inArray(shipmentLineItems.shipmentId, shipmentIds))
+
+    const lineItemsByShipment = new Map<string, ShipmentLineItem[]>()
+    for (const lineItem of lineItemRows) {
+      const existing = lineItemsByShipment.get(lineItem.shipmentId) ?? []
+      existing.push(mapLineItemRow(lineItem))
+      lineItemsByShipment.set(lineItem.shipmentId, existing)
     }
-    return result
+
+    return shipmentRows.map((row) => mapShipmentRow(row, lineItemsByShipment.get(row.id) ?? []))
   } catch {
     return []
   }
