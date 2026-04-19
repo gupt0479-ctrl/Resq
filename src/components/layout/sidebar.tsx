@@ -18,7 +18,6 @@ const navItems = [
   { href: "/workflow",     label: "Agent Run",    icon: GitBranch    },
   { href: "/dashboard",   label: "Dashboard",    icon: LayoutDashboard },
   { href: "/cashflow",     label: "Cashflow",     icon: DollarSign   },
-  { href: "/invoices",     label: "Invoices",     icon: FileText     },
   { href: "/customers",    label: "Customers",    icon: Users        },
   { href: "/integrations", label: "Integrations", icon: Plug         },
 ]
