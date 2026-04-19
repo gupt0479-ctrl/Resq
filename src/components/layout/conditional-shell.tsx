@@ -7,7 +7,7 @@ import { Header } from "./header"
 export function ConditionalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
-  if (pathname === "/") {
+  if (pathname === "/" || pathname === "/login") {
     return <>{children}</>
   }
 
