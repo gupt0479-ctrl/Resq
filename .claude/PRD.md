@@ -51,6 +51,23 @@ Existing software usually stops at dashboards or raw alerts. OpsPilot Rescue is
 designed to go one step further: it investigates and proposes or executes
 survival actions.
 
+**Positioning:** Large companies retain consultants, analysts, and finance staff.
+Small business owners cannot afford that. OpsPilot Rescue is the always-on AI
+operator that fills those roles — the equivalent of the advisor Google keeps on
+retainer, built for the owner running the front desk, the kitchen, and the books
+at the same time.
+
+### 2.1 Core Pain Points
+
+| Pain Point | Owner Experience Today | How OpsPilot Addresses It |
+|---|---|---|
+| **Unpaid and delayed invoices** | Customers pay weeks, months, or never — owners chase manually and lose track | Automated reminders, overdue flags, and cash-flow risk alerts surface risk before it becomes a write-off |
+| **Cross-border communication gaps** | Language barriers, timezone confusion, and missed messages with international customers or suppliers | AI-drafted follow-ups adapt tone and clarity; flag communication threads gone cold |
+| **Affordable hiring** | Finding qualified staff at a sustainable cost is hard; owners waste time on unsuitable candidates | Future: AI-assisted job description drafts and candidate screening surfaced to the dashboard |
+| **Marketing and social media** | Many owners lack the time or skill to advertise on social platforms or post job listings | Future: AI-drafted posting copy and suggested channels reduce the skill gap |
+| **Manual disconnected workflow** | Reservations, invoices, payments, and follow-ups tracked across disconnected tools and memory | Full reservation → invoice → payment → feedback loop automated so nothing drops |
+| **No expert operational guidance** | Enterprise companies employ consultants; small businesses cannot | AI agents surface the same recommendations — flag risks, suggest next actions, draft messages — without a retainer |
+
 ---
 
 ## 3. Hackathon Fit

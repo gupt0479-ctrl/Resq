@@ -10,17 +10,18 @@ If a file is not in the read order below, it is either:
 
 ## Canonical read order
 
-1. `PRD.md`
-2. `context/current-state.md`
-3. `context/architecture.md`
-4. `context/12hour-execution.md`
-5. `playbooks/tinyfish-and-agent.md`
-6. `playbooks/backend-and-api.md`
-7. `playbooks/ui-and-demo.md`
-8. `playbooks/supabase-and-data.md`
-9. `checklists/change-gate.md`
-10. `checklists/demo-readiness.md`
-11. `decisions/decision-log.md`
+1. `PRD.md` — canonical product spec including pain points and positioning
+2. `context/product-vision.md` — expanded problem space and roadmap context
+3. `context/current-state.md`
+4. `context/architecture.md`
+5. `context/12hour-execution.md`
+6. `playbooks/tinyfish-and-agent.md`
+7. `playbooks/backend-and-api.md`
+8. `playbooks/ui-and-demo.md`
+9. `playbooks/supabase-and-data.md`
+10. `checklists/change-gate.md`
+11. `checklists/demo-readiness.md`
+12. `decisions/decision-log.md`
 
 ## Setup companions
 
