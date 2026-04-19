@@ -1,8 +1,8 @@
 /**
- * One-off repro: load .env.local and hit Supabase like dashboard + buildFinanceSummaryFacts.
+ * One-off repro: load .env.local and hit Postgres like dashboard + buildFinanceSummaryFacts.
  * Does not print secrets. Usage: node scripts/repro-dashboard-data.mjs
  */
-import { createClient } from "@supabase/supabase-js"
+import pg from "pg"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -27,64 +27,70 @@ for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
   env[k] = v
 }
 
-const url = env.NEXT_PUBLIC_SUPABASE_URL
-const key = env.SUPABASE_SERVICE_ROLE_KEY
+const databaseUrl = env.DATABASE_URL
 const org = env.DEMO_ORG_ID || "00000000-0000-0000-0000-000000000001"
-if (!url || !key) {
-  console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local")
+if (!databaseUrl) {
+  console.error("Missing DATABASE_URL in .env.local")
   process.exit(1)
 }
 
-const client = createClient(url, key, { auth: { persistSession: false } })
+const pool = new pg.Pool({ connectionString: databaseUrl })
+
+async function query(sql, params = []) {
+  try {
+    const result = await pool.query(sql, params)
+    return { rows: result.rows, count: result.rowCount, error: null }
+  } catch (err) {
+    return { rows: [], count: 0, error: err.message }
+  }
+}
 
 async function main() {
   console.log("orgId prefix:", org.slice(0, 8) + "...")
 
-  const q1 = await client.from("appointments").select("id").eq("organization_id", org).limit(1)
-  console.log("appointments:", q1.error?.message ?? "ok", "rows", q1.data?.length ?? 0)
+  const q1 = await query("SELECT id FROM appointments WHERE organization_id = $1 LIMIT 1", [org])
+  console.log("appointments:", q1.error ?? "ok", "rows", q1.rows.length)
 
-  const q2 = await client
-    .from("invoices")
-    .select("invoice_number, total_amount, amount_paid, customers ( full_name )")
-    .eq("organization_id", org)
-    .eq("status", "overdue")
-    .limit(1)
-  console.log("invoices+embed (buildFinanceSummaryFacts style):", q2.error?.message ?? "ok", "rows", q2.data?.length ?? 0)
+  const q2 = await query(
+    `SELECT i.invoice_number, i.total_amount, i.amount_paid, c.full_name
+     FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id
+     WHERE i.organization_id = $1 AND i.status = 'overdue' LIMIT 1`,
+    [org]
+  )
+  console.log("invoices+join (buildFinanceSummaryFacts style):", q2.error ?? "ok", "rows", q2.rows.length)
 
-  const q3 = await client
-    .from("invoices")
-    .select("total_amount, amount_paid, due_at, invoice_number, customers(full_name)")
-    .eq("organization_id", org)
-    .eq("status", "overdue")
-    .limit(1)
-  console.log("invoices+embed (getFinanceSummary style):", q3.error?.message ?? "ok")
+  const q3 = await query("SELECT id FROM integration_connectors WHERE organization_id = $1", [org])
+  console.log("integration_connectors:", q3.error ?? "ok", "rows", q3.rows.length)
 
-  const q4 = await client.from("integration_connectors").select("id").eq("organization_id", org)
-  console.log("integration_connectors:", q4.error?.message ?? "ok", "rows", q4.data?.length ?? 0)
+  const q4 = await query("SELECT id FROM ai_summaries WHERE organization_id = $1 LIMIT 1", [org])
+  console.log("ai_summaries:", q4.error ?? "ok", "rows", q4.rows.length)
 
-  const q5 = await client.from("ai_summaries").select("id").eq("organization_id", org).limit(1)
-  console.log("ai_summaries:", q5.error?.message ?? "ok", "rows", q5.data?.length ?? 0)
-
-  const q6 = await client.from("feedback").select("*", { count: "exact", head: true })
-  const q7 = await client.from("feedback").select("*", { count: "exact", head: true }).eq("organization_id", org)
+  const q5 = await query("SELECT count(*) as cnt FROM feedback")
+  const q6 = await query("SELECT count(*) as cnt FROM feedback WHERE organization_id = $1", [org])
   console.log(
     "feedback rows (all orgs / this DEMO_ORG_ID):",
-    q6.error?.message ?? "ok",
-    q6.count ?? 0,
+    q5.error ?? "ok",
+    q5.rows[0]?.cnt ?? 0,
     "/",
-    q7.error?.message ?? "ok",
-    q7.count ?? 0
+    q6.error ?? "ok",
+    q6.rows[0]?.cnt ?? 0
   )
-  console.log("Supabase host from .env.local:", new URL(url).hostname)
+
+  try {
+    const url = new URL(databaseUrl)
+    console.log("DB host from .env.local:", url.hostname)
+  } catch {
+    console.log("DB host: (could not parse DATABASE_URL)")
+  }
 }
 
 async function columns() {
-  const r = await client.from("invoices").select("*").limit(1)
+  const r = await query("SELECT * FROM invoices LIMIT 1")
   if (r.error) {
-    console.log("invoices select *:", r.error.message)
+    console.log("invoices select *:", r.error)
     return
   }
-  const row = r.data?.[0]
+  const row = r.rows[0]
   console.log("invoices sample keys:", row ? Object.keys(row).sort().join(", ") : "(no rows)")
 }
 
@@ -93,10 +99,12 @@ main()
   .then(() => {
     console.log("")
     console.log(
-      "=> If any line above shows PostgREST errors: open Supabase SQL Editor for THIS project and run migrations in order (0001_core_ledger.sql, 002_invoice_reminders.sql), then supabase/seed.sql. Or: supabase link && supabase db push (if you use the CLI)."
+      "=> If any line above shows errors: run migrations in order (0001_core_ledger.sql, 002_invoice_reminders.sql), then seed.sql against your RDS instance."
     )
+    pool.end()
   })
   .catch((e) => {
     console.error("fatal", e?.message || e)
+    pool.end()
     process.exit(1)
   })

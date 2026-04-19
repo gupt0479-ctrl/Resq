@@ -28,9 +28,27 @@ Canonical demo addon:
 - do not create fragile FK chains unnecessarily
 - prefer additive ai-action rows over risky invoice rewrites
 - keep seeds idempotent where possible
+- keep rescue queue shaping in query/read-model code where possible
 
 ## Environment rules
 
 - `DEMO_ORG_ID` must match seeded data
 - TinyFish mock mode should work with zero external secrets
 - live mode must be explicit, never assumed
+
+## Deterministic ownership
+
+Postgres and deterministic services own:
+
+- invoices
+- finance transactions
+- payment state
+- rescue status transitions that affect truth
+
+AI and TinyFish may influence:
+
+- ranking
+- summaries
+- prioritization
+- external offer extraction
+- recommended next actions

@@ -9,6 +9,7 @@ export const DashboardKpisSchema = z.object({
   pendingInvoiceCount: z.number(),
   pendingInvoiceAmount: z.number(),
   unhappyGuestCount: z.number(),
+  activeRescueActionsCount: z.number(),
 })
 
 export const RecentReservationSchema = z.object({

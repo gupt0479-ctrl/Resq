@@ -48,6 +48,47 @@ export const TinyFishFetchResultSchema = z.object({
 })
 export type TinyFishFetchResult = z.infer<typeof TinyFishFetchResultSchema>
 
+// ─── Financing contract ────────────────────────────────────────────────────
+
+export const TinyFishFinancingOfferSchema = z.object({
+  lender:        z.string(),
+  product:       z.string(),
+  aprPercent:    z.number().optional(),
+  termMonths:    z.number().optional(),
+  maxAmountUsd:  z.number().optional(),
+  decisionSpeed: z.string().optional(),
+  sourceUrl:     z.string().url(),
+  sourceTitle:   z.string().optional(),
+  confidence:    z.number().min(0).max(1),
+  notes:         z.string().optional(),
+})
+export type TinyFishFinancingOffer = z.infer<typeof TinyFishFinancingOfferSchema>
+
+export const TinyFishFinancingOutputsSchema = z.object({
+  offers: z.array(TinyFishFinancingOfferSchema),
+  sourceUrls: z.array(z.string().url()).optional(),
+  searchQueries: z.array(z.string()).optional(),
+  sources: z.array(z.object({
+    title: z.string(),
+    url: z.string().url(),
+    snippet: z.string(),
+    score: z.number().nullable().optional(),
+  })).optional(),
+  fetchedPages: z.array(z.object({
+    url: z.string().url(),
+    title: z.string().nullable().optional(),
+    status: z.number(),
+    excerpt: z.string(),
+  })).optional(),
+  agentAssistedUrl: z.string().url().nullable().optional(),
+  liveAttempted: z.boolean().optional(),
+  summary: z.string().optional(),
+  mode: TinyFishModeSchema.optional(),
+  degradedFromLive: z.boolean().optional(),
+  warning: z.string().nullable().optional(),
+})
+export type TinyFishFinancingOutputs = z.infer<typeof TinyFishFinancingOutputsSchema>
+
 // ─── Agent run ─────────────────────────────────────────────────────────────
 
 export const TinyFishAgentStepSchema = z.object({
@@ -59,6 +100,7 @@ export const TinyFishAgentStepSchema = z.object({
 export type TinyFishAgentStep = z.infer<typeof TinyFishAgentStepSchema>
 
 export const TinyFishScenarioSchema = z.enum([
+  "collections",
   "financing",
   "vendor",
   "insurance",
@@ -77,3 +119,29 @@ export const TinyFishAgentRunResultSchema = z.object({
   warning:          z.string().optional(),
 })
 export type TinyFishAgentRunResult = z.infer<typeof TinyFishAgentRunResultSchema>
+
+// ─── Portal Reconnaissance (re-export) ─────────────────────────────────────
+
+export {
+  PortalReconnaissanceModeSchema,
+  PortalReconnaissanceResultSchema,
+  PortalReconnaissanceResponseSchema,
+  ScreenshotSchema,
+  ParsedPortalDataSchema,
+  ParsedInvoiceSchema,
+  ParsedActivitySchema,
+  PortalLoginResultSchema,
+  PortalReconScenarioSchema,
+} from "./portal-schemas"
+
+export type {
+  PortalReconnaissanceMode,
+  PortalReconnaissanceResult,
+  PortalReconnaissanceResponse,
+  Screenshot,
+  ParsedPortalData,
+  ParsedInvoice,
+  ParsedActivity,
+  PortalLoginResult,
+  PortalReconScenario,
+} from "./portal-schemas"

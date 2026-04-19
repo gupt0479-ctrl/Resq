@@ -1,194 +1,216 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { ArrowRight, Activity, ShieldAlert, TrendingDown, FileWarning, ScanSearch, Search, GitCompare, Zap, ScrollText } from "lucide-react"
+import { McpGraph } from "@/components/McpGraph"
+import { RiskBadge } from "@/components/RiskBadge"
+import { AgentStatusPill } from "@/components/AgentStatusPill"
 
 export const metadata: Metadata = {
-  title: "OpsPilot Rescue — Autonomous Cashflow Recovery",
-  description: "Autonomous cashflow recovery for small businesses",
+  title: "OpsPilot Rescue — Autonomous SMB Survival Agent",
+  description: "Autonomous cashflow recovery for small businesses. Collections, financing scout, vendor optimization.",
 }
 
-// /rescue is in the sidebar but not yet built — fall back to /dashboard for all CTAs.
-const CTA_HREF = "/dashboard"
+function formatUSD(n: number) {
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
+}
 
-// ── Stat chips shown below hero CTA ──────────────────────────────────────────
-
-const URGENCY_STATS = [
-  "$18,400 at risk this week",
-  "3 overdue accounts",
-  "2 rescue actions pending",
-] as const
-
-// ── How-it-works cards ────────────────────────────────────────────────────────
-
-const HOW_CARDS = [
-  {
-    step: "01",
-    title: "Detect",
-    body: "OpsPilot monitors your receivables and flags overdue invoices and cashflow gaps before they become crises.",
-  },
-  {
-    step: "02",
-    title: "Investigate",
-    body: "The agent checks invoice status, customer payment history, and external systems to understand the full picture.",
-  },
-  {
-    step: "03",
-    title: "Act",
-    body: "Outreach is drafted and sent. Payment plans are suggested. Financing options are fetched. All logged automatically.",
-  },
-  {
-    step: "04",
-    title: "Report",
-    body: "Every action is recorded in the audit trail. You see exactly what the agent did and why. No black boxes.",
-  },
-] as const
-
-// ── Page ──────────────────────────────────────────────────────────────────────
+const kpis = { atRiskReceivables: 43800 }
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-
-      {/* ── 1. Top bar ───────────────────────────────────────────────────────── */}
-      <div className="bg-foreground px-4 py-2 text-center text-xs font-medium text-background">
-        OpsPilot Rescue is live — autonomous cashflow recovery for small businesses
-      </div>
-
-      {/* ── 2. Nav ───────────────────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-          <span className="text-base font-bold tracking-tight text-foreground">
-            OpsPilot Rescue
-          </span>
-          <Link
-            href={CTA_HREF}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            Open Rescue Queue →
+    <div className="min-h-screen bg-background">
+      {/* Nav */}
+      <header className="border-b border-border/60">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-md bg-foreground text-background grid place-items-center font-display text-sm font-semibold">O</div>
+            <div className="leading-tight">
+              <div className="font-display text-[15px] font-semibold tracking-tight">OpsPilot</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-steel -mt-0.5">Rescue</div>
+            </div>
+          </Link>
+          <nav className="hidden md:flex items-center gap-7 text-sm text-steel">
+            <a href="#how" className="hover:text-foreground transition-colors">How it works</a>
+            <a href="#mcp" className="hover:text-foreground transition-colors">MCP / Tools</a>
+          </nav>
+          <Link href="/rescue" className="inline-flex items-center gap-1.5 rounded-md bg-foreground text-background px-3.5 h-9 text-sm font-medium hover:opacity-90 transition-opacity">
+            Open Rescue Queue <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
-      </nav>
+      </header>
 
-      {/* ── 3. Hero ──────────────────────────────────────────────────────────── */}
-      <section className="flex min-h-screen flex-col items-center justify-center px-6 py-24 text-center">
-        <h1 className="mb-6 max-w-2xl text-5xl font-bold leading-tight tracking-tight text-foreground sm:text-6xl">
-          Cash is late.<br />OpsPilot acts.
-        </h1>
-        <p className="mb-10 max-w-xl text-base leading-relaxed text-muted-foreground">
-          When receivables slip, OpsPilot detects the risk, investigates
-          across live systems, and takes action — automatically.
-        </p>
-        <Link
-          href={CTA_HREF}
-          className="mb-3 inline-block rounded-lg bg-primary px-8 py-3.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Open Rescue Queue →
-        </Link>
-        <p className="mb-14 text-xs text-muted-foreground">
-          No dashboard required. Agent runs autonomously.
-        </p>
-
-        {/* Urgency stat chips */}
-        <div className="flex flex-wrap justify-center gap-3">
-          {URGENCY_STATS.map((stat) => (
-            <span
-              key={stat}
-              className="rounded-full border border-destructive/30 bg-destructive/10 px-4 py-1.5 text-xs font-semibold text-destructive"
-            >
-              {stat}
+      {/* Hero */}
+      <section className="relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 pt-24 pb-28 grid lg:grid-cols-12 gap-12 items-center relative">
+          <div className="lg:col-span-6 stagger-in">
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-[11px] tracking-wider uppercase text-steel">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber animate-pulse" />
+              Autonomous SMB Survival Agent
             </span>
-          ))}
+            <h1 className="mt-6 font-display text-5xl md:text-6xl font-medium leading-[1.05] tracking-tight">
+              Cash is late.<br />
+              Costs are up.<br />
+              <span className="text-steel">Act before the business feels it.</span>
+            </h1>
+            <p className="mt-6 text-base md:text-lg text-steel max-w-xl leading-relaxed">
+              OpsPilot Rescue autonomously recovers receivables, scouts financing, and finds vendor and insurance savings — so small businesses survive the gap between cost and cash.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Link href="/rescue" className="inline-flex items-center gap-2 rounded-md bg-foreground text-background px-5 h-11 text-sm font-medium hover:opacity-90 transition-opacity">
+                Open Rescue Queue <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link href="/workflow" className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-5 h-11 text-sm font-medium hover:bg-surface-muted transition-colors">
+                See a survival scan
+              </Link>
+            </div>
+          </div>
+
+          {/* App mockup */}
+          <div className="lg:col-span-6 relative">
+            <div className="card-elevated overflow-hidden shadow-2xl shadow-black/5">
+              <div className="h-9 border-b border-border bg-surface-muted flex items-center px-3 gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-crimson/60" />
+                <span className="h-2.5 w-2.5 rounded-full bg-amber/60" />
+                <span className="h-2.5 w-2.5 rounded-full bg-teal/60" />
+                <span className="ml-3 text-[11px] text-steel">opspilot.app/rescue</span>
+              </div>
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-steel">Rescue Queue</div>
+                    <div className="font-display text-lg">6 open cases · {formatUSD(kpis.atRiskReceivables)} at risk</div>
+                  </div>
+                  <AgentStatusPill status="running" />
+                </div>
+                <div className="space-y-2.5">
+                  {[
+                    { t: "Maple & Oak — 18d overdue",      level: "Critical" as const, amt: "$6,420",    cat: "Collections" },
+                    { t: "Insurance renewal +16.4%",        level: "High"     as const, amt: "$2,328/yr", cat: "Insurance"   },
+                    { t: "Tomato case price spike",          level: "High"     as const, amt: "+$240/mo",  cat: "Vendor"      },
+                    { t: "Working capital — 23d runway",    level: "High"     as const, amt: "Up to $35k", cat: "Financing"  },
+                  ].map((r, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2.5">
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-medium truncate">{r.t}</div>
+                        <div className="text-[11px] text-steel">{r.cat}</div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-[12px] tabular-nums font-medium">{r.amt}</span>
+                        <RiskBadge level={r.level} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* mini agent run inset */}
+            <div className="absolute -bottom-8 -left-6 hidden md:block w-64 card-elevated p-3 bg-surface">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-wider text-steel">Agent Run</span>
+                <AgentStatusPill status="completed" />
+              </div>
+              <div className="space-y-1.5">
+                {["Inspect receivables", "Search financing", "Compare vendors", "Insurance renewal", "Survival summary"].map((s, i) => (
+                  <div key={s} className="flex items-center gap-2 text-[11px]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-teal" />
+                    <span className="text-foreground">{s}</span>
+                    <span className="ml-auto text-steel tabular-nums">{[1.8, 4.2, 3.5, 2.7, 1.8][i]}s</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ── 4. How the agent works ───────────────────────────────────────────── */}
-      <section className="bg-muted/40 px-6 py-24">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="mb-14 text-center text-2xl font-bold tracking-tight text-foreground">
-            Four steps. No manual work.
-          </h2>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {HOW_CARDS.map(({ step, title, body }) => (
-              <div
-                key={step}
-                className="rounded-xl border border-border bg-card p-6 shadow-sm"
-              >
-                <p className="mb-3 text-xs font-bold tracking-widest text-muted-foreground">
-                  {step}
-                </p>
-                <h3 className="mb-3 text-base font-semibold text-foreground">{title}</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">{body}</p>
+      {/* Problem */}
+      <section className="border-t border-border/60 bg-surface">
+        <div className="max-w-7xl mx-auto px-6 py-24">
+          <div className="max-w-2xl">
+            <span className="text-[11px] uppercase tracking-[0.18em] text-amber font-medium">The problem</span>
+            <h2 className="mt-3 font-display text-3xl md:text-4xl tracking-tight">Small businesses don&apos;t fail from one big shock. They fail from quiet pressure.</h2>
+          </div>
+          <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { Icon: FileWarning, h: "Overdue receivables starve cash",       t: "Customers pay late. Owners chase invoices instead of running the business." },
+              { Icon: TrendingDown, h: "Financing offers are hard to compare", t: "APR, term, speed, and fit are scattered across providers and PDFs." },
+              { Icon: ShieldAlert,  h: "Vendor prices creep up unnoticed",     t: "Unit costs rise week by week — invisible until margin disappears." },
+              { Icon: Activity,     h: "Insurance renewals erode margin",      t: "Premiums jump at renewal. Comparing carriers is slow and unrewarding." },
+            ].map(({ Icon, h, t }) => (
+              <div key={h} className="card-elevated p-5">
+                <Icon className="h-5 w-5 text-amber mb-4" />
+                <h3 className="text-[15px] font-medium leading-snug">{h}</h3>
+                <p className="mt-2 text-sm text-steel leading-relaxed">{t}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── 5. Where TinyFish comes in ───────────────────────────────────────── */}
-      <section className="px-6 py-24">
-        <div className="mx-auto grid max-w-5xl items-center gap-14 lg:grid-cols-2">
-
-          {/* Left: text */}
-          <div>
-            <h2 className="mb-5 text-3xl font-bold leading-tight tracking-tight text-foreground">
-              The agent operates on the live web.
-            </h2>
-            <p className="text-base leading-relaxed text-muted-foreground">
-              OpsPilot uses TinyFish to log into external portals,
-              verify invoice status, check payment dashboards, and
-              fetch live financing options — exactly like a human would.
-            </p>
+      {/* How it works */}
+      <section id="how" className="border-t border-border/60">
+        <div className="max-w-7xl mx-auto px-6 py-24">
+          <div className="max-w-xl mb-12">
+            <span className="text-[11px] uppercase tracking-[0.18em] text-teal font-medium">How it works</span>
+            <h2 className="mt-3 font-display text-3xl md:text-4xl tracking-tight">A five-step survival loop, end to end.</h2>
           </div>
 
-          {/* Right: terminal mock card */}
-          {/* bg-zinc-950 is intentional terminal aesthetic — not a theme color */}
-          <div className="rounded-xl bg-zinc-950 p-6 shadow-2xl">
-            <p className="mb-5 font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-              Agent Step 3 of 5
-            </p>
-            <ul className="space-y-3 font-mono text-sm">
-              <li className="flex items-start gap-3">
-                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-400" />
-                <span className="text-zinc-300">Checking payment portal...</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="mt-0.5 shrink-0 font-bold text-emerald-400">✓</span>
-                <span className="text-zinc-300">
-                  Invoice{" "}
-                  <span className="font-semibold text-white">#1042</span>
-                  {" "}— unpaid, 14 days over
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="mt-0.5 shrink-0 font-bold text-emerald-400">✓</span>
-                <span className="text-zinc-300">
-                  Customer has 2 prior late payments
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="mt-0.5 shrink-0 font-bold text-blue-400">→</span>
-                <span className="text-zinc-300">Drafting escalated follow-up</span>
-              </li>
-            </ul>
+          <div className="grid md:grid-cols-5 gap-4">
+            {[
+              { Icon: ScanSearch, v: "Detect",      o: "identify survival risk" },
+              { Icon: Search,     v: "Investigate", o: "gather internal + external context" },
+              { Icon: GitCompare, v: "Compare",     o: "normalize the best options" },
+              { Icon: Zap,        v: "Act",         o: "recommend or trigger next steps" },
+              { Icon: ScrollText, v: "Audit",       o: "log every agent decision" },
+            ].map(({ Icon, v, o }, idx) => (
+              <div key={v} className="card-elevated p-5 relative">
+                <div className="absolute -top-2 -left-2 h-6 w-6 rounded-full bg-foreground text-background grid place-items-center text-[11px] font-medium">{idx + 1}</div>
+                <Icon className="h-5 w-5 text-foreground mb-4" />
+                <div className="font-display text-lg">{v}</div>
+                <div className="text-sm text-steel mt-1">{o}</div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── 6. CTA footer ────────────────────────────────────────────────────── */}
-      <section className="bg-foreground px-6 py-28 text-center">
-        <h2 className="mb-8 text-3xl font-bold tracking-tight text-background sm:text-4xl">
-          One click to recover what you&apos;re owed.
-        </h2>
-        <Link
-          href={CTA_HREF}
-          className="inline-block rounded-lg bg-primary px-10 py-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Open Rescue Queue →
-        </Link>
-        <p className="mt-8 text-xs text-background/50">
-          Built for small businesses. Powered by Claude AI + TinyFish.
-        </p>
+      {/* MCP / TinyFish */}
+      <section id="mcp" className="border-t border-border/60 bg-surface-muted">
+        <div className="max-w-7xl mx-auto px-6 py-24 grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <span className="text-[11px] uppercase tracking-[0.18em] text-amber font-medium">Tool execution layer</span>
+            <h2 className="mt-3 font-display text-3xl md:text-4xl tracking-tight">An MCP bridge to the systems that already run the business.</h2>
+            <p className="mt-5 text-base text-steel max-w-lg leading-relaxed">
+              OpsPilot orchestrates external tools — TinyFish for the open web, Stripe for ledger truth, Gmail for outreach, vendor and insurance sources for live quotes. The agent acts; the audit trail proves it.
+            </p>
+            <div className="mt-8">
+              <Link href="/rescue" className="inline-flex items-center gap-2 rounded-md bg-foreground text-background px-5 h-10 text-sm font-medium hover:opacity-90 transition-opacity">
+                Open Rescue Queue <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+          <div className="card-elevated p-6">
+            <McpGraph />
+          </div>
+        </div>
       </section>
 
+      {/* Footer */}
+      <footer className="border-t border-border/60">
+        <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-steel">
+          <div className="flex items-center gap-2">
+            <div className="h-5 w-5 rounded-md bg-foreground text-background grid place-items-center font-display text-[11px]">O</div>
+            <span>OpsPilot Rescue · Autonomous operator for business survival</span>
+          </div>
+          <div className="flex gap-5">
+            <Link href="/rescue"       className="hover:text-foreground transition-colors">Rescue Queue</Link>
+            <Link href="/workflow"     className="hover:text-foreground transition-colors">Agent Run</Link>
+            <Link href="/dashboard"    className="hover:text-foreground transition-colors">Dashboard</Link>
+            <Link href="/integrations" className="hover:text-foreground transition-colors">Integrations</Link>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

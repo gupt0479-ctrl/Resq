@@ -61,6 +61,8 @@ must remain demo-safe:
 1. mock mode available at all times
 2. live mode fully env-gated
 3. route handlers must not crash if live config is incomplete
+4. financing scout is the only required live external lane
+5. vendor and insurance may remain seeded during hybrid live mode
 
 ## Integration rule
 
@@ -70,3 +72,33 @@ External inputs and agent outputs must remain auditable:
 2. normalize incoming or outgoing actions
 3. write auditable `ai_actions`
 4. preserve deterministic service boundaries
+
+## Public contract freeze
+
+### `/api/tinyfish/health`
+
+Must distinguish:
+
+- `mock`
+- `misconfigured`
+- `live`
+
+### `/api/tinyfish/demo-run`
+
+Must remain the judge-facing survival-scan route.
+
+For financing, the returned output must stay stable around:
+
+- `offers[]`
+- `lender`
+- `product`
+- `aprPercent`
+- `termMonths`
+- `maxAmountUsd`
+- `decisionSpeed`
+- `sourceUrl`
+- `sourceTitle`
+- `confidence`
+- `mode`
+- `degradedFromLive`
+- `warning`

@@ -1,5 +1,7 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { db, DEMO_ORG_ID } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and } from "drizzle-orm"
 import { generateFollowUp } from "@/lib/ai/generate-followup"
 
 export async function POST(
@@ -8,47 +10,51 @@ export async function POST(
 ) {
   try {
     const { id } = await ctx.params
-    const client = createServerSupabaseClient()
 
     // Fetch appointment with customer join
-    const { data: appt, error } = await client
-      .from("appointments")
-      .select("*, customers ( full_name, email )")
-      .eq("id", id)
-      .eq("organization_id", DEMO_ORG_ID)
-      .single()
+    const rows = await db
+      .select()
+      .from(schema.appointments)
+      .leftJoin(schema.customers, eq(schema.appointments.customerId, schema.customers.id))
+      .where(
+        and(
+          eq(schema.appointments.id, id),
+          eq(schema.appointments.organizationId, DEMO_ORG_ID),
+        ),
+      )
+      .limit(1)
 
-    if (error || !appt) {
+    const row = rows[0]
+    if (!row) {
       return Response.json({ error: "Appointment not found" }, { status: 404 })
     }
 
-    const customer = (appt as { customers?: { full_name: string; email: string } | null }).customers
-
-    const apptAny = appt as Record<string, unknown>
+    const appt = row.appointments
+    const customer = row.customers
 
     const followUpMessage = await generateFollowUp({
-      id:          appt.id as string,
-      customer_id: appt.customer_id as string,
+      id:          appt.id,
+      customer_id: appt.customerId,
       customer: customer
-        ? { id: appt.customer_id as string, name: customer.full_name, email: customer.email, visit_count: 1, created_at: "" }
+        ? { id: appt.customerId, name: customer.fullName, email: customer.email ?? "", visit_count: 1, created_at: "" }
         : undefined,
-      party_size:     appt.covers as number,
-      starts_at:      appt.starts_at as string,
-      ends_at:        appt.ends_at as string,
+      party_size:     appt.covers,
+      starts_at:      appt.startsAt.toISOString(),
+      ends_at:        appt.endsAt.toISOString(),
       status:         "completed",
-      notes:          (appt.notes as string | null) ?? null,
-      occasion:       (apptAny.occasion as string | null) ?? null,
+      notes:          appt.notes ?? null,
+      occasion:       appt.occasion ?? null,
       reminder_sent:  false,
       follow_up_sent: false,
-      created_at:     appt.created_at as string,
+      created_at:     appt.createdAt.toISOString(),
       updated_at:     new Date().toISOString(),
     })
 
     // Mark follow-up sent
-    await client
-      .from("appointments")
-      .update({ follow_up_sent: true })
-      .eq("id", id)
+    await db
+      .update(schema.appointments)
+      .set({ followUpSent: true })
+      .where(eq(schema.appointments.id, id))
 
     return Response.json({ data: { followUpMessage } })
   } catch (err) {

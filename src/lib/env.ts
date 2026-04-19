@@ -2,14 +2,8 @@ import "server-only"
 import { z } from "zod"
 
 const serverSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  DATABASE_URL: z.string().min(1),
   DEMO_ORG_ID: z.string().default("00000000-0000-0000-0000-000000000001"),
-})
-
-const publicEnvSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
 })
 
 function validateServerEnv() {
@@ -25,43 +19,37 @@ export function getServerEnv() {
   return validateServerEnv()
 }
 
-export function getPublicEnv() {
-  const parsed = publicEnvSchema.safeParse(process.env)
-  if (!parsed.success) {
-    const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ")
-    throw new Error(`Missing or invalid public env vars: ${missing}`)
-  }
-  return parsed.data
-}
-
 const DEFAULT_DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
 
 /** Ember Table demo org from seed; trim so blank .env lines do not override the default. */
 export const DEMO_ORG_ID =
   process.env.DEMO_ORG_ID?.trim() || DEFAULT_DEMO_ORG_ID
 
-export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
-export const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
+export const DATABASE_URL = process.env.DATABASE_URL ?? ""
 
-export function isSupabaseConfigured(): boolean {
-  return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+export function isDatabaseConfigured(): boolean {
+  return Boolean(DATABASE_URL)
 }
 
 // ─── TinyFish (server-only, additive) ──────────────────────────────────────
 
-const DEFAULT_TINYFISH_BASE_URL = "https://agent.tinyfish.ai"
+const DEFAULT_TINYFISH_AGENT_BASE_URL = "https://agent.tinyfish.ai"
+const DEFAULT_TINYFISH_SEARCH_BASE_URL = "https://api.search.tinyfish.ai"
+const DEFAULT_TINYFISH_FETCH_BASE_URL = "https://api.fetch.tinyfish.ai"
+const DEFAULT_TINYFISH_AGENT_RUN_PATH = "/v1/automation/run"
 const DEFAULT_TINYFISH_TIMEOUT_MS = 30_000
 
 export const TINYFISH_API_KEY = process.env.TINYFISH_API_KEY?.trim() ?? ""
-export const TINYFISH_BASE_URL =
-  process.env.TINYFISH_BASE_URL?.trim() || DEFAULT_TINYFISH_BASE_URL
+export const TINYFISH_AGENT_BASE_URL =
+  process.env.TINYFISH_AGENT_BASE_URL?.trim() || DEFAULT_TINYFISH_AGENT_BASE_URL
+export const TINYFISH_SEARCH_BASE_URL =
+  process.env.TINYFISH_SEARCH_BASE_URL?.trim() || DEFAULT_TINYFISH_SEARCH_BASE_URL
+export const TINYFISH_FETCH_BASE_URL =
+  process.env.TINYFISH_FETCH_BASE_URL?.trim() || DEFAULT_TINYFISH_FETCH_BASE_URL
 
-/** Optional per-method paths. Required for live mode to be considered fully configured. */
-export const TINYFISH_SEARCH_PATH = process.env.TINYFISH_SEARCH_PATH?.trim() ?? ""
-export const TINYFISH_FETCH_PATH  = process.env.TINYFISH_FETCH_PATH?.trim()  ?? ""
-export const TINYFISH_AGENT_PATH  = process.env.TINYFISH_AGENT_PATH?.trim()  ?? ""
-export const TINYFISH_HEALTH_PATH = process.env.TINYFISH_HEALTH_PATH?.trim() ?? ""
+/** The Agent API uses a canonical path under the agent base URL. */
+export const TINYFISH_AGENT_PATH =
+  process.env.TINYFISH_AGENT_PATH?.trim() ?? DEFAULT_TINYFISH_AGENT_RUN_PATH
 
 /** Truthy unless explicitly set to "false" (trim + lower). Missing env => demo-safe default. */
 function parseBooleanDefaultTrue(raw: string | undefined): boolean {
@@ -88,16 +76,21 @@ export const TINYFISH_ENABLED   = parseBooleanDefaultFalse(process.env.TINYFISH_
 export const TINYFISH_USE_MOCKS = parseBooleanDefaultTrue(process.env.TINYFISH_USE_MOCKS)
 export const TINYFISH_TIMEOUT_MS = parseTimeoutMs(process.env.TINYFISH_TIMEOUT_MS)
 
-/** API key + base URL present. Does NOT require method paths. */
+/** API key + official base URLs present. Optional path overrides are not required. */
 export function isTinyFishConfigured(): boolean {
-  return Boolean(TINYFISH_API_KEY && TINYFISH_BASE_URL)
+  return Boolean(
+    TINYFISH_API_KEY &&
+    TINYFISH_AGENT_BASE_URL &&
+    TINYFISH_SEARCH_BASE_URL &&
+    TINYFISH_FETCH_BASE_URL
+  )
 }
 
 /**
  * "Live intent" = operator has explicitly asked for live mode.
  * i.e. TINYFISH_ENABLED=true AND TINYFISH_USE_MOCKS=false.
- * A missing API key or missing path env does NOT cancel live intent — the
- * operator signaled they want live, they just forgot a piece of config.
+ * A missing API key does NOT cancel live intent — the operator signaled they
+ * want live, they just forgot a piece of config.
  */
 export function hasTinyFishLiveIntent(): boolean {
   return TINYFISH_ENABLED && !TINYFISH_USE_MOCKS
@@ -112,16 +105,10 @@ export function isTinyFishMockMode(): boolean {
   return !hasTinyFishLiveIntent()
 }
 
-/** True only if configured, enabled, mocks disabled, and all required method paths present. */
+/** True only if configured, enabled, and mocks are disabled. */
 export function isTinyFishLiveReady(): boolean {
   if (!hasTinyFishLiveIntent()) return false
-  if (!isTinyFishConfigured()) return false
-  return Boolean(
-    TINYFISH_SEARCH_PATH &&
-    TINYFISH_FETCH_PATH &&
-    TINYFISH_AGENT_PATH &&
-    TINYFISH_HEALTH_PATH
-  )
+  return isTinyFishConfigured()
 }
 
 export type TinyFishMode = "mock" | "live" | "misconfigured"
@@ -129,7 +116,7 @@ export type TinyFishMode = "mock" | "live" | "misconfigured"
 /**
  * High-level classification for UI + logging:
  *   - "mock":         mocks explicitly on, or live not intended.
- *   - "live":         live intent + fully configured + all paths set.
+ *   - "live":         live intent + API key + official endpoints available.
  *   - "misconfigured": live intent but something required is missing.
  *                     Surfaces operator mistakes instead of hiding them.
  */
@@ -137,6 +124,41 @@ export function getTinyFishMode(): TinyFishMode {
   if (!hasTinyFishLiveIntent()) return "mock"
   if (isTinyFishLiveReady())    return "live"
   return "misconfigured"
+}
+
+// ─── Portal Reconnaissance (additive) ──────────────────────────────────────
+
+export const TINYFISH_VAULT_ENABLED = parseBooleanDefaultFalse(process.env.TINYFISH_VAULT_ENABLED)
+export const TINYFISH_PORTAL_RECON_ENABLED = parseBooleanDefaultFalse(process.env.TINYFISH_PORTAL_RECON_ENABLED)
+
+/**
+ * Portal reconnaissance is live-ready when:
+ * - TinyFish is live-ready (API key + endpoints configured)
+ * - Vault credentials are enabled
+ * - Portal reconnaissance is explicitly enabled
+ */
+export function isPortalReconLiveReady(): boolean {
+  return (
+    isTinyFishLiveReady() &&
+    TINYFISH_VAULT_ENABLED &&
+    TINYFISH_PORTAL_RECON_ENABLED
+  )
+}
+
+/**
+ * Portal reconnaissance mode follows the same three-mode pattern:
+ * - "mock": safe for demos, no network calls
+ * - "misconfigured": live intent but missing config
+ * - "live": fully configured and ready
+ */
+export function getPortalReconMode(): TinyFishMode {
+  if (isTinyFishMockMode() || !TINYFISH_PORTAL_RECON_ENABLED) {
+    return "mock"
+  }
+  if (!isPortalReconLiveReady()) {
+    return "misconfigured"
+  }
+  return "live"
 }
 
 // ─── AWS (optional, server-only) ───────────────────────────────────────────

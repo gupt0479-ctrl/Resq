@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and, count, inArray, lt, gte, desc, asc } from "drizzle-orm"
 import {
   computeInvoiceTotals,
   buildServiceLines,
@@ -18,6 +20,7 @@ interface AppointmentForInvoice {
   service_id:      string
   covers:          number
   notes:           string | null
+  status?:         string
   customLineItems?: Array<{ description: string; qty: number; unitPrice: number }>
 }
 
@@ -31,7 +34,6 @@ interface AppointmentForInvoice {
  * Returns the newly created invoice ID.
  */
 export async function generateInvoiceFromAppointment(
-  client: SupabaseClient,
   appt: AppointmentForInvoice
 ): Promise<string> {
   // 1. Build line items — use custom items if provided, otherwise fall back to service catalog
@@ -45,16 +47,23 @@ export async function generateInvoiceFromAppointment(
       unitPrice:   li.unitPrice,
     }))
   } else {
-    const { data: service, error: svcErr } = await client
-      .from("services")
-      .select("id, name, price_per_person")
-      .eq("id", appt.service_id)
-      .single()
+    const [service] = await db
+      .select({
+        id:             schema.services.id,
+        name:           schema.services.name,
+        pricePerPerson: schema.services.pricePerPerson,
+      })
+      .from(schema.services)
+      .where(eq(schema.services.id, appt.service_id))
+      .limit(1)
 
-    if (svcErr || !service) {
-      throw new Error(svcErr?.message ?? "Service not found — cannot price invoice")
+    if (!service) {
+      throw new Error("Service not found — cannot price invoice")
     }
-    lines = buildServiceLines(service, appt.covers)
+    lines = buildServiceLines(
+      { id: service.id, name: service.name, price_per_person: Number(service.pricePerPerson) },
+      appt.covers,
+    )
   }
 
   // 3. Compute totals deterministically
@@ -62,68 +71,68 @@ export async function generateInvoiceFromAppointment(
 
   // 4. Generate sequential invoice number
   const year = new Date().getFullYear()
-  const { count } = await client
-    .from("invoices")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", appt.organization_id)
-    .gte("created_at", `${year}-01-01T00:00:00Z`)
+  const [countResult] = await db
+    .select({ count: count() })
+    .from(schema.invoices)
+    .where(
+      and(
+        eq(schema.invoices.organizationId, appt.organization_id),
+        gte(schema.invoices.createdAt, new Date(`${year}-01-01T00:00:00Z`)),
+      ),
+    )
 
-  const invoiceNumber = generateInvoiceNumber(count ?? 0)
-  const now = new Date().toISOString()
+  const invoiceNumber = generateInvoiceNumber(Number(countResult?.count ?? 0))
+  const now = new Date()
 
   // 5. Insert invoice row
-  const { data: invoice, error: invErr } = await client
-    .from("invoices")
-    .insert({
-      organization_id: appt.organization_id,
-      appointment_id:  appt.id,
-      customer_id:     appt.customer_id,
-      invoice_number:  invoiceNumber,
-      currency:        "USD",
-      subtotal:        totals.subtotal,
-      tax_rate:        totals.taxRate,
-      tax_amount:      totals.taxAmount,
-      discount_amount: totals.discountAmount,
-      total_amount:    totals.totalAmount,
-      amount_paid:     0,
-      due_at:          totals.dueAt.toISOString(),
-      status:          "draft",
-      notes:           appt.notes,
-      created_at:      now,
-      updated_at:      now,
+  const [invoice] = await db
+    .insert(schema.invoices)
+    .values({
+      organizationId: appt.organization_id,
+      appointmentId:  appt.id,
+      customerId:     appt.customer_id,
+      invoiceNumber,
+      currency:       "USD",
+      subtotal:       String(totals.subtotal),
+      taxRate:        String(totals.taxRate),
+      taxAmount:      String(totals.taxAmount),
+      discountAmount: String(totals.discountAmount),
+      totalAmount:    String(totals.totalAmount),
+      amountPaid:     "0",
+      dueAt:          totals.dueAt,
+      status:         "draft",
+      notes:          appt.notes,
+      createdAt:      now,
+      updatedAt:      now,
     })
-    .select("id")
-    .single()
+    .returning({ id: schema.invoices.id })
 
-  if (invErr || !invoice) {
-    throw new Error(invErr?.message ?? "Failed to create invoice")
+  if (!invoice) {
+    throw new Error("Failed to create invoice")
   }
 
   // 6. Insert line items
   const lineRows = lines.map((l) => ({
-    invoice_id:      invoice.id,
-    organization_id: appt.organization_id,
-    service_id:      l.serviceId,
-    description:     l.description,
-    quantity:        l.quantity,
-    unit_price:      l.unitPrice,
-    amount:          Math.round(l.quantity * l.unitPrice * 100) / 100,
+    invoiceId:      invoice.id,
+    organizationId: appt.organization_id,
+    serviceId:      l.serviceId,
+    description:    l.description,
+    quantity:       l.quantity,
+    unitPrice:      String(l.unitPrice),
+    amount:         String(Math.round(l.quantity * l.unitPrice * 100) / 100),
   }))
 
-  const { error: itemErr } = await client.from("invoice_items").insert(lineRows)
-  if (itemErr) {
-    throw new Error(`Failed to create invoice items: ${itemErr.message}`)
-  }
+  await db.insert(schema.invoiceItems).values(lineRows)
 
   // 7. Insert audit event on the appointment
-  await client.from("appointment_events").insert({
-    appointment_id:  appt.id,
-    organization_id: appt.organization_id,
-    event_type:      DOMAIN_EVENT.INVOICE_GENERATED,
-    from_status:     "completed",
-    to_status:       "completed",
-    notes:           `Invoice ${invoiceNumber} generated`,
-    metadata:        { invoice_id: invoice.id, invoice_number: invoiceNumber },
+  await db.insert(schema.appointmentEvents).values({
+    appointmentId:  appt.id,
+    organizationId: appt.organization_id,
+    eventType:      DOMAIN_EVENT.INVOICE_GENERATED,
+    fromStatus:     "completed",
+    toStatus:       "completed",
+    notes:          `Invoice ${invoiceNumber} generated`,
+    metadata:       { invoice_id: invoice.id, invoice_number: invoiceNumber },
   })
 
   return invoice.id
@@ -132,20 +141,28 @@ export async function generateInvoiceFromAppointment(
 // ─── Send invoice ─────────────────────────────────────────────────────────
 
 export async function sendInvoice(
-  client: SupabaseClient,
   invoiceId: string,
   organizationId: string,
   notes?: string
 ): Promise<void> {
-  const { data: inv, error: fetchErr } = await client
-    .from("invoices")
-    .select("id, status, appointment_id, organization_id")
-    .eq("id", invoiceId)
-    .eq("organization_id", organizationId)
-    .single()
+  const [inv] = await db
+    .select({
+      id:             schema.invoices.id,
+      status:         schema.invoices.status,
+      appointmentId:  schema.invoices.appointmentId,
+      organizationId: schema.invoices.organizationId,
+    })
+    .from(schema.invoices)
+    .where(
+      and(
+        eq(schema.invoices.id, invoiceId),
+        eq(schema.invoices.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (fetchErr || !inv) {
-    throw new Error(fetchErr?.message ?? "Invoice not found")
+  if (!inv) {
+    throw new Error("Invoice not found")
   }
 
   if (!canSendInvoice(inv.status as InvoiceStatus)) {
@@ -154,26 +171,26 @@ export async function sendInvoice(
     )
   }
 
-  const now = new Date().toISOString()
-  const { error: updateErr } = await client
-    .from("invoices")
-    .update({ status: "sent", sent_at: now, notes: notes ?? null, updated_at: now })
-    .eq("id", invoiceId)
-    .eq("organization_id", organizationId)
+  const now = new Date()
+  await db
+    .update(schema.invoices)
+    .set({ status: "sent", sentAt: now, notes: notes ?? null, updatedAt: now })
+    .where(
+      and(
+        eq(schema.invoices.id, invoiceId),
+        eq(schema.invoices.organizationId, organizationId),
+      ),
+    )
 
-  if (updateErr) {
-    throw new Error(`Failed to send invoice: ${updateErr.message}`)
-  }
-
-  if (inv.appointment_id) {
-    await client.from("appointment_events").insert({
-      appointment_id:  inv.appointment_id,
-      organization_id: organizationId,
-      event_type:      DOMAIN_EVENT.INVOICE_SENT,
-      from_status:     null,
-      to_status:       null,
-      notes:           "Invoice sent to guest",
-      metadata:        { invoice_id: invoiceId },
+  if (inv.appointmentId) {
+    await db.insert(schema.appointmentEvents).values({
+      appointmentId:  inv.appointmentId,
+      organizationId,
+      eventType:      DOMAIN_EVENT.INVOICE_SENT,
+      fromStatus:     null,
+      toStatus:       null,
+      notes:          "Invoice sent to guest",
+      metadata:       { invoice_id: invoiceId },
     })
   }
 }
@@ -187,20 +204,30 @@ export interface MarkPaidOptions {
 }
 
 export async function markInvoicePaid(
-  client: SupabaseClient,
   invoiceId: string,
   organizationId: string,
   opts: MarkPaidOptions = {}
 ): Promise<void> {
-  const { data: inv, error: fetchErr } = await client
-    .from("invoices")
-    .select("id, status, total_amount, appointment_id, customer_id, invoice_number")
-    .eq("id", invoiceId)
-    .eq("organization_id", organizationId)
-    .single()
+  const [inv] = await db
+    .select({
+      id:            schema.invoices.id,
+      status:        schema.invoices.status,
+      totalAmount:   schema.invoices.totalAmount,
+      appointmentId: schema.invoices.appointmentId,
+      customerId:    schema.invoices.customerId,
+      invoiceNumber: schema.invoices.invoiceNumber,
+    })
+    .from(schema.invoices)
+    .where(
+      and(
+        eq(schema.invoices.id, invoiceId),
+        eq(schema.invoices.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (fetchErr || !inv) {
-    throw new Error(fetchErr?.message ?? "Invoice not found")
+  if (!inv) {
+    throw new Error("Invoice not found")
   }
 
   if (!canMarkInvoicePaid(inv.status as InvoiceStatus)) {
@@ -210,42 +237,42 @@ export async function markInvoicePaid(
     )
   }
 
-  const amountPaid = opts.amountPaid ?? inv.total_amount
-  const now = new Date().toISOString()
+  const amountPaid = opts.amountPaid ?? Number(inv.totalAmount)
+  const now = new Date()
 
-  const { error: updateErr } = await client
-    .from("invoices")
-    .update({
-      status:       "paid",
-      paid_at:      now,
-      amount_paid:  amountPaid,
-      updated_at:   now,
+  await db
+    .update(schema.invoices)
+    .set({
+      status:     "paid",
+      paidAt:     now,
+      amountPaid: String(amountPaid),
+      updatedAt:  now,
     })
-    .eq("id", invoiceId)
-    .eq("organization_id", organizationId)
-
-  if (updateErr) {
-    throw new Error(`Failed to mark invoice paid: ${updateErr.message}`)
-  }
+    .where(
+      and(
+        eq(schema.invoices.id, invoiceId),
+        eq(schema.invoices.organizationId, organizationId),
+      ),
+    )
 
   // Create idempotent revenue transaction (unique index guards against duplication)
-  await createRevenueTransaction(client, {
+  await createRevenueTransaction({
     organizationId,
     invoiceId,
     amount:        amountPaid,
     paymentMethod: opts.paymentMethod,
-    notes:         opts.notes ?? `Payment for invoice ${inv.invoice_number}`,
+    notes:         opts.notes ?? `Payment for invoice ${inv.invoiceNumber}`,
   })
 
-  if (inv.appointment_id) {
-    await client.from("appointment_events").insert({
-      appointment_id:  inv.appointment_id,
-      organization_id: organizationId,
-      event_type:      DOMAIN_EVENT.INVOICE_PAID,
-      from_status:     null,
-      to_status:       null,
-      notes:           `Invoice ${inv.invoice_number} paid`,
-      metadata:        { invoice_id: invoiceId, amount: amountPaid },
+  if (inv.appointmentId) {
+    await db.insert(schema.appointmentEvents).values({
+      appointmentId:  inv.appointmentId,
+      organizationId,
+      eventType:      DOMAIN_EVENT.INVOICE_PAID,
+      fromStatus:     null,
+      toStatus:       null,
+      notes:          `Invoice ${inv.invoiceNumber} paid`,
+      metadata:       { invoice_id: invoiceId, amount: amountPaid },
     })
   }
 }
@@ -253,7 +280,6 @@ export async function markInvoicePaid(
 // ─── List invoices ────────────────────────────────────────────────────────
 
 export async function listInvoices(
-  client: SupabaseClient,
   organizationId: string,
   opts: {
     status?: InvoiceStatus
@@ -261,53 +287,62 @@ export async function listInvoices(
     offset?: number
   } = {}
 ) {
-  let query = client
-    .from("invoices")
-    .select("*, customers ( id, full_name, email )")
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false })
-
+  const conditions = [eq(schema.invoices.organizationId, organizationId)]
   if (opts.status) {
-    query = query.eq("status", opts.status)
+    conditions.push(eq(schema.invoices.status, opts.status))
   }
 
-  if (opts.limit) {
-    query = query.limit(opts.limit)
-  }
-  if (opts.offset) {
-    query = query.range(opts.offset, opts.offset + (opts.limit ?? 50) - 1)
-  }
+  const rows = await db
+    .select()
+    .from(schema.invoices)
+    .leftJoin(schema.customers, eq(schema.invoices.customerId, schema.customers.id))
+    .where(and(...conditions))
+    .orderBy(desc(schema.invoices.createdAt))
+    .limit(opts.limit ?? 50)
+    .offset(opts.offset ?? 0)
 
-  const { data, error } = await query
-  if (error) throw new Error(error.message)
-  return data ?? []
+  return rows.map((r) => ({
+    ...r.invoices,
+    customers: r.customers
+      ? { id: r.customers.id, full_name: r.customers.fullName, email: r.customers.email }
+      : null,
+  }))
 }
 
 // ─── Get invoice detail (with line items) ────────────────────────────────
 
 export async function getInvoiceDetail(
-  client: SupabaseClient,
   invoiceId: string,
   organizationId: string
 ) {
-  const { data: invoice, error: invErr } = await client
-    .from("invoices")
-    .select("*, customers ( id, full_name, email, phone )")
-    .eq("id", invoiceId)
-    .eq("organization_id", organizationId)
-    .single()
+  const invRows = await db
+    .select()
+    .from(schema.invoices)
+    .leftJoin(schema.customers, eq(schema.invoices.customerId, schema.customers.id))
+    .where(
+      and(
+        eq(schema.invoices.id, invoiceId),
+        eq(schema.invoices.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (invErr || !invoice) throw new Error(invErr?.message ?? "Invoice not found")
+  const invRow = invRows[0]
+  if (!invRow) throw new Error("Invoice not found")
 
-  const { data: items, error: itemErr } = await client
-    .from("invoice_items")
-    .select("*")
-    .eq("invoice_id", invoiceId)
-    .order("created_at", { ascending: true })
+  const items = await db
+    .select()
+    .from(schema.invoiceItems)
+    .where(eq(schema.invoiceItems.invoiceId, invoiceId))
+    .orderBy(asc(schema.invoiceItems.createdAt))
 
-  if (itemErr) throw new Error(itemErr.message)
-
-  return { ...invoice, invoice_items: items ?? [] }
+  return {
+    ...invRow.invoices,
+    customers: invRow.customers
+      ? { id: invRow.customers.id, full_name: invRow.customers.fullName, email: invRow.customers.email, phone: invRow.customers.phone }
+      : null,
+    invoice_items: items,
+  }
 }
 
 // ─── Recompute overdue status (called by cron or scheduled job) ───────────
@@ -317,19 +352,22 @@ export async function getInvoiceDetail(
  * (idempotent — returns existing invoice if already generated).
  */
 export async function ensureInvoiceForCompletedAppointment(
-  client: SupabaseClient,
   appointmentId: string,
   organizationId: string
 ): Promise<{ invoiceId: string; created: boolean }> {
-  const { data: appt, error: fetchErr } = await client
-    .from("appointments")
-    .select("*")
-    .eq("id", appointmentId)
-    .eq("organization_id", organizationId)
-    .single()
+  const [appt] = await db
+    .select()
+    .from(schema.appointments)
+    .where(
+      and(
+        eq(schema.appointments.id, appointmentId),
+        eq(schema.appointments.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (fetchErr || !appt) {
-    throw new Error(fetchErr?.message ?? "Appointment not found")
+  if (!appt) {
+    throw new Error("Appointment not found")
   }
 
   if (appt.status !== "completed") {
@@ -338,45 +376,45 @@ export async function ensureInvoiceForCompletedAppointment(
     )
   }
 
-  const { data: existing, error: exErr } = await client
-    .from("invoices")
-    .select("id")
-    .eq("appointment_id", appointmentId)
-    .eq("organization_id", organizationId)
-    .maybeSingle()
+  const [existing] = await db
+    .select({ id: schema.invoices.id })
+    .from(schema.invoices)
+    .where(
+      and(
+        eq(schema.invoices.appointmentId, appointmentId),
+        eq(schema.invoices.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (exErr) throw new Error(exErr.message)
   if (existing?.id) {
     return { invoiceId: existing.id, created: false }
   }
 
   try {
-    const invoiceId = await generateInvoiceFromAppointment(client, {
-      id:              appt.id as string,
-      organization_id: appt.organization_id as string,
-      customer_id:     appt.customer_id as string,
-      service_id:      appt.service_id as string,
-      covers:          appt.covers as number,
-      notes:           (appt.notes as string | null) ?? null,
+    const invoiceId = await generateInvoiceFromAppointment({
+      id:              appt.id,
+      organization_id: appt.organizationId,
+      customer_id:     appt.customerId,
+      service_id:      appt.serviceId,
+      covers:          appt.covers,
+      notes:           appt.notes,
     })
 
     return { invoiceId, created: true }
   } catch (err) {
     // A concurrent request may have inserted the invoice between our read and
     // insert — re-fetch to handle the unique-violation case.
-    const { data: concurrentExisting, error: concurrentErr } = await client
-      .from("invoices")
-      .select("id")
-      .eq("appointment_id", appointmentId)
-      .eq("organization_id", organizationId)
-      .maybeSingle()
-
-    if (concurrentErr) {
-      // Wrap both errors for full context.
-      throw new Error(
-        `Invoice insert failed (${(err as Error).message}); re-fetch also failed: ${concurrentErr.message}`
+    const [concurrentExisting] = await db
+      .select({ id: schema.invoices.id })
+      .from(schema.invoices)
+      .where(
+        and(
+          eq(schema.invoices.appointmentId, appointmentId),
+          eq(schema.invoices.organizationId, organizationId),
+        ),
       )
-    }
+      .limit(1)
 
     if (concurrentExisting?.id) {
       return { invoiceId: concurrentExisting.id, created: false }
@@ -388,63 +426,69 @@ export async function ensureInvoiceForCompletedAppointment(
 
 /** Record that a payment reminder was drafted/sent (increments reminder_count). */
 export async function recordInvoiceReminderSent(
-  client: SupabaseClient,
   invoiceId: string,
   organizationId: string
 ): Promise<number> {
-  const now = new Date().toISOString()
+  const now = new Date()
   const maxAttempts = 5
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const { data: inv, error: fetchErr } = await client
-      .from("invoices")
-      .select("id, appointment_id, reminder_count, invoice_number")
-      .eq("id", invoiceId)
-      .eq("organization_id", organizationId)
-      .single()
+    const [inv] = await db
+      .select({
+        id:            schema.invoices.id,
+        appointmentId: schema.invoices.appointmentId,
+        reminderCount: schema.invoices.reminderCount,
+        invoiceNumber: schema.invoices.invoiceNumber,
+      })
+      .from(schema.invoices)
+      .where(
+        and(
+          eq(schema.invoices.id, invoiceId),
+          eq(schema.invoices.organizationId, organizationId),
+        ),
+      )
+      .limit(1)
 
-    if (fetchErr || !inv) {
-      throw new Error(fetchErr?.message ?? "Invoice not found")
+    if (!inv) {
+      throw new Error("Invoice not found")
     }
 
-    const current = Number(inv.reminder_count) || 0
+    const current = Number(inv.reminderCount) || 0
     const next = current + 1
 
     // CAS-style update: only commit if reminder_count hasn't changed since we read it.
-    // Use maybeSingle() so a 0-row CAS miss returns data:null instead of a 406 error.
-    const { data: updatedInv, error: updateErr } = await client
-      .from("invoices")
-      .update({
-        reminder_count:   next,
-        last_reminded_at: now,
-        updated_at:       now,
+    const updated = await db
+      .update(schema.invoices)
+      .set({
+        reminderCount:  next,
+        lastRemindedAt: now,
+        updatedAt:      now,
       })
-      .eq("id", invoiceId)
-      .eq("organization_id", organizationId)
-      .eq("reminder_count", current)
-      .select("reminder_count")
-      .maybeSingle()
+      .where(
+        and(
+          eq(schema.invoices.id, invoiceId),
+          eq(schema.invoices.organizationId, organizationId),
+          eq(schema.invoices.reminderCount, current),
+        ),
+      )
+      .returning({ reminderCount: schema.invoices.reminderCount })
 
-    if (updateErr) {
-      throw new Error(updateErr.message)
-    }
-
-    if (!updatedInv) {
+    if (!updated.length) {
       // 0 rows matched — another concurrent update won the race; retry.
       continue
     }
 
-    const finalCount = Number(updatedInv.reminder_count) || next
+    const finalCount = Number(updated[0].reminderCount) || next
 
-    if (inv.appointment_id) {
-      await client.from("appointment_events").insert({
-        appointment_id:  inv.appointment_id as string,
-        organization_id: organizationId,
-        event_type:      DOMAIN_EVENT.INVOICE_REMINDER_SENT,
-        from_status:     null,
-        to_status:       null,
-        notes:           `Payment reminder #${finalCount} for invoice ${inv.invoice_number as string}`,
-        metadata:        { invoice_id: invoiceId, reminder_count: finalCount },
+    if (inv.appointmentId) {
+      await db.insert(schema.appointmentEvents).values({
+        appointmentId:  inv.appointmentId,
+        organizationId,
+        eventType:      DOMAIN_EVENT.INVOICE_REMINDER_SENT,
+        fromStatus:     null,
+        toStatus:       null,
+        notes:          `Payment reminder #${finalCount} for invoice ${inv.invoiceNumber}`,
+        metadata:       { invoice_id: invoiceId, reminder_count: finalCount },
       })
     }
 
@@ -455,19 +499,21 @@ export async function recordInvoiceReminderSent(
 }
 
 export async function markOverdueInvoices(
-  client: SupabaseClient,
   organizationId: string
 ): Promise<number> {
-  const now = new Date().toISOString()
+  const now = new Date()
 
-  const { data, error } = await client
-    .from("invoices")
-    .update({ status: "overdue", updated_at: now })
-    .eq("organization_id", organizationId)
-    .in("status", ["sent", "pending"])
-    .lt("due_at", now)
-    .select("id")
+  const data = await db
+    .update(schema.invoices)
+    .set({ status: "overdue", updatedAt: now })
+    .where(
+      and(
+        eq(schema.invoices.organizationId, organizationId),
+        inArray(schema.invoices.status, ["sent", "pending"]),
+        lt(schema.invoices.dueAt, now),
+      ),
+    )
+    .returning({ id: schema.invoices.id })
 
-  if (error) throw new Error(error.message)
-  return data?.length ?? 0
+  return data.length
 }

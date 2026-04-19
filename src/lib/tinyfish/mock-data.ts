@@ -1,9 +1,11 @@
 import type {
   TinyFishAgentRunResult,
   TinyFishFetchResult,
+  TinyFishFinancingOutputs,
   TinyFishScenario,
   TinyFishSearchResult,
 } from "./schemas"
+import { TinyFishFinancingOutputsSchema } from "./schemas"
 
 // Deterministic timestamp so demo replays stay stable.
 const DEMO_FIXED_ISO = "2026-04-11T18:00:00.000Z"
@@ -19,6 +21,9 @@ export const FINANCING_OFFERS = [
     maxAmountUsd:    75_000,
     decisionSpeed:   "48 hours",
     notes:           "Soft credit pull. Daily ACH repayment.",
+    sourceUrl:       "https://example.com/blueharbor-working-capital",
+    sourceTitle:     "BlueHarbor Capital working capital advance",
+    confidence:      0.84,
   },
   {
     lender:          "Kabbage-Lite Line",
@@ -28,6 +33,9 @@ export const FINANCING_OFFERS = [
     maxAmountUsd:    40_000,
     decisionSpeed:   "24 hours",
     notes:           "Draw as needed, interest-only on drawn balance.",
+    sourceUrl:       "https://example.com/kabbage-lite-line",
+    sourceTitle:     "Kabbage-Lite revolving line of credit",
+    confidence:      0.76,
   },
   {
     lender:          "Backer SMB Loans",
@@ -37,6 +45,9 @@ export const FINANCING_OFFERS = [
     maxAmountUsd:    150_000,
     decisionSpeed:   "14 days",
     notes:           "Requires 2 years tax returns. Lowest APR of the three.",
+    sourceUrl:       "https://example.com/backer-sba-micro",
+    sourceTitle:     "Backer SMB Loans SBA 7(a) micro offer",
+    confidence:      0.72,
   },
 ] as const
 
@@ -99,11 +110,33 @@ function steps(labels: Array<[string, string, number]>) {
   }))
 }
 
+function buildMockFinancingOutputs(
+  overrides: Partial<TinyFishFinancingOutputs> = {}
+): TinyFishFinancingOutputs {
+  return TinyFishFinancingOutputsSchema.parse({
+    offers: FINANCING_OFFERS.map((offer) => ({ ...offer })),
+    mode: "mock",
+    degradedFromLive: false,
+    warning: null,
+    ...overrides,
+  })
+}
+
 export function mockAgentRun(
   scenario: TinyFishScenario,
   task: string
 ): TinyFishAgentRunResult {
   if (scenario === "financing") {
+    const outputs = buildMockFinancingOutputs({
+      searchQueries: [
+        "small business working capital line of credit fast approval",
+        "SMB financing offers same day funding term loan APR",
+      ],
+      sourceUrls: FINANCING_OFFERS.map((offer) => offer.sourceUrl),
+      summary:
+        "Three financing options surfaced. Recommend BlueHarbor for speed and SBA-style financing for lowest APR.",
+    })
+
     return {
       task,
       scenario,
@@ -115,9 +148,7 @@ export function mockAgentRun(
       ]),
       summary:
         "Three financing options surfaced. Recommend BlueHarbor (48h) for bridging, SBA 7(a) for long-term.",
-      outputs: {
-        offers: FINANCING_OFFERS.map((o) => ({ ...o, estMonthlySavings: undefined })),
-      },
+      outputs,
     }
   }
 
@@ -177,10 +208,107 @@ export function mockAgentRun(
     summary:
       "Survival scan complete: 3 financing offers, 2 vendor savings plays, 1 insurance renewal warning.",
     outputs: {
-      financing: financing.outputs,
-      vendor:    vendor.outputs,
-      insurance: insurance.outputs,
+      financing: {
+        ...(financing.outputs as TinyFishFinancingOutputs),
+        summary: financing.summary,
+        mode: financing.mode,
+        degradedFromLive: financing.degradedFromLive ?? false,
+        warning: financing.warning ?? null,
+      },
+      vendor: {
+        ...vendor.outputs,
+        summary: vendor.summary,
+        mode: vendor.mode,
+        degradedFromLive: vendor.degradedFromLive ?? false,
+        warning: vendor.warning ?? null,
+      },
+      insurance: {
+        ...insurance.outputs,
+        summary: insurance.summary,
+        mode: insurance.mode,
+        degradedFromLive: insurance.degradedFromLive ?? false,
+        warning: insurance.warning ?? null,
+      },
     },
+  }
+}
+
+export function mockCollectionsSearch(customerName: string, query: string): TinyFishSearchResult {
+  const isMarketQuery = /market|industry|sector|conditions/i.test(query)
+  const isNewsQuery   = /news|bankruptcy|insolvency|financial|difficulties/i.test(query)
+
+  if (isMarketQuery) {
+    return {
+      query,
+      mode: "mock",
+      results: [
+        {
+          title:   "Service sector payment delays rising in Q1 2026",
+          url:     "https://example.com/service-sector-2026",
+          snippet: "Small and mid-size service businesses are reporting longer payment cycles, with average DSO up 8 days year-over-year amid tightening credit conditions.",
+          score:   0.88,
+        },
+        {
+          title:   "SMB cashflow pressure index reaches 18-month high",
+          url:     "https://example.com/smb-cashflow-index",
+          snippet: "Receivables aging is accelerating across hospitality, retail, and professional services as customers extend payment windows.",
+          score:   0.74,
+        },
+        {
+          title:   "Industry receivables benchmarks: Q1 2026 report",
+          url:     "https://example.com/receivables-benchmarks-q1",
+          snippet: "Median days-sales-outstanding climbed to 42 days in Q1 2026, up from 38 days in Q4 2025, driven by broader economic caution.",
+          score:   0.67,
+        },
+      ],
+    }
+  }
+
+  if (isNewsQuery) {
+    return {
+      query,
+      mode: "mock",
+      results: [
+        {
+          title:   `No insolvency or bankruptcy filings found for ${customerName}`,
+          url:     "https://example.com/public-records-search",
+          snippet: `Public records search returned no active bankruptcy petitions, court judgments, or insolvency notices linked to ${customerName} as of April 2026.`,
+          score:   0.91,
+        },
+        {
+          title:   `${customerName}: no major negative press coverage detected`,
+          url:     "https://example.com/news-monitor",
+          snippet: "No news articles referencing business closure, fraud, or financial distress were found in recent web index for this entity.",
+          score:   0.79,
+        },
+        {
+          title:   "How to interpret absence of negative signals in B2B collections",
+          url:     "https://example.com/collections-guide",
+          snippet: "When no derogatory public records are found, focus shifts to internal payment behavior and direct outreach strategy.",
+          score:   0.62,
+        },
+      ],
+    }
+  }
+
+  // Generic collections fallback
+  return {
+    query,
+    mode: "mock",
+    results: [
+      {
+        title:   `${customerName} — public profile overview`,
+        url:     "https://example.com/business-profiles",
+        snippet: "Business appears active with no significant public derogatory records in recent searches.",
+        score:   0.84,
+      },
+      {
+        title:   "Collections risk assessment: external data sources guide",
+        url:     "https://example.com/collections-external-data",
+        snippet: "Combining internal payment history with external news and filing searches improves recovery rate predictions by 22%.",
+        score:   0.71,
+      },
+    ],
   }
 }
 
@@ -190,21 +318,42 @@ export function mockSearch(query: string): TinyFishSearchResult {
     mode: "mock",
     results: [
       {
-        title:   "SMB working-capital options for independent restaurants",
+        title:   "SMB working-capital options for cash-constrained operators",
         url:     "https://example.com/working-capital-guide",
-        snippet: "Compare term loans, lines of credit, and SBA 7(a) programs.",
+        snippet: "Compare term loans, lines of credit, revenue-based financing, and SBA programs.",
         score:   0.91,
       },
       {
-        title:   "How to benchmark supplier pricing for produce SKUs",
+        title:   "How to benchmark supplier pricing for recurring business inputs",
         url:     "https://example.com/supplier-benchmarks",
-        snippet: "Use 30/60/90-day moving averages against market indices.",
+        snippet: "Use 30/60/90-day moving averages against market indices and invoice history.",
         score:   0.77,
       },
       {
         title:   "BOP insurance renewal negotiation playbook",
         url:     "https://example.com/bop-renewal",
         snippet: "Get quotes 45 days before renewal; carriers discount to win.",
+        score:   0.72,
+      },
+    ],
+  }
+}
+
+export function mockWatchlistSearch(name: string, query: string): TinyFishSearchResult {
+  return {
+    query,
+    mode: "mock",
+    results: [
+      {
+        title:   `Sanctions search — no records found for "${name}"`,
+        url:     "https://example.com/sanctions-search",
+        snippet: `Automated watchlist search returned no matching records for "${name}" across OFAC SDN, Interpol, EU consolidated sanctions, UN Security Council, World Bank debarred entities, and U.S. BIS entity list as of April 2026.`,
+        score:   0.97,
+      },
+      {
+        title:   "How to interpret a clean sanctions screening result",
+        url:     "https://example.com/sanctions-guide",
+        snippet: "A clean result means no exact or close matches were found in the screened databases. Ongoing monitoring is still recommended for high-value counterparties.",
         score:   0.72,
       },
     ],
@@ -221,3 +370,11 @@ export function mockFetch(url: string): TinyFishFetchResult {
     fetchedAt: DEMO_FIXED_ISO,
   }
 }
+
+// ─── Portal Reconnaissance (re-export) ─────────────────────────────────────
+
+export {
+  PORTAL_RECON_FIXTURES,
+  getMockPortalRecon,
+  selectScenarioByInvoiceId,
+} from "./portal-mock-data"

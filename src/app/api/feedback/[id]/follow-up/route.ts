@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { FeedbackFollowUpBodySchema } from "@/lib/schemas/feedback"
 import { enqueueFollowUpFromBody } from "@/lib/services/feedback"
 
@@ -24,8 +24,7 @@ export async function POST(
   }
 
   try {
-    const client = createServerSupabaseClient()
-    await enqueueFollowUpFromBody(client, DEMO_ORG_ID, id, {
+    await enqueueFollowUpFromBody(DEMO_ORG_ID, id, {
       actionType:   parsed.data.actionType,
       channel:      parsed.data.channel,
       priority:     parsed.data.priority,

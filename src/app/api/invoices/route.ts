@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { listInvoicesQuery } from "@/lib/queries/invoices"
 import { INVOICE_STATUS } from "@/lib/constants/enums"
 import type { InvoiceStatus } from "@/lib/constants/enums"
@@ -16,8 +16,7 @@ export async function GET(request: NextRequest) {
         ? (rawStatus as InvoiceStatus)
         : undefined
 
-    const client   = createServerSupabaseClient()
-    const invoices = await listInvoicesQuery(client, DEMO_ORG_ID, { status, limit, offset })
+    const invoices = await listInvoicesQuery(DEMO_ORG_ID, { status, limit, offset })
 
     return Response.json({ data: invoices, count: invoices.length })
   } catch (err) {

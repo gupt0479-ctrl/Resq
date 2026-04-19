@@ -1,5 +1,7 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { db, DEMO_ORG_ID } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 import { completeAppointment } from "@/lib/services/appointments"
 import { CompleteAppointmentBodySchema } from "@/lib/schemas/appointment"
 import { generateFollowUp } from "@/lib/ai/generate-followup"
@@ -22,17 +24,16 @@ export async function POST(
       )
     }
 
-    const client = createServerSupabaseClient()
     const result = await completeAppointment(
-      client, id, DEMO_ORG_ID, parsed.data.notes, parsed.data.lineItems
+      id, DEMO_ORG_ID, parsed.data.notes, parsed.data.lineItems
     )
 
     // Fetch customer for personalised follow-up
-    const { data: customer } = await client
-      .from("customers")
-      .select("full_name, email")
-      .eq("id", result.appointment.customer_id)
-      .maybeSingle()
+    const [customer] = await db
+      .select({ fullName: schema.customers.fullName, email: schema.customers.email })
+      .from(schema.customers)
+      .where(eq(schema.customers.id, result.appointment.customer_id))
+      .limit(1)
 
     const apptWithExtras = result.appointment as typeof result.appointment & {
       occasion?: string | null
@@ -43,7 +44,7 @@ export async function POST(
       id:          result.appointment.id,
       customer_id: result.appointment.customer_id,
       customer: customer
-        ? { id: result.appointment.customer_id, name: customer.full_name, email: customer.email, visit_count: 1, created_at: "" }
+        ? { id: result.appointment.customer_id, name: customer.fullName, email: customer.email ?? "", visit_count: 1, created_at: "" }
         : undefined,
       party_size:     result.appointment.covers,
       starts_at:      result.appointment.starts_at,
@@ -58,10 +59,10 @@ export async function POST(
     })
 
     // Mark follow-up generated
-    await client
-      .from("appointments")
-      .update({ follow_up_sent: true })
-      .eq("id", id)
+    await db
+      .update(schema.appointments)
+      .set({ followUpSent: true })
+      .where(eq(schema.appointments.id, id))
 
     return Response.json({
       data: {

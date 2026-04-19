@@ -1,10 +1,9 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
 import { getFinanceSummary, listTransactions } from "@/lib/services/finance"
 import type {
   FinanceSummaryResponse,
   FinanceTransactionResponse,
 } from "@/lib/schemas/finance"
-import { DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 
 type TransactionRow = Record<string, unknown> & {
   id: string
@@ -22,14 +21,12 @@ type TransactionRow = Record<string, unknown> & {
 }
 
 export async function getFinanceSummaryQuery(
-  client: SupabaseClient,
   organizationId: string = DEMO_ORG_ID
 ): Promise<FinanceSummaryResponse> {
-  return getFinanceSummary(client, organizationId)
+  return getFinanceSummary(organizationId)
 }
 
 export async function listTransactionsQuery(
-  client: SupabaseClient,
   organizationId: string,
   opts: {
     type?: string
@@ -39,7 +36,7 @@ export async function listTransactionsQuery(
     since?: string
   } = {}
 ): Promise<FinanceTransactionResponse[]> {
-  const rows = await listTransactions(client, organizationId, opts)
+  const rows = await listTransactions(organizationId, opts)
   return rows.map((row) => mapTransactionRow(row as TransactionRow))
 }
 

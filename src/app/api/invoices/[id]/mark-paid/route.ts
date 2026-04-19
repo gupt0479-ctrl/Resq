@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { markInvoicePaid } from "@/lib/services/invoices"
 import { MarkPaidBodySchema } from "@/lib/schemas/invoice"
 
@@ -25,8 +25,7 @@ export async function POST(
       )
     }
 
-    const client = createServerSupabaseClient()
-    await markInvoicePaid(client, id, DEMO_ORG_ID, {
+    await markInvoicePaid(id, DEMO_ORG_ID, {
       paymentMethod: parsed.data.paymentMethod,
       amountPaid:    parsed.data.amountPaid,
       notes:         parsed.data.notes,

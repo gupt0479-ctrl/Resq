@@ -18,15 +18,17 @@ Use this on the final rehearsal path.
 ## TinyFish
 
 - [ ] `/api/tinyfish/health` returns healthy output
-- [ ] `/api/tinyfish/demo-run` returns a valid scenario response
+- [ ] `/api/tinyfish/demo-run` returns a valid financing-first scenario response
 - [ ] Mock mode fallback is available
+- [ ] Financing output includes source links, warnings, and mode truth
 
 ## Demo path
 
-- [ ] Rescue / dashboard view shows cash pressure
-- [ ] Financing result is understandable
-- [ ] Vendor or insurance result is understandable
-- [ ] Workflow / audit trail shows agent activity
+- [ ] Dashboard clearly shows cash pressure
+- [ ] Rescue queue feels like the main working surface
+- [ ] Financing result is understandable in under 15 seconds
+- [ ] Vendor or insurance proof supports the story without distracting from it
+- [ ] Workflow / audit trail clearly shows the survival scan
 
 ## Verification
 
@@ -41,3 +43,5 @@ Use this on the final rehearsal path.
 - [ ] Backup recording prepared
 - [ ] Live demo browser tabs prepared
 - [ ] HDMI / stage fallback plan ready
+- [ ] 90-second script rehearsed
+- [ ] 5-minute script rehearsed

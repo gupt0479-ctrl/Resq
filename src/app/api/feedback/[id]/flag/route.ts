@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { FeedbackFlagBodySchema } from "@/lib/schemas/feedback"
 import { setFeedbackFlagged } from "@/lib/services/feedback"
 
@@ -23,8 +23,7 @@ export async function POST(
   }
 
   try {
-    const client = createServerSupabaseClient()
-    await setFeedbackFlagged(client, DEMO_ORG_ID, id, parsed.data.flagged)
+    await setFeedbackFlagged(DEMO_ORG_ID, id, parsed.data.flagged)
     return NextResponse.json({ data: { feedbackId: id, flagged: parsed.data.flagged } })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error"

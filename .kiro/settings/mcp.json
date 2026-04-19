@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "tinyfish": {
+      "url": "https://agent.tinyfish.ai/mcp",
+      "disabled": false,
+      "autoApprove": []
+    },
+    "tinyfish-docs": {
+      "url": "https://docs.tinyfish.ai/mcp",
+      "disabled": false,
+      "autoApprove": []
+    },
+    "aws-knowledge-mcp-server": {
+      "url": "https://knowledge-mcp.global.api.aws",
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}

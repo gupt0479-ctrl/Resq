@@ -17,12 +17,11 @@ const OPTIONAL_VARS = [
   "CRON_SECRET",
   "DEMO_MODE",
   "TINYFISH_API_KEY",
-  "TINYFISH_BASE_URL",
   "TINYFISH_ENABLED",
   "TINYFISH_USE_MOCKS",
-  "TINYFISH_HEALTH_PATH",
-  "TINYFISH_SEARCH_PATH",
-  "TINYFISH_FETCH_PATH",
+  "TINYFISH_AGENT_BASE_URL",
+  "TINYFISH_SEARCH_BASE_URL",
+  "TINYFISH_FETCH_BASE_URL",
   "TINYFISH_AGENT_PATH",
   "AWS_REGION",
   "AWS_S3_BUCKET",
@@ -81,7 +80,7 @@ async function main() {
   }
 
   console.log("\nNext steps:")
-  console.log("  1. Apply Supabase SQL in order (see docs/rescue-demo-runbook.md section 4).")
+  console.log("  1. Apply Supabase SQL in order (see docs/rescue-demo-runbook.md section 3).")
   console.log("  2. npm install && npm run dev")
   console.log("  3. Re-run with --probe once the dev server is up.")
 

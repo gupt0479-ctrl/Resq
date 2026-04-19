@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { createTransaction } from "@/lib/services/finance"
 import { listTransactionsQuery } from "@/lib/queries/finance"
 import { CreateTransactionBodySchema } from "@/lib/schemas/finance"
@@ -15,8 +15,7 @@ export async function GET(request: NextRequest) {
     const offset = Number(searchParams.get("offset") ?? "0")
     const since  = searchParams.get("since") ?? undefined
 
-    const client = createServerSupabaseClient()
-    const transactions = await listTransactionsQuery(client, DEMO_ORG_ID, {
+    const transactions = await listTransactionsQuery(DEMO_ORG_ID, {
       type,
       taxRelevant,
       limit,
@@ -48,8 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const client = createServerSupabaseClient()
-    const id = await createTransaction(client, {
+    const id = await createTransaction({
       organizationId:  DEMO_ORG_ID,
       type:            parsed.data.type,
       category:        parsed.data.category,

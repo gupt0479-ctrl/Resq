@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
 import { ChevronDown, ChevronRight, Check, Bell, Copy, CheckCheck, Loader2, Pencil, Plus, Trash2, X, Download, Mail, Phone, User } from "lucide-react"
+import { InvestigationPanel } from "@/components/receivables/investigation-panel"
 
 export interface LineItem {
   description: string
@@ -1291,6 +1292,7 @@ export function InvoiceTable({ invoices: initial }: { invoices: Invoice[] }) {
 
                           {/* Remind (pending) or Send Follow-up (overdue) */}
                           {inv.status === "overdue" ? (
+                            <>
                             <button
                               onClick={(e) => sendFollowUp(inv, e)}
                               disabled={loadingFollowUp === inv.id}
@@ -1299,6 +1301,21 @@ export function InvoiceTable({ invoices: initial }: { invoices: Invoice[] }) {
                               {loadingFollowUp === inv.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bell className="h-3 w-3" />}
                               Send Follow-up
                             </button>
+                            {/* Risk investigation — overdue invoices only */}
+                            <span onClick={(e) => e.stopPropagation()}>
+                              <InvestigationPanel
+                                invoiceId={inv.id}
+                                invoiceNumber={inv.number}
+                                customerName={inv.guest}
+                                balance={inv.amount}
+                                daysOverdue={
+                                  inv.dueDate
+                                    ? Math.max(0, Math.floor((Date.now() - new Date(inv.dueDate).getTime()) / (1000 * 60 * 60 * 24)))
+                                    : 0
+                                }
+                              />
+                            </span>
+                            </>
                           ) : (
                             <button
                               onClick={(e) => sendReminder(inv, e)}

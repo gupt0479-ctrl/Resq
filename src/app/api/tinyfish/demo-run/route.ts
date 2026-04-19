@@ -1,6 +1,5 @@
 import { z } from "zod"
-import { DEMO_ORG_ID, isDemoMode, isSupabaseConfigured } from "@/lib/env"
-import { createServerSupabaseClient } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID, isDemoMode, isDatabaseConfigured } from "@/lib/env"
 import { recordAiAction } from "@/lib/services/ai-actions"
 import { runAgent, TinyFishError } from "@/lib/tinyfish/client"
 import { TinyFishScenarioSchema } from "@/lib/tinyfish/schemas"
@@ -19,6 +18,7 @@ const BodySchema = z.object({
 })
 
 const SCENARIO_ACTION: Record<z.infer<typeof TinyFishScenarioSchema>, string> = {
+  collections:        "receivable_risk_detected",
   financing:          "financing_options_scouted",
   vendor:             "vendor_costs_compared",
   insurance:          "insurance_renewal_checked",
@@ -28,6 +28,7 @@ const SCENARIO_ACTION: Record<z.infer<typeof TinyFishScenarioSchema>, string> = 
 // Deterministic UUIDs per scenario so repeat demo runs collapse onto the same
 // timeline rows instead of duplicating. Namespace: 0x...000A = "survival_agent".
 const SCENARIO_DEMO_ENTITY_ID: Record<z.infer<typeof TinyFishScenarioSchema>, string> = {
+  collections:        "00000000-0000-0000-000a-000000000005",
   financing:          "00000000-0000-0000-000a-000000000001",
   vendor:             "00000000-0000-0000-000a-000000000002",
   insurance:          "00000000-0000-0000-000a-000000000003",
@@ -35,6 +36,7 @@ const SCENARIO_DEMO_ENTITY_ID: Record<z.infer<typeof TinyFishScenarioSchema>, st
 }
 
 const SCENARIO_TASK: Record<z.infer<typeof TinyFishScenarioSchema>, string> = {
+  collections:        "Investigate overdue receivables and assess customer payment risk.",
   financing:          "Scout SMB financing options to bridge near-term cashflow stress.",
   vendor:             "Compare supplier costs on top SKUs and flag price spikes.",
   insurance:          "Assess upcoming insurance renewal and recommend shopping action.",
@@ -92,19 +94,18 @@ export async function POST(request: Request) {
   }
 
   let aiActionId: string | null = null
-  if (isSupabaseConfigured()) {
+  if (isDatabaseConfigured()) {
     try {
-      const client = createServerSupabaseClient()
       const entityId = isDemoMode()
         ? SCENARIO_DEMO_ENTITY_ID[scenario]
         : crypto.randomUUID()
 
-      aiActionId = await recordAiAction(client, {
+      aiActionId = await recordAiAction({
         organizationId,
         entityType:   "survival_agent",
         entityId,
         triggerType:  "tinyfish.demo_run",
-        actionType:   SCENARIO_ACTION[scenario],
+        actionType:   SCENARIO_ACTION[scenario] as import("@/lib/constants/enums").AiActionType,
         inputSummary: summarizeInput({ scenario, customerName, invoiceId, dryRun }),
         outputPayload: {
           mode:             runResult.mode,
