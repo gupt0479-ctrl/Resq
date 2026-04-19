@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import {
   AreaChart,
   Area,
@@ -10,6 +11,7 @@ import {
 } from "recharts"
 import { WaterfallChart } from "@/components/cashflow/WaterfallChart"
 import { IncomeGauge } from "@/components/cashflow/IncomeGauge"
+import { InvoiceTable, type Invoice } from "@/components/invoices/invoice-table"
 import { AlertTriangle, TrendingDown, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -325,6 +327,15 @@ export function CashflowClient() {
   const historicalWeeks = d.waterfall.filter((w) => !w.isForecast)
   const forecastWeeks   = d.waterfall.filter((w) =>  w.isForecast)
 
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+
+  useEffect(() => {
+    fetch("/api/cash/invoices")
+      .then(r => r.json())
+      .then(j => { if (j.ok) setInvoices(j.invoices) })
+      .catch(() => {})
+  }, [])
+
   const cashColor =
     d.currentCash > 20_000 ? "#2d9b8a" :
     d.currentCash > 5_000  ? "#f59e0b" : "#c0522a"
@@ -425,6 +436,13 @@ export function CashflowClient() {
           <TopDriversList drivers={d.topDrivers} />
           <ActionQueue    items={d.actionQueue} />
         </div>
+
+        {/* Row 5 — Invoices */}
+        {invoices.length > 0 && (
+          <div className="rounded-2xl border border-stone-100 bg-white shadow-sm overflow-hidden">
+            <InvoiceTable invoices={invoices} />
+          </div>
+        )}
 
       </div>
     </div>

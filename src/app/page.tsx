@@ -33,9 +33,14 @@ export default function LandingPage() {
             <a href="#how" className="hover:text-foreground transition-colors">How it works</a>
             <a href="#mcp" className="hover:text-foreground transition-colors">MCP / Tools</a>
           </nav>
-          <Link href="/rescue" className="inline-flex items-center gap-1.5 rounded-md bg-foreground text-background px-3.5 h-9 text-sm font-medium hover:opacity-90 transition-opacity">
-            Open Rescue Queue <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/login" className="inline-flex items-center px-3.5 h-9 text-sm font-medium text-steel hover:text-foreground transition-colors">
+              Sign in
+            </Link>
+            <Link href="/login" className="inline-flex items-center gap-1.5 rounded-md bg-foreground text-background px-3.5 h-9 text-sm font-medium hover:opacity-90 transition-opacity">
+              Get started <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -56,11 +61,11 @@ export default function LandingPage() {
               OpsPilot Rescue autonomously recovers receivables, scouts financing, and finds vendor and insurance savings — so small businesses survive the gap between cost and cash.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link href="/rescue" className="inline-flex items-center gap-2 rounded-md bg-foreground text-background px-5 h-11 text-sm font-medium hover:opacity-90 transition-opacity">
-                Open Rescue Queue <ArrowRight className="h-4 w-4" />
+              <Link href="/login" className="inline-flex items-center gap-2 rounded-md bg-foreground text-background px-5 h-11 text-sm font-medium hover:opacity-90 transition-opacity">
+                Get started <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/workflow" className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-5 h-11 text-sm font-medium hover:bg-surface-muted transition-colors">
-                See a survival scan
+              <Link href="/login" className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-5 h-11 text-sm font-medium hover:bg-surface-muted transition-colors">
+                Sign in
               </Link>
             </div>
           </div>
