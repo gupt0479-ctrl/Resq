@@ -751,22 +751,39 @@ async function runLiveFullSurvivalScan(task: string): Promise<TinyFishAgentRunRe
   }
 }
 
+export function buildGoalString(url: string): string {
+  return [
+    `STEP 1: Handle any cookie consent banners, popup overlays, or modal dialogs before interacting with page content.`,
+    `STEP 2: Navigate to the primary financing or loan product section of ${url}.`,
+    `STEP 3: Extract all available financing offers from the page.`,
+    `STEP 4: Return strict JSON only — no surrounding prose, no markdown, no explanation.`,
+    ``,
+    `Required output schema:`,
+    `{ "offers": [ { "lender": string, "product": string, "aprPercent": number|null, "termMonths": number|null, "maxAmountUsd": number|null, "decisionSpeed": string|null, "notes": string|null } ] }`,
+    ``,
+    `Use null for any field you cannot find. Do not invent values.`,
+  ].join("\n")
+}
+
 async function runFinancingAgentAssist(url: string): Promise<TinyFishFinancingOffer[]> {
   const payload = await runAutomationLive({
     url,
-    goal: [
-      "Read this SMB financing page and extract financing terms as JSON.",
-      "Return an array of offers.",
-      "Each offer must use keys: lender, product, aprPercent, termMonths, maxAmountUsd, decisionSpeed, notes.",
-      "Use null for unknown fields and do not invent values.",
-    ].join(" "),
+    goal: buildGoalString(url),
   })
 
   if (payload.status !== "COMPLETED") {
     throw new TinyFishError("run_failed", `TinyFish agent run ended with status ${payload.status}`)
   }
 
-  return normalizeAgentFinancingOffers(payload.result, url)
+  let resultValue = payload.result
+  if (typeof resultValue === "string") {
+    try {
+      resultValue = JSON.parse(resultValue)
+    } catch {
+      // pass raw string through — normalizeAgentFinancingOffers handles strings
+    }
+  }
+  return normalizeAgentFinancingOffers(resultValue, url)
 }
 
 async function runAutomationLive(opts: {

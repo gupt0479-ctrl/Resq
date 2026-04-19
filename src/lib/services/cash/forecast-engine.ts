@@ -1,11 +1,11 @@
 import "server-only"
 import { createServerSupabaseClient } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { createHash } from "crypto"
 import {
   getObligations,
   getReceivables,
   getRefundExposure,
-  DEMO_ORG_ID,
   type CashObligation,
   type CashReceivable,
   type RefundExposureItem,

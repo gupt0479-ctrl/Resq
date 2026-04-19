@@ -1,24 +1,12 @@
 import Link from "next/link"
+import { createServerSupabaseClient } from "@/lib/db/supabase-server"
 import { DEMO_ORG_ID } from "@/lib/db"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { getDashboardSummary } from "@/lib/queries/dashboard"
 import { isDatabaseConfigured } from "@/lib/env"
 import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
 import { KpiCard } from "@/components/KpiCard"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import {
-  AlertTriangle,
-  ArrowRight,
-  ArrowUpRight,
-  CalendarDays,
-  Clock,
-  DollarSign,
-  MessageSquare,
-  Plug,
-  TrendingUp,
-  Zap,
-} from "lucide-react"
+import { ArrowUpRight, Zap, AlertTriangle } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -31,6 +19,23 @@ function timeAgo(iso: string) {
   if (diff < 60) return `${diff}m ago`
   if (diff < 1440) return `${Math.floor(diff / 60)}h ago`
   return `${Math.floor(diff / 1440)}d ago`
+}
+
+type InvoiceCustomer = { full_name: string } | null
+
+function getInvoiceCustomer(
+  customer: InvoiceCustomer | InvoiceCustomer[] | null | undefined
+): InvoiceCustomer {
+  if (Array.isArray(customer)) return customer[0] ?? null
+  return customer ?? null
+}
+
+function formatDueDateLabel(iso: string | null | undefined) {
+  if (!iso) return "Due date unavailable"
+  return `Due ${new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })}`
 }
 
 export default async function DashboardPage() {
@@ -71,31 +76,17 @@ export default async function DashboardPage() {
   const runwayDays  = weeklyBurn > 0 ? Math.round((cashOnHand / weeklyBurn) * 7) : 0
 
   // Top overdue invoices for survival briefing + top risks
-  const overdueInvoices = await (async () => {
-    try {
-      const { db: database } = await import("@/lib/db")
-      const { invoices, customers } = await import("@/lib/db/schema")
-      const { eq, and, desc } = await import("drizzle-orm")
-      const rows = await database
-        .select({
-          id: invoices.id,
-          invoice_number: invoices.invoiceNumber,
-          total_amount: invoices.totalAmount,
-          amount_paid: invoices.amountPaid,
-          due_at: invoices.dueAt,
-          customers: { full_name: customers.fullName },
-        })
-        .from(invoices)
-        .leftJoin(customers, eq(invoices.customerId, customers.id))
-        .where(and(eq(invoices.organizationId, DEMO_ORG_ID), eq(invoices.status, "overdue")))
-        .orderBy(desc(invoices.totalAmount))
-        .limit(5)
-      return rows
-    } catch { return [] }
-  })()
+  const client = createServerSupabaseClient()
+  const { data: overdueInvoices } = await client
+    .from("invoices")
+    .select("id, invoice_number, total_amount, amount_paid, due_at, customers(full_name)")
+    .eq("organization_id", DEMO_ORG_ID)
+    .eq("status", "overdue")
+    .order("total_amount", { ascending: false })
+    .limit(5)
 
   const topInvoice = overdueInvoices?.[0]
-  const topCust    = topInvoice?.customers as { full_name: string } | null
+  const topCust = getInvoiceCustomer(topInvoice?.customers as InvoiceCustomer | InvoiceCustomer[] | undefined)
 
   return (
     <div className="p-8 lg:p-10 max-w-[1280px] mx-auto">
@@ -175,19 +166,14 @@ export default async function DashboardPage() {
           <div className="card-elevated p-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-4">Top risks</div>
             <div className="space-y-3">
-              {(overdueInvoices ?? []).slice(0, 3).map((inv) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const cust  = (Array.isArray(inv.customers) ? inv.customers[0] : inv.customers) as { full_name: string } | null
+              {(overdueInvoices ?? []).slice(0, 3).map((inv: Record<string, unknown>) => {
+                const cust  = getInvoiceCustomer(inv.customers as InvoiceCustomer | InvoiceCustomer[] | undefined)
                 const bal   = Number(inv.total_amount) - Number(inv.amount_paid)
-                const now   = new Date().getTime()
-                const daysO = inv.due_at
-                  ? Math.max(0, Math.floor((now - new Date(inv.due_at).getTime()) / 86400000))
-                  : 0
                 return (
-                  <div key={inv.id} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">
+                  <div key={inv.id as string} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">
                     <div>
                       <p className="text-[13px] font-medium">{cust?.full_name ?? "Unknown"}</p>
-                      <p className="text-[11px] text-steel">{daysO}d overdue · {inv.invoice_number}</p>
+                      <p className="text-[11px] text-steel">{formatDueDateLabel(inv.due_at as string | null | undefined)} · {inv.invoice_number as string}</p>
                     </div>
                     <span className="font-display text-base text-crimson shrink-0">{fmt(bal)}</span>
                   </div>

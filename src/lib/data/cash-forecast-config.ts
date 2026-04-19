@@ -1,6 +1,7 @@
 // Resq · Cash Forecast Configuration
 // Deterministic seed data for obligations, receivables, and refund exposure
-// Stored as code (not DB) for hackathon speed — same data, same output every run
+// Stored as code (not DB) for hackathon speed and deterministic demo/test runs.
+// Trade-off: this is easier to scenario-test now, while production should move to DB tables.
 
 export const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
 

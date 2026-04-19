@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-
-import { DEMO_ORG_ID } from "@/lib/db"
+import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 
 export const dynamic = "force-dynamic"
 
@@ -10,9 +9,9 @@ type TimelineEvent = {
   action_type: string
   input_summary: string | null
   status: string
-  created_at: string | Date
+  created_at: string
   entity_type: string
-  output_payload?: unknown
+  output_payload_json?: unknown
 }
 
 function formatActionLabel(actionType: string): string {
@@ -37,7 +36,13 @@ function getTrackStyle(event: TimelineEvent) {
     }
   }
 
-  if (event.action_type.includes("invoice") || event.action_type.includes("payment")) {
+  if (
+    event.entity_type === "invoice" ||
+    event.action_type.includes("invoice") ||
+    event.action_type.includes("payment") ||
+    event.action_type.includes("receivable") ||
+    event.action_type.includes("followup")
+  ) {
     return {
       border: "border-l-teal-500",
       badge: "bg-teal-100 text-teal-700",
@@ -103,24 +108,15 @@ function getRunMeta(outputPayload: unknown) {
 }
 
 export default async function WorkflowPage() {
-  const { createServerSupabaseClient } = await import("@/lib/db/supabase-server")
-  const sb = createServerSupabaseClient()
-  const { data } = await sb
+  const client = createServerSupabaseClient()
+  const { data } = await client
     .from("ai_actions")
     .select("id, action_type, input_summary, status, created_at, entity_type, output_payload_json")
     .eq("organization_id", DEMO_ORG_ID)
     .order("created_at", { ascending: false })
     .limit(20)
 
-  const timeline = (data ?? []).map((r: Record<string, unknown>) => ({
-    id: r.id as string,
-    action_type: r.action_type as string,
-    input_summary: r.input_summary as string | null,
-    status: r.status as string,
-    created_at: r.created_at as string,
-    entity_type: r.entity_type as string,
-    output_payload: r.output_payload_json,
-  }))
+  const timeline = (data ?? []) as TimelineEvent[]
   return (
     <div className="space-y-5 p-6">
       <div>
@@ -160,7 +156,7 @@ export default async function WorkflowPage() {
               <ul className="space-y-0">
                 {timeline.map((event, index) => {
                   const track = getTrackStyle(event)
-                  const meta = getRunMeta(event.output_payload)
+                  const meta = getRunMeta(event.output_payload_json)
                   return (
                     <li
                       key={event.id}

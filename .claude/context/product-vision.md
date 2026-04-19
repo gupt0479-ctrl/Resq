@@ -5,7 +5,7 @@ Updated: 2026-04-18
 ## The core insight
 
 Large enterprises employ consultants, finance analysts, marketing teams, and HR
-staff. Small business owners cannot. OpsPilot Rescue is the AI operator that
+staff. Small business owners cannot. Resq is the AI operator that
 fills all of those roles simultaneously — at a price a single-location business
 can sustain.
 
@@ -19,7 +19,7 @@ Small businesses regularly carry receivables that should have been collected 30,
 60, or 90 days ago. Owners either forget to follow up or feel awkward doing so
 repeatedly. The result is cash flow crises that are entirely preventable.
 
-**OpsPilot response:** Automated overdue tracking, tiered reminder logic,
+**Resq response:** Automated overdue tracking, tiered reminder logic,
 cash-flow risk alerts, and aging reports. The manager sees what is at risk
 before it becomes a write-off.
 
@@ -30,7 +30,7 @@ overseas suppliers. Timezone confusion, language barriers, and cultural
 communication differences lead to missed bookings, disputed invoices, and failed
 hiring.
 
-**OpsPilot response (current):** AI-drafted follow-up messages adapt tone and
+**Resq response (current):** AI-drafted follow-up messages adapt tone and
 clarity. Future: multi-language reply drafts and flagging when a communication
 thread has gone cold unexpectedly.
 
@@ -41,7 +41,7 @@ restaurant, a cleaning technician — at a sustainable hourly rate is a constant
 operational problem. Owners do not know where to advertise, how to screen, or
 what a fair local rate looks like.
 
-**OpsPilot response (future):** AI-assisted job description drafts surfaced from
+**Resq response (future):** AI-assisted job description drafts surfaced from
 the manager dashboard. Suggested posting channels. Candidate intake notes
 summarized before the owner reviews.
 
@@ -51,7 +51,7 @@ Many small business owners know their trade but are not marketers. They want to
 post a job ad or a seasonal promotion on Instagram or Facebook but do not know
 how to write copy, choose a format, or target the right audience.
 
-**OpsPilot response (future):** AI drafts posting copy, suggests formats, and
+**Resq response (future):** AI drafts posting copy, suggests formats, and
 provides a checklist for the owner to review and post — reducing the skill gap
 without requiring the owner to become a marketer.
 
@@ -61,7 +61,7 @@ Reservations are confirmed by text. Invoices are created in a spreadsheet or
 not at all. Payments are tracked by memory. Each of these is a single point of
 failure for a solo operator.
 
-**OpsPilot response:** The full reservation → invoice → payment → feedback chain
+**Resq response:** The full reservation → invoice → payment → feedback chain
 is automated. Nothing drops unless the owner explicitly dismisses it.
 
 ### 6. No access to expert operational guidance
@@ -70,7 +70,7 @@ Google retains strategy consultants. A neighborhood restaurant owner has none of
 that. Operational mistakes — pricing too low, missing tax-relevant expenses,
 ignoring churn signals — compound silently.
 
-**OpsPilot response:** AI agents surface the same recommendations a consultant
+**Resq response:** AI agents surface the same recommendations a consultant
 would flag: cash flow at risk, a customer showing churn signals, an expense
 category running over budget.
 
@@ -93,7 +93,7 @@ category running over budget.
 
 ## Positioning statement
 
-> "Every big company has a consultant. OpsPilot Rescue is that consultant for
+> "Every big company has a consultant. Resq is that consultant for
 > the small business that can't afford one — an AI operator that tracks your
 > money, communicates with your customers, and tells you what needs attention
 > before it becomes a crisis."

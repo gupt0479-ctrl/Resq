@@ -13,7 +13,7 @@ function buildHtml(body: string, tone: string): string {
   const lines = body.split("\n").map(l => l.trim() ? `<p style="margin:0 0 12px;line-height:1.6">${l}</p>` : "<br/>").join("")
   return `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:600px;margin:40px auto;padding:0 24px;color:#1a1a1a">
 <div style="border-left:4px solid ${borderColor};padding-left:20px;margin-bottom:24px">${lines}</div>
-<p style="font-size:11px;color:#888;margin-top:32px">Sent by Resq · Powered by AI collections</p>
+<p style="font-size:11px;color:#888;margin-top:32px">Sent by OpsPilot · Powered by AI collections</p>
 </body></html>`
 }
 
@@ -34,7 +34,7 @@ export async function sendOutreachEmail(params: {
   const html    = buildHtml(params.body, params.tone)
 
   const { data, error } = await resend.emails.send({
-    from:    `${params.fromName ?? "Resq Collections"} <collections@resq.app>`,
+    from:    `${params.fromName ?? "OpsPilot Collections"} <collections@opspilot.app>`,
     to:      [params.toEmail],
     subject,
     html,

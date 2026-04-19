@@ -118,6 +118,31 @@ What to look for:
 - `data.warning`
 - `data.result.outputs.offers`
 
+For cookbook-style live progress, the repo also exposes additive TinyFish routes:
+
+```bash
+curl -N -X POST http://localhost:3000/api/tinyfish/run-sse \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","goal":"Return JSON only"}'
+
+curl -s -X POST http://localhost:3000/api/tinyfish/run-async \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","goal":"Return JSON only"}' | jq
+
+curl -s http://localhost:3000/api/tinyfish/poll/<runId> | jq
+```
+
+These routes are additive helpers for frontend progress UX:
+
+- `run-sse` streams TinyFish progress with an initial local `MODE` event
+- `run-async` starts a long-running run and returns a `runId`
+- `poll/[runId]` checks run status without local server-side state
+
+Important:
+
+- The rescue UI does not consume these endpoints automatically yet.
+- The judge-facing hero flow still runs through the existing rescue and demo-run surfaces until frontend wiring is added.
+
 For the full survival scan, the financing branch remains visible under:
 
 - `data.result.outputs.financing.offers`

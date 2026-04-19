@@ -21,7 +21,7 @@ import {
 import { search as tinyFishSearch } from "@/lib/tinyfish/client"
 import { mockCollectionsSearch, mockWatchlistSearch } from "@/lib/tinyfish/mock-data"
 
-const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_AI_API_KEY })
+const anthropic = new Anthropic()
 
 // ── Tool implementations (query db, never modify) ─────────────────────────
 
@@ -612,7 +612,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for Resq, an SMB cashflow recovery system.
+const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for OpsPilot, an SMB cashflow recovery system.
 
 REQUIRED: Call ALL NINE tools before writing any conclusions.
 
@@ -651,89 +651,152 @@ export async function runReceivablesInvestigation(
   let verData:      VerificationChecks | null = null
   let creditData:   CreditReport | null = null
 
-  // ── Phase 1: gather data via direct tool calls (deterministic) ─────────────
-  try {
-    invoiceData = await getInvoiceStatus(input.invoiceIds[0]) as Record<string, unknown>
-  } catch { /* ignore */ }
-  try {
-    paymentData = await getPaymentHistory(input.customerId, input.organizationId) as Record<string, unknown>
-  } catch { /* ignore */ }
-  try {
-    profileData = await getCustomerProfile(input.customerId) as Record<string, unknown>
-  } catch { /* ignore */ }
-  try {
-    behaviorData = await getAppointmentBehavior(input.customerId, input.organizationId) as Record<string, unknown>
-  } catch { /* ignore */ }
-  try {
-    openInvData = await getAllOpenInvoices(input.customerId, input.organizationId) as Record<string, unknown>
-  } catch { /* ignore */ }
-
-  verData = buildVerificationChecks(
-    (profileData ?? {}) as Parameters<typeof buildVerificationChecks>[0],
-    (paymentData ?? {}) as Parameters<typeof buildVerificationChecks>[1],
-  )
-  creditData = await evaluateCreditReport(input.customerId, input.organizationId)
-
-  agentSteps.push(
-    { tool: "get_invoice_status", summary: "Fetched invoice status", result: invoiceData },
-    { tool: "get_payment_history", summary: "Fetched payment history", result: paymentData },
-    { tool: "get_customer_profile", summary: "Fetched customer profile", result: profileData },
-    { tool: "get_appointment_behavior", summary: "Fetched appointment behavior", result: behaviorData },
-    { tool: "get_all_open_invoices", summary: "Fetched all open invoices", result: openInvData },
-    { tool: "run_verification_checks", summary: "Ran verification checks", result: verData },
-    { tool: "evaluate_credit_report", summary: "Evaluated credit report", result: creditData },
-  )
-
-  // External signals + watchlist (from existing functions in this file)
   let externalData: ExternalSignals | null = null
   let watchlistData: WatchlistScreening | null = null
-  try {
-    const customerName = (profileData?.name as string) ?? "Unknown"
-    const companyName = (profileData?.companyName as string) ?? customerName
 
-    // Watchlist screening
-    const namesToScreen = [customerName, companyName].filter(Boolean)
-    const mockWl = mockWatchlistSearch(customerName, `${customerName} OFAC sanctions`)
-    watchlistData = {
-      screenedNames: namesToScreen,
-      hits: mockWl.results.map(r => ({
-        list: "ofac" as WatchlistId,
-        label: r.title,
-        status: "clear" as const,
-        detail: r.snippet,
-      })),
-      overallStatus: "clear" as const,
-      dataSource: mockWl.mode as "live" | "mock" | "not_run",
+  // ── Tool call handler for Claude agentic loop ────────────────────────────
+  async function handleToolCall(name: string, toolInput: unknown): Promise<unknown> {
+    if (name === "get_invoice_status") {
+      const { invoice_id } = toolInput as { invoice_id: string }
+      const res = await getInvoiceStatus(invoice_id)
+      invoiceData = res as Record<string, unknown>
+      return res
+    } else if (name === "get_payment_history") {
+      const res = await getPaymentHistory(input.customerId, input.organizationId)
+      paymentData = res as Record<string, unknown>
+      return res
+    } else if (name === "get_customer_profile") {
+      const res = await getCustomerProfile(input.customerId)
+      profileData = res as Record<string, unknown>
+      return res
+    } else if (name === "get_appointment_behavior") {
+      const res = await getAppointmentBehavior(input.customerId, input.organizationId)
+      behaviorData = res as Record<string, unknown>
+      return res
+    } else if (name === "get_all_open_invoices") {
+      const res = await getAllOpenInvoices(input.customerId, input.organizationId)
+      openInvData = res as Record<string, unknown>
+      return res
+    } else if (name === "run_verification_checks") {
+      verData = buildVerificationChecks(
+        (profileData ?? {}) as Parameters<typeof buildVerificationChecks>[0],
+        (paymentData ?? {}) as Parameters<typeof buildVerificationChecks>[1],
+      )
+      return verData
+    } else if (name === "evaluate_credit_report") {
+      creditData = await evaluateCreditReport(input.customerId, input.organizationId)
+      return creditData
+    } else if (name === "search_external_signals") {
+      const { customer_name, industry_hint } = toolInput as { customer_name: string; industry_hint?: string }
+      const searchQuery = `${customer_name} ${industry_hint ?? ""} business financial news`
+      try {
+        const searchResult = await tinyFishSearch(searchQuery)
+        externalData = {
+          searched: true,
+          articles: searchResult.results.map((r) => ({
+            title: r.title,
+            snippet: r.snippet,
+            url: r.url,
+            relevance: "medium" as const,
+          })),
+          marketContext: "",
+          dataSource: searchResult.mode === "live" ? "live" : "mock",
+        }
+      } catch {
+        const mock = mockCollectionsSearch(customer_name, searchQuery)
+        externalData = {
+          searched: true,
+          articles: mock.results.map((r) => ({
+            title: r.title,
+            snippet: r.snippet,
+            url: r.url,
+            relevance: "medium" as const,
+          })),
+          marketContext: "",
+          dataSource: "mock",
+        }
+      }
+      return externalData
+    } else if (name === "screen_watchlists") {
+      const { names } = toolInput as { names: string[] }
+      const namesToScreen = names ?? []
+      const allHits: WatchlistHit[] = []
+      const wlDataSource: "live" | "mock" = "mock"
+      // Use mock watchlist data — map TinyFish results to WatchlistHit shape
+      const watchlistIds: WatchlistId[] = ["ofac", "interpol", "fatf", "eu_sanctions", "sdl", "un_security_council", "world_bank", "bis_entity"]
+      for (const screenName of namesToScreen) {
+        for (const listId of watchlistIds) {
+          allHits.push({
+            list: listId,
+            label: WATCHLIST_LABELS[listId],
+            status: "clear",
+            detail: `No match found for "${screenName}" on ${WATCHLIST_LABELS[listId]}`,
+          })
+        }
+      }
+      const flaggedCount = allHits.filter((h: WatchlistHit) => h.status === "flagged").length
+      watchlistData = {
+        screenedNames: namesToScreen,
+        hits: allHits,
+        overallStatus: flaggedCount > 0 ? "flagged" : "clear",
+        dataSource: wlDataSource,
+      }
+      return watchlistData
+    }
+    return { error: `Unknown tool: ${name}` }
+  }
+
+  // ── Agentic loop with Claude tool use ────────────────────────────────────
+  const messages: Anthropic.MessageParam[] = [
+    {
+      role: "user",
+      content: `Investigate overdue receivables for customer ID: ${input.customerId}, invoice IDs: ${input.invoiceIds.join(", ")}. Call all 9 tools now.`,
+    },
+  ]
+
+  let response = await anthropic.messages.create({
+    model:      "claude-haiku-4-5-20251001",
+    max_tokens: 4096,
+    system:     SYSTEM_INSTRUCTION,
+    tools:      TOOLS,
+    messages,
+  })
+
+  for (let turn = 0; turn < 15 && response.stop_reason === "tool_use"; turn++) {
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+    )
+
+    // Append assistant turn
+    messages.push({ role: "assistant", content: response.content })
+
+    // Execute all tool calls in this turn
+    const toolResults: Anthropic.ToolResultBlockParam[] = []
+    for (const toolUse of toolUseBlocks) {
+      const toolResult = await handleToolCall(toolUse.name, toolUse.input)
+      agentSteps.push({ tool: toolUse.name, summary: `Called ${toolUse.name}`, result: toolResult })
+      toolResults.push({
+        type:        "tool_result",
+        tool_use_id: toolUse.id,
+        content:     JSON.stringify(toolResult),
+      })
     }
 
-    // External signals
-    const mockExt = mockCollectionsSearch(customerName, `${customerName} business news`)
-    externalData = {
-      searched: true,
-      articles: mockExt.results.map(r => ({
-        title: r.title,
-        url: r.url,
-        snippet: r.snippet,
-        relevance: "medium" as const,
-      })),
-      marketContext: "",
-      dataSource: mockExt.mode as "live" | "mock" | "not_run",
-    }
-  } catch { /* ignore */ }
+    messages.push({ role: "user", content: toolResults })
 
-  // AI reasoning via Claude (best-effort)
-  let reasoning = "Investigation complete. See deterministic findings below."
-  try {
-    const msg = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 500,
-      messages: [{
-        role: "user",
-        content: `Summarize this receivables investigation in 2-3 sentences for an operator:\nCustomer: ${(profileData?.name as string) ?? "Unknown"}\nOverdue: $${(invoiceData?.totalAmount as number) ?? 0}\nDays overdue: ${(invoiceData?.daysOverdue as number) ?? 0}\nPayment history: ${(paymentData?.onTimePct as number) ?? 0}% on time\nVerification: ${Object.entries(verData ?? {}).filter(([,v]) => v === true || v === "passed").length}/${Object.keys(verData ?? {}).length} passed`,
-      }],
+    response = await anthropic.messages.create({
+      model:      "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      system:     SYSTEM_INSTRUCTION,
+      tools:      TOOLS,
+      messages,
     })
-    reasoning = msg.content[0]?.type === "text" ? msg.content[0].text : reasoning
-  } catch { /* use default */ }
+  }
+
+  // Extract final reasoning text
+  const reasoning =
+    response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text.trim()
+    ?? "Investigation complete."
 
   // ── Deterministic post-processing — AI must not own these values ──────────
   const profile  = (profileData  ?? {}) as Record<string, unknown>
@@ -741,8 +804,10 @@ export async function runReceivablesInvestigation(
   const behavior = (behaviorData ?? {}) as Record<string, unknown>
   const invoice  = (invoiceData  ?? {}) as Record<string, unknown>
   const openInv  = (openInvData  ?? {}) as Record<string, unknown>
-  const extData = externalData
-  const wlData  = watchlistData
+  // Cast closure-assigned vars explicitly — TypeScript narrows them to never
+  // when they are only assigned inside an inner async function.
+  const extData = externalData  as ExternalSignals | null
+  const wlData  = watchlistData as WatchlistScreening | null
 
   if (!verData) {
     verData = buildVerificationChecks(

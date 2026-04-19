@@ -1,8 +1,6 @@
 import "server-only"
 import Anthropic from "@anthropic-ai/sdk"
-import { db } from "@/lib/db"
-import * as schema from "@/lib/db/schema"
-import { eq, and, gte, inArray, asc } from "drizzle-orm"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { search as tinyFishSearch } from "@/lib/tinyfish/client"
 import { getCustomerProfile, type CustomerProfile } from "@/lib/services/recovery-agent"
 import { investigate as portalReconInvestigate } from "@/lib/services/portal-reconnaissance"
@@ -343,43 +341,68 @@ interface LegalGuardrailCheck {
 }
 
 async function checkLegalGuardrails(
+  client: SupabaseClient,
   orgId: string,
   customerId: string,
   invoiceId: string
 ): Promise<LegalGuardrailCheck> {
-  const oneDayAgo  = new Date(Date.now() - 86_400_000)
-  const oneWeekAgo = new Date(Date.now() - 7 * 86_400_000)
+  // Check 1: Contact frequency limit (max 1 per day, 3 per week)
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const recentActions = await db
-    .select({ createdAt: schema.aiActions.createdAt })
-    .from(schema.aiActions)
-    .where(
-      and(
-        eq(schema.aiActions.organizationId, orgId),
-        eq(schema.aiActions.entityId, invoiceId),
-        inArray(schema.aiActions.actionType, ["customer_followup_sent", "payment_plan_suggested", "dispute_clarification_sent"]),
-        gte(schema.aiActions.createdAt, oneWeekAgo),
-      )
-    )
+  const { data: recentActions } = await client
+    .from("ai_actions")
+    .select("created_at")
+    .eq("organization_id", orgId)
+    .eq("entity_id", invoiceId)
+    .in("action_type", ["customer_followup_sent", "payment_plan_suggested", "dispute_clarification_sent"])
+    .gte("created_at", oneWeekAgo)
+    .order("created_at", { ascending: false })
 
-  const actionsToday    = recentActions.filter((a) => a.createdAt! >= oneDayAgo).length
-  const actionsThisWeek = recentActions.length
+  const actionsToday = (recentActions ?? []).filter(
+    (a: Record<string, string>) => a.created_at >= oneDayAgo
+  ).length
 
-  if (actionsToday >= 1) return { passed: false, reason: "Contact frequency limit: Already contacted this customer today (max 1/day)" }
-  if (actionsThisWeek >= 3) return { passed: false, reason: "Contact frequency limit: Already contacted 3 times this week (max 3/week)" }
+  const actionsThisWeek = (recentActions ?? []).length
 
+  if (actionsToday >= 1) {
+    return {
+      passed: false,
+      reason: "Contact frequency limit: Already contacted this customer today (max 1/day)",
+    }
+  }
+
+  if (actionsThisWeek >= 3) {
+    return {
+      passed: false,
+      reason: "Contact frequency limit: Already contacted 3 times this week (max 3/week)",
+    }
+  }
+
+  // Check 2: Time of day (no contact before 8am or after 9pm local time)
+  // For demo purposes, using system time. Production would use customer timezone.
   const hour = new Date().getHours()
-  if (hour < 8 || hour >= 21) return { passed: false, reason: `Time restriction: Cannot contact outside 8am-9pm (current hour: ${hour})` }
+  if (hour < 8 || hour >= 21) {
+    return {
+      passed: false,
+      reason: `Time restriction: Cannot contact outside 8am-9pm (current hour: ${hour})`,
+    }
+  }
 
-  const [customer] = await db
-    .select({ notes: schema.customers.notes })
-    .from(schema.customers)
-    .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, orgId)))
-    .limit(1)
+  // Check 3: Do-not-contact list (check customer notes for DNC flag)
+  const { data: customer } = await client
+    .from("customers")
+    .select("notes")
+    .eq("id", customerId)
+    .eq("organization_id", orgId)
+    .single()
 
   const notes = (customer?.notes ?? "").toLowerCase()
   if (notes.includes("do not contact") || notes.includes("dnc")) {
-    return { passed: false, reason: "Customer is on do-not-contact list" }
+    return {
+      passed: false,
+      reason: "Customer is on do-not-contact list",
+    }
   }
 
   return { passed: true }
@@ -464,7 +487,7 @@ function deterministicDecision(
     : aggressionBudget < 80 ? "formal"
     : "urgent"
 
-  const outreachDraft = `Hi ${customerName},\n\nThis is a ${tone} follow-up regarding invoice overdue by ${daysOverdue} days ($${amount.toFixed(0)}). We'd like to resolve this promptly.\n\nPlease contact us to arrange payment or a payment plan.\n\nBest regards,\nResq`
+  const outreachDraft = `Hi ${customerName},\n\nThis is a ${tone} follow-up regarding invoice overdue by ${daysOverdue} days ($${amount.toFixed(0)}). We'd like to resolve this promptly.\n\nPlease contact us to arrange payment or a payment plan.\n\nBest regards,\nOpsPilot`
 
   return {
     classification,
@@ -551,7 +574,7 @@ async function claudeDecision(params: {
     portalSection = lines.join("\n")
   }
 
-  const prompt = `You are Resq's collections decision agent. Analyze this overdue invoice situation and produce a structured decision.
+  const prompt = `You are OpsPilot's collections decision agent. Analyze this overdue invoice situation and produce a structured decision.
 
 ## Invoice Context
 - Customer: ${params.customerName}
@@ -659,39 +682,30 @@ Respond ONLY with valid JSON matching this schema exactly:
 // ── Main entry ─────────────────────────────────────────────────────────────
 
 export async function runCollectionsDecision(
+  client: SupabaseClient,
   invoiceId: string,
   orgId: string
 ): Promise<CollectionsDecision> {
   // 1. Fetch invoice + customer
-  const [inv] = await db
-    .select({
-      id:            schema.invoices.id,
-      invoiceNumber: schema.invoices.invoiceNumber,
-      totalAmount:   schema.invoices.totalAmount,
-      amountPaid:    schema.invoices.amountPaid,
-      dueAt:         schema.invoices.dueAt,
-      status:        schema.invoices.status,
-      reminderCount: schema.invoices.reminderCount,
-      customerId:    schema.invoices.customerId,
-      fullName:      schema.customers.fullName,
-      email:         schema.customers.email,
-      lifetimeValue: schema.customers.lifetimeValue,
-    })
-    .from(schema.invoices)
-    .leftJoin(schema.customers, eq(schema.invoices.customerId, schema.customers.id))
-    .where(and(eq(schema.invoices.id, invoiceId), eq(schema.invoices.organizationId, orgId)))
-    .limit(1)
+  const { data: inv } = await client
+    .from("invoices")
+    .select("id, invoice_number, total_amount, amount_paid, due_at, status, reminder_count, customer_id, customers ( full_name, email, lifetime_value, risk_status )")
+    .eq("id", invoiceId)
+    .eq("organization_id", orgId)
+    .single()
 
   if (!inv) throw new Error(`Invoice ${invoiceId} not found`)
 
-  const daysOverdue   = inv.dueAt
-    ? Math.max(0, Math.floor((Date.now() - inv.dueAt.getTime()) / 86_400_000))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cust = (Array.isArray(inv.customers) ? inv.customers[0] : inv.customers) as any
+  const daysOverdue = inv.due_at
+    ? Math.max(0, Math.floor((Date.now() - new Date(inv.due_at as string).getTime()) / 86_400_000))
     : 0
-  const amount        = Number(inv.totalAmount) - Number(inv.amountPaid)
-  const reminderCount = Number(inv.reminderCount ?? 0)
-  const lifetimeValue = Number(inv.lifetimeValue ?? 0)
-  const customerName  = inv.fullName ?? "Unknown"
-  const customerId    = inv.customerId
+  const amount         = Number(inv.total_amount) - Number(inv.amount_paid)
+  const reminderCount  = Number(inv.reminder_count ?? 0)
+  const lifetimeValue  = Number(cust?.lifetime_value ?? 0)
+  const customerName   = (cust?.full_name as string) ?? "Unknown"
+  const customerId     = inv.customer_id as string
 
   // 2. Payment history profile
   const profile = await getCustomerProfile(orgId, customerId)
@@ -763,18 +777,19 @@ export async function runCollectionsDecision(
     : aggressionBudget
 
   // 5. Rule filter
-  const allowedActions = applyRuleFilter(daysOverdue, reminderCount, inv.status ?? "sent")
+  const allowedActions = applyRuleFilter(daysOverdue, reminderCount, inv.status as string)
 
   // 6. Prior rescue actions
-  const priorData = await db
-    .select({ actionType: schema.aiActions.actionType })
-    .from(schema.aiActions)
-    .where(and(eq(schema.aiActions.entityId, invoiceId), eq(schema.aiActions.organizationId, orgId)))
-    .orderBy(asc(schema.aiActions.createdAt))
-  const priorActions = priorData.map(r => r.actionType)
+  const { data: priorData } = await client
+    .from("ai_actions")
+    .select("action_type")
+    .eq("entity_id", invoiceId)
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: true })
+  const priorActions = (priorData ?? []).map(r => r.action_type as string)
 
   // 7. Legal guardrails check (DISABLED FOR DEMO - just log warnings)
-  const guardrailCheck = await checkLegalGuardrails(orgId, customerId, invoiceId)
+  const guardrailCheck = await checkLegalGuardrails(client, orgId, customerId, invoiceId)
   if (!guardrailCheck.passed) {
     // Log the warning but don't block - for demo purposes
     console.warn(`[CollectionsDecision] Guardrail warning for invoice ${invoiceId}: ${guardrailCheck.reason}`)
@@ -785,7 +800,7 @@ export async function runCollectionsDecision(
   try {
     decision = await claudeDecision({
       customerName,
-      invoiceNumber:      inv.invoiceNumber ?? "—",
+      invoiceNumber:      (inv.invoice_number as string) ?? "—",
       amount,
       daysOverdue,
       reminderCount,

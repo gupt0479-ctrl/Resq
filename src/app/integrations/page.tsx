@@ -13,12 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export const dynamic = "force-dynamic"
 
-function statusDot(status: ConnectorStatus) {
-  if (status === "connected") return <span className="h-1.5 w-1.5 rounded-full bg-teal shrink-0" />
-  if (status === "error")     return <span className="h-1.5 w-1.5 rounded-full bg-crimson shrink-0" />
-  return                              <span className="h-1.5 w-1.5 rounded-full bg-steel shrink-0" />
-}
-
 function statusIcon(status: ConnectorStatus) {
   if (status === "connected") return <CheckCircle2 className="h-4 w-4 text-green-500" />
   if (status === "error") return <XCircle className="h-4 w-4 text-red-500" />
