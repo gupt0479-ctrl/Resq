@@ -220,7 +220,7 @@ export function scoreRisk(ctx: RiskContext & { creditTier?: CreditTier }): numbe
 
 export function selectChannel(
   ctx: { hasStripeCustomer: boolean },
-  _urgency: string
+  _urgency: string // eslint-disable-line @typescript-eslint/no-unused-vars
 ): "stripe" | "email" {
   return ctx.hasStripeCustomer ? "stripe" : "email"
 }

@@ -312,7 +312,7 @@ async function rankDrivers(
   buckets: WeeklyBucket[],
 ): Promise<DriverRanking[]> {
   const drivers: DriverRanking[] = []
-  const minBalance = Math.min(...buckets.map(b => b.closingBalance))
+  void Math.min(...buckets.map(b => b.closingBalance))
 
   // Receivable slippage — each slipped receivable
   for (const r of receivables) {

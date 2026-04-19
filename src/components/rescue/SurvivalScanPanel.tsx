@@ -100,12 +100,11 @@ export function SurvivalScanPanel() {
   const [mode, setMode]         = useState<string>("mock")
   const pollCount               = useRef(0)
   const timerRef                = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pollRef                 = useRef<((id: string) => Promise<void>) | null>(null)
 
   const stopPolling = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
   }, [])
-
-  const pollRef = useRef<((id: string) => Promise<void>) | null>(null)
 
   const poll = useCallback(async (id: string) => {
     if (pollCount.current >= MAX_POLLS) {

@@ -60,7 +60,7 @@ export default async function DashboardPage() {
       error: err instanceof Error ? err.message : String(err),
     }))
 
-  const { summary, error: loadError } = summaryResult
+  const { summary } = summaryResult
 
   if (!summary) {
     return (

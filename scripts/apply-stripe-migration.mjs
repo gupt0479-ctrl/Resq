@@ -31,7 +31,7 @@ let createClient
 try {
   const supabaseModule = await import('@supabase/supabase-js')
   createClient = supabaseModule.createClient
-} catch (error) {
+} catch {
   console.error('❌ @supabase/supabase-js not installed')
   console.error('   Run: npm install @supabase/supabase-js')
   process.exit(1)

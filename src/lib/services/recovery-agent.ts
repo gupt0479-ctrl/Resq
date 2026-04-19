@@ -260,7 +260,7 @@ export async function persistCreditScore(
   orgId: string,
   customerId: string,
   creditScore: ClientCreditScore,
-  _profile: CustomerProfile
+  _profile: CustomerProfile // eslint-disable-line @typescript-eslint/no-unused-vars
 ): Promise<void> {
   const now = new Date()
   await db
@@ -292,8 +292,8 @@ export async function persistCreditScore(
 
 export async function sendStripeReminder(
   invoice: OverdueInvoice,
-  _decision: ReturnType<typeof decideNextAction>,
-  _draftedMessage: string
+  _decision: ReturnType<typeof decideNextAction>, // eslint-disable-line @typescript-eslint/no-unused-vars
+  _draftedMessage: string // eslint-disable-line @typescript-eslint/no-unused-vars
 ): Promise<string> {
   if (!STRIPE_SECRET_KEY || !invoice.stripe_invoice_id) {
     const mockId = `mock_stripe_reminder_${invoice.id.slice(0, 8)}_${Date.now()}`
@@ -416,6 +416,7 @@ interface CashPositionSignal {
   currentRunway: number         // Current cash runway in days
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function getCashPositionSignal(
   client: SupabaseClient,
   orgId: string
