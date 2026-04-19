@@ -5,21 +5,14 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   Zap,
-  GitBranch,
-  LayoutDashboard,
   DollarSign,
-  FileText,
   Users,
-  Plug,
 } from "lucide-react"
 
 const navItems = [
   { href: "/rescue",       label: "Rescue Queue", icon: Zap          },
-  { href: "/workflow",     label: "Agent Run",    icon: GitBranch    },
-  { href: "/dashboard",   label: "Dashboard",    icon: LayoutDashboard },
   { href: "/cashflow",     label: "Cashflow",     icon: DollarSign   },
   { href: "/customers",    label: "Customers",    icon: Users        },
-  { href: "/integrations", label: "Integrations", icon: Plug         },
 ]
 
 const systemHealth = [
