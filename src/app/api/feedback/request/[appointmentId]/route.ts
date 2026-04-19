@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { getAppointment } from "@/lib/services/appointments"
 
 /**
@@ -11,8 +11,7 @@ export async function POST(
 ) {
   const { appointmentId } = await ctx.params
   try {
-    const client = createServerSupabaseClient()
-    await getAppointment(client, appointmentId, DEMO_ORG_ID)
+    await getAppointment(appointmentId, DEMO_ORG_ID)
     return NextResponse.json({
       data: {
         appointmentId,

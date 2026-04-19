@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { clearConnectorError } from "@/lib/services/integrations"
 
 export async function POST(
@@ -13,16 +13,15 @@ export async function POST(
   }
 
   try {
-    const client = createServerSupabaseClient()
-    const connector = await clearConnectorError(client, DEMO_ORG_ID, provider)
+    const connector = await clearConnectorError(DEMO_ORG_ID, provider)
 
     return Response.json({
       data: {
         id: connector.id,
         provider: connector.provider,
         status: connector.status,
-        lastSyncAt: connector.last_sync_at ?? null,
-        lastError: connector.last_error ?? null,
+        lastSyncAt: connector.lastSyncAt?.toISOString() ?? null,
+        lastError: connector.lastError ?? null,
       },
     })
   } catch (error) {

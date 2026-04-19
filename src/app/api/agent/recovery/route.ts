@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import {
   buildRecoveryQueue,
   runRecoveryAgent,
@@ -25,16 +25,15 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const orgId  = searchParams.get("orgId") ?? DEMO_ORG_ID
     const view   = searchParams.get("view")
-    const client = createServerSupabaseClient()
 
     if (view === "audit") {
       const limit = Math.min(200, Number(searchParams.get("limit") ?? "50"))
-      const trail = await getRecoveryAuditTrail(client, orgId, limit)
+      const trail = await getRecoveryAuditTrail(orgId, limit)
       return NextResponse.json({ ok: true, trail })
     }
 
     if (view === "credits") {
-      const scores = await getAllClientCreditScores(client, orgId)
+      const scores = await getAllClientCreditScores(orgId)
       return NextResponse.json({ ok: true, scores })
     }
 
@@ -43,7 +42,7 @@ export async function GET(req: NextRequest) {
       if (!customerId) {
         return NextResponse.json({ ok: false, error: "customerId is required for view=credit" }, { status: 400 })
       }
-      const score = await getClientCreditScore(client, orgId, customerId)
+      const score = await getClientCreditScore(orgId, customerId)
       if (!score) {
         return NextResponse.json(
           { ok: false, error: "No credit score found for this client. Run the recovery agent first to generate scores." },
@@ -59,12 +58,12 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "customerId is required for view=reminders" }, { status: 400 })
       }
       const limit = Math.min(100, Number(searchParams.get("limit") ?? "25"))
-      const reminders = await getClientReminderHistory(client, orgId, customerId, limit)
+      const reminders = await getClientReminderHistory(orgId, customerId, limit)
       return NextResponse.json({ ok: true, reminders })
     }
 
     // Default: prioritized queue
-    const queue = await buildRecoveryQueue(client, orgId)
+    const queue = await buildRecoveryQueue(orgId)
 
     const overdueCount        = queue.length
     const criticalCount       = queue.filter((i) => i.risk_score >= 80).length
@@ -112,7 +111,6 @@ export async function POST(req: NextRequest) {
 
     const { mode, invoiceId, dryRun, maxInvoices, orgId: bodyOrgId } = parsed.data
     const orgId  = bodyOrgId ?? DEMO_ORG_ID
-    const client = createServerSupabaseClient()
 
     if (mode === "single") {
       if (!invoiceId) {
@@ -122,7 +120,7 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      const invoices = await getOverdueInvoices(client, orgId)
+      const invoices = await getOverdueInvoices(orgId)
       const invoice  = invoices.find((i) => i.id === invoiceId)
 
       if (!invoice) {
@@ -132,12 +130,12 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      const result = await runRecoveryActionOnInvoice(invoice, orgId, client, dryRun)
+      const result = await runRecoveryActionOnInvoice(invoice, orgId, dryRun)
       return NextResponse.json({ ok: true, result, dryRun })
     }
 
     // batch
-    const result = await runRecoveryAgent(client, orgId, { maxInvoices, dryRun })
+    const result = await runRecoveryAgent(orgId, { maxInvoices, dryRun })
 
     const summary =
       dryRun
@@ -157,51 +155,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }
-
-/*
- * ─── Stripe webhook ingest handler ───────────────────────────────────────
- *
- * Move this block to: src/app/api/integrations/webhooks/stripe/route.ts
- *
- * import { NextRequest, NextResponse } from "next/server"
- * import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
- *
- * export const config = { api: { bodyParser: false } }
- *
- * export async function POST(req: NextRequest) {
- *   const rawBody = await req.text()
- *   let payload: Record<string, unknown>
- *   try {
- *     payload = JSON.parse(rawBody)
- *   } catch {
- *     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
- *   }
- *
- *   const stripeEventId   = payload.id as string
- *   const eventType       = payload.type as string
- *   const stripeCustomerId = (payload.data as Record<string, unknown> | undefined)
- *     ?.object &&
- *     ((payload.data as { object: { customer?: string } }).object.customer ?? null)
- *
- *   if (!stripeEventId || !eventType) {
- *     return NextResponse.json({ error: "Missing event id or type" }, { status: 400 })
- *   }
- *
- *   const client = createServerSupabaseClient()
- *   const orgId  = DEMO_ORG_ID
- *
- *   await client.from("stripe_events").upsert(
- *     {
- *       organization_id:    orgId,
- *       stripe_event_id:    stripeEventId,
- *       stripe_customer_id: stripeCustomerId ?? null,
- *       event_type:         eventType,
- *       payload_json:       payload,
- *       processed_at:       new Date().toISOString(),
- *     },
- *     { onConflict: "stripe_event_id", ignoreDuplicates: true }
- *   )
- *
- *   return NextResponse.json({ received: true })
- * }
- */

@@ -1,14 +1,14 @@
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { listFeedbackQuery } from "@/lib/queries/feedback"
-import { isSupabaseConfigured } from "@/lib/env"
+import { isDatabaseConfigured } from "@/lib/env"
 import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
 import { FeedbackPageClient } from "@/components/feedback/FeedbackPageClient"
 
 export const dynamic = "force-dynamic"
 
 export default async function FeedbackPage() {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">
         <p className="font-semibold text-amber-800">
@@ -18,15 +18,14 @@ export default async function FeedbackPage() {
     )
   }
 
-  const client = createServerSupabaseClient()
-  const schema = await getLedgerSchemaHealth(client)
+  const schema = await getLedgerSchemaHealth()
   if (!schema.ok) {
     return <LedgerSchemaBanner message={schema.message} />
   }
 
   let pageData
   try {
-    pageData = await listFeedbackQuery(client, DEMO_ORG_ID)
+    pageData = await listFeedbackQuery(DEMO_ORG_ID)
   } catch {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">
@@ -75,7 +74,7 @@ export default async function FeedbackPage() {
             <div className="mt-3 rounded-md border border-black/10 bg-white/50 p-3 text-[11px] leading-relaxed">
               <p className="font-semibold text-foreground">What this app sees</p>
               <p className="mt-1 font-mono text-muted-foreground">
-                Supabase host: <span className="text-foreground">{emptyDiagnostics.supabaseHost}</span>
+                DB host: <span className="text-foreground">{emptyDiagnostics.dbHost}</span>
               </p>
               <p className="mt-1 text-muted-foreground">
                 Row counts — organizations:{" "}

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import {
   generateAndPersistManagerSummary,
   getLatestManagerSummary,
@@ -8,8 +8,7 @@ import {
 /** GET — latest persisted manager summary (read-only). */
 export async function GET() {
   try {
-    const client = createServerSupabaseClient()
-    const row = await getLatestManagerSummary(client, DEMO_ORG_ID)
+    const row = await getLatestManagerSummary(DEMO_ORG_ID)
     if (!row) {
       return NextResponse.json({ data: null })
     }
@@ -51,8 +50,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const client = createServerSupabaseClient()
-    const out = await generateAndPersistManagerSummary(client, DEMO_ORG_ID)
+    const out = await generateAndPersistManagerSummary(DEMO_ORG_ID)
     return NextResponse.json({
       data: {
         headline: out.summary.headline,

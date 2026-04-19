@@ -1,6 +1,8 @@
 import "server-only"
-import Anthropic from "@anthropic-ai/sdk"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { GoogleGenerativeAI, SchemaType, type FunctionDeclaration, type Part } from "@google/generative-ai"
+import { db } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and, inArray, gte, desc, asc, count } from "drizzle-orm"
 import {
   ReceivablesInvestigationResultSchema,
   type ReceivablesInvestigationResult,
@@ -21,55 +23,72 @@ import { mockCollectionsSearch, mockWatchlistSearch } from "@/lib/tinyfish/mock-
 
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_AI_API_KEY })
 
-// ── Tool implementations (query Supabase, never modify) ───────────────────────
+// ── Tool implementations (query db, never modify) ─────────────────────────
 
-async function getInvoiceStatus(client: SupabaseClient, invoiceId: string) {
-  const { data, error } = await client
-    .from("invoices")
-    .select("id, status, due_at, total_amount, amount_paid, reminder_count, last_reminded_at, invoice_number")
-    .eq("id", invoiceId)
-    .single()
+async function getInvoiceStatus(invoiceId: string) {
+  const [data] = await db
+    .select({
+      id:             schema.invoices.id,
+      status:         schema.invoices.status,
+      dueAt:          schema.invoices.dueAt,
+      totalAmount:    schema.invoices.totalAmount,
+      amountPaid:     schema.invoices.amountPaid,
+      reminderCount:  schema.invoices.reminderCount,
+      lastRemindedAt: schema.invoices.lastRemindedAt,
+      invoiceNumber:  schema.invoices.invoiceNumber,
+    })
+    .from(schema.invoices)
+    .where(eq(schema.invoices.id, invoiceId))
+    .limit(1)
 
-  if (error) return { error: error.message }
+  if (!data) return { error: "Invoice not found" }
 
-  const daysOverdue = data.due_at
-    ? Math.max(0, Math.floor((Date.now() - new Date(data.due_at).getTime()) / (1000 * 60 * 60 * 24)))
+  const daysOverdue = data.dueAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(data.dueAt.toISOString()).getTime()) / (1000 * 60 * 60 * 24)))
     : 0
 
   return {
-    invoiceNumber:   data.invoice_number,
+    invoiceNumber:   data.invoiceNumber,
     status:          data.status,
-    dueAt:           data.due_at,
-    totalAmount:     Number(data.total_amount),
-    amountPaid:      Number(data.amount_paid),
-    balance:         Number(data.total_amount) - Number(data.amount_paid),
+    dueAt:           data.dueAt?.toISOString(),
+    totalAmount:     Number(data.totalAmount),
+    amountPaid:      Number(data.amountPaid),
+    balance:         Number(data.totalAmount) - Number(data.amountPaid),
     daysOverdue,
-    reminderCount:   data.reminder_count,
-    lastRemindedAt:  data.last_reminded_at,
+    reminderCount:   data.reminderCount,
+    lastRemindedAt:  data.lastRemindedAt?.toISOString() ?? null,
   }
 }
 
 async function getPaymentHistory(
-  client: SupabaseClient,
   customerId: string,
   organizationId: string,
 ) {
-  const { data: invoices, error } = await client
-    .from("invoices")
-    .select("id, status, total_amount, due_at, paid_at, created_at")
-    .eq("customer_id", customerId)
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false })
+  const invoices = await db
+    .select({
+      id:          schema.invoices.id,
+      status:      schema.invoices.status,
+      totalAmount: schema.invoices.totalAmount,
+      dueAt:       schema.invoices.dueAt,
+      paidAt:      schema.invoices.paidAt,
+      createdAt:   schema.invoices.createdAt,
+    })
+    .from(schema.invoices)
+    .where(
+      and(
+        eq(schema.invoices.customerId, customerId),
+        eq(schema.invoices.organizationId, organizationId),
+      ),
+    )
+    .orderBy(desc(schema.invoices.createdAt))
     .limit(20)
 
-  if (error) return { error: error.message }
-
-  const all = invoices ?? []
+  const all = invoices
   const paid = all.filter(
-    (i) => i.status === "paid" && i.paid_at && i.due_at,
+    (i) => i.status === "paid" && i.paidAt && i.dueAt,
   )
   const lateCount = paid.filter(
-    (i) => new Date(i.paid_at as string) > new Date(i.due_at as string),
+    (i) => new Date(i.paidAt!.toISOString()) > new Date(i.dueAt.toISOString()),
   ).length
   const onTimePct =
     paid.length > 0 ? Math.round(((paid.length - lateCount) / paid.length) * 100) : null
@@ -77,17 +96,21 @@ async function getPaymentHistory(
   const invoiceIds = all.map((i) => i.id)
   let paymentMethods: string[] = []
   if (invoiceIds.length > 0) {
-    const { data: txns } = await client
-      .from("finance_transactions")
-      .select("payment_method")
-      .in("invoice_id", invoiceIds)
-      .eq("direction", "in")
-      .eq("type", "revenue")
+    const txns = await db
+      .select({ paymentMethod: schema.financeTransactions.paymentMethod })
+      .from(schema.financeTransactions)
+      .where(
+        and(
+          inArray(schema.financeTransactions.invoiceId, invoiceIds),
+          eq(schema.financeTransactions.direction, "in"),
+          eq(schema.financeTransactions.type, "revenue"),
+        ),
+      )
     paymentMethods = [
       ...new Set(
-        (txns ?? [])
-          .map((t: { payment_method: string }) => t.payment_method)
-          .filter(Boolean),
+        txns
+          .map((t) => t.paymentMethod)
+          .filter((m): m is string => Boolean(m)),
       ),
     ]
   }
@@ -101,52 +124,61 @@ async function getPaymentHistory(
     paymentMethods,
     recentInvoices: all.slice(0, 5).map((i) => ({
       status:  i.status,
-      amount:  Number(i.total_amount),
-      dueAt:   i.due_at,
-      paidAt:  i.paid_at,
+      amount:  Number(i.totalAmount),
+      dueAt:   i.dueAt?.toISOString(),
+      paidAt:  i.paidAt?.toISOString() ?? null,
     })),
   }
 }
 
-async function getCustomerProfile(client: SupabaseClient, customerId: string) {
-  const { data, error } = await client
-    .from("customers")
-    .select(
-      "id, full_name, email, phone, preferred_contact_channel, lifetime_value, avg_feedback_score, risk_status, last_visit_at, notes",
-    )
-    .eq("id", customerId)
-    .single()
+async function getCustomerProfile(customerId: string) {
+  const [data] = await db
+    .select({
+      id:                      schema.customers.id,
+      fullName:                schema.customers.fullName,
+      email:                   schema.customers.email,
+      phone:                   schema.customers.phone,
+      preferredContactChannel: schema.customers.preferredContactChannel,
+      lifetimeValue:           schema.customers.lifetimeValue,
+      avgFeedbackScore:        schema.customers.avgFeedbackScore,
+      riskStatus:              schema.customers.riskStatus,
+      lastVisitAt:             schema.customers.lastVisitAt,
+      notes:                   schema.customers.notes,
+    })
+    .from(schema.customers)
+    .where(eq(schema.customers.id, customerId))
+    .limit(1)
 
-  if (error) return { error: error.message }
+  if (!data) return { error: "Customer not found" }
 
   return {
-    name:             data.full_name,
+    name:             data.fullName,
     email:            data.email,
     phone:            data.phone,
-    preferredContact: data.preferred_contact_channel,
-    lifetimeValue:    Number(data.lifetime_value ?? 0),
-    avgFeedbackScore: data.avg_feedback_score,
-    riskStatus:       data.risk_status,
-    lastVisitAt:      data.last_visit_at,
+    preferredContact: data.preferredContactChannel,
+    lifetimeValue:    Number(data.lifetimeValue ?? 0),
+    avgFeedbackScore: data.avgFeedbackScore,
+    riskStatus:       data.riskStatus,
+    lastVisitAt:      data.lastVisitAt?.toISOString() ?? null,
     notes:            data.notes,
   }
 }
 
 async function getAppointmentBehavior(
-  client: SupabaseClient,
   customerId: string,
   organizationId: string,
 ) {
-  const { data, error } = await client
-    .from("appointments")
-    .select("status")
-    .eq("customer_id", customerId)
-    .eq("organization_id", organizationId)
+  const appts = await db
+    .select({ status: schema.appointments.status })
+    .from(schema.appointments)
+    .where(
+      and(
+        eq(schema.appointments.customerId, customerId),
+        eq(schema.appointments.organizationId, organizationId),
+      ),
+    )
     .limit(20)
 
-  if (error) return { error: error.message }
-
-  const appts = data ?? []
   const total = appts.length
   const completed = appts.filter((a) => a.status === "completed").length
   const noShow = appts.filter((a) => a.status === "no_show").length
@@ -163,23 +195,31 @@ async function getAppointmentBehavior(
 }
 
 async function getAllOpenInvoices(
-  client: SupabaseClient,
   customerId: string,
   organizationId: string,
 ) {
-  const { data, error } = await client
-    .from("invoices")
-    .select("id, invoice_number, status, total_amount, amount_paid, due_at, reminder_count")
-    .eq("customer_id", customerId)
-    .eq("organization_id", organizationId)
-    .in("status", ["sent", "pending", "overdue"])
-    .order("due_at", { ascending: true })
+  const invoices = await db
+    .select({
+      id:            schema.invoices.id,
+      invoiceNumber: schema.invoices.invoiceNumber,
+      status:        schema.invoices.status,
+      totalAmount:   schema.invoices.totalAmount,
+      amountPaid:    schema.invoices.amountPaid,
+      dueAt:         schema.invoices.dueAt,
+      reminderCount: schema.invoices.reminderCount,
+    })
+    .from(schema.invoices)
+    .where(
+      and(
+        eq(schema.invoices.customerId, customerId),
+        eq(schema.invoices.organizationId, organizationId),
+        inArray(schema.invoices.status, ["sent", "pending", "overdue"]),
+      ),
+    )
+    .orderBy(asc(schema.invoices.dueAt))
 
-  if (error) return { error: error.message }
-
-  const invoices = data ?? []
   const totalOpen = invoices.reduce(
-    (sum, i) => sum + (Number(i.total_amount) - Number(i.amount_paid)),
+    (sum, i) => sum + (Number(i.totalAmount) - Number(i.amountPaid)),
     0,
   )
 
@@ -187,15 +227,19 @@ async function getAllOpenInvoices(
     openInvoiceCount: invoices.length,
     totalOpenAmount:  totalOpen,
     invoices: invoices.map((i) => ({
-      invoiceNumber: i.invoice_number,
+      invoiceNumber: i.invoiceNumber,
       status:        i.status,
-      balance:       Number(i.total_amount) - Number(i.amount_paid),
-      dueAt:         i.due_at,
-      // Always compute overdue days dynamically from current time
-      daysOverdue: i.due_at
-        ? Math.max(0, Math.floor((Date.now() - new Date(i.due_at).getTime()) / (1000 * 60 * 60 * 24)))
+      balance:       Number(i.totalAmount) - Number(i.amountPaid),
+      dueAt:         i.dueAt?.toISOString(),
+      daysOverdue: i.dueAt
+        ? Math.max(
+            0,
+            Math.floor(
+              (Date.now() - new Date(i.dueAt.toISOString()).getTime()) / (1000 * 60 * 60 * 24),
+            ),
+          )
         : 0,
-      reminderCount: i.reminder_count,
+      reminderCount: i.reminderCount,
     })),
   }
 }
@@ -248,7 +292,6 @@ function computeRiskScore(params: {
   const factors: RiskFactor[] = []
   let weighted = 0
 
-  // Payment history on-time % — 30% weight
   const paymentScore =
     params.onTimePct !== null
       ? Math.max(0, 100 - params.onTimePct)
@@ -268,7 +311,6 @@ function computeRiskScore(params: {
   })
   weighted += paymentScore * 0.3
 
-  // Invoice age — 25% weight
   const ageScore = Math.min(100, params.daysOverdue * 2)
   factors.push({
     label:    "Invoice Age",
@@ -278,18 +320,16 @@ function computeRiskScore(params: {
   })
   weighted += ageScore * 0.25
 
-  // Customer lifetime value — 15% weight (higher LTV → lower risk score)
   const ltv = params.lifetimeValue ?? 0
   const ltvScore = ltv >= 5000 ? 5 : ltv >= 1000 ? 20 : ltv >= 200 ? 50 : 75
   factors.push({
     label:    "Customer Value",
     score:    ltvScore,
     weight:   0.15,
-    evidence: `$${ltv.toFixed(2)} lifetime value`,
+    evidence: `${ltv.toFixed(2)} lifetime value`,
   })
   weighted += ltvScore * 0.15
 
-  // Booking reliability — 15% weight
   const noShowScore = params.noShowRate ?? 30
   factors.push({
     label:    "Booking Reliability",
@@ -300,7 +340,6 @@ function computeRiskScore(params: {
   })
   weighted += noShowScore * 0.15
 
-  // CRM risk status — 15% weight
   const statusScore =
     params.riskStatus === "churned" ? 90 : params.riskStatus === "at_risk" ? 65 : 10
   factors.push({
@@ -319,28 +358,36 @@ function computeRiskScore(params: {
 }
 
 async function evaluateCreditReport(
-  client: SupabaseClient,
   customerId: string,
   organizationId: string,
 ): Promise<CreditReport> {
   const flags: CreditRedFlag[] = []
 
   // ── 1. Late payments: 30 / 60 / 90+ days ─────────────────────────────────
-  const { data: allInvoices } = await client
-    .from("invoices")
-    .select("status, due_at, paid_at, total_amount")
-    .eq("customer_id", customerId)
-    .eq("organization_id", organizationId)
+  const allInvoices = await db
+    .select({
+      status:      schema.invoices.status,
+      dueAt:       schema.invoices.dueAt,
+      paidAt:      schema.invoices.paidAt,
+      totalAmount: schema.invoices.totalAmount,
+    })
+    .from(schema.invoices)
+    .where(
+      and(
+        eq(schema.invoices.customerId, customerId),
+        eq(schema.invoices.organizationId, organizationId),
+      ),
+    )
 
   const late30: number[] = []
   const late60: number[] = []
   const late90: number[] = []
 
-  for (const inv of allInvoices ?? []) {
-    if (!inv.due_at) continue
-    const compareDate = inv.paid_at ? new Date(inv.paid_at) : new Date()
+  for (const inv of allInvoices) {
+    if (!inv.dueAt) continue
+    const compareDate = inv.paidAt ? new Date(inv.paidAt.toISOString()) : new Date()
     const daysLate = Math.floor(
-      (compareDate.getTime() - new Date(inv.due_at).getTime()) / (1000 * 60 * 60 * 24),
+      (compareDate.getTime() - new Date(inv.dueAt.toISOString()).getTime()) / (1000 * 60 * 60 * 24),
     )
     if (daysLate >= 90) late90.push(daysLate)
     else if (daysLate >= 60) late60.push(daysLate)
@@ -359,21 +406,29 @@ async function evaluateCreditReport(
   })
 
   // ── 2. Charged-off accounts ───────────────────────────────────────────────
-  const { data: invoiceRows } = await client
-    .from("invoices")
-    .select("id")
-    .eq("customer_id", customerId)
-    .eq("organization_id", organizationId)
+  const invoiceRows = await db
+    .select({ id: schema.invoices.id })
+    .from(schema.invoices)
+    .where(
+      and(
+        eq(schema.invoices.customerId, customerId),
+        eq(schema.invoices.organizationId, organizationId),
+      ),
+    )
 
-  const ids = (invoiceRows ?? []).map((r: { id: string }) => r.id)
+  const ids = invoiceRows.map((r) => r.id)
   let writeoffCount = 0
   if (ids.length > 0) {
-    const { count } = await client
-      .from("finance_transactions")
-      .select("id", { count: "exact", head: true })
-      .in("invoice_id", ids)
-      .eq("type", "writeoff")
-    writeoffCount = count ?? 0
+    const [result] = await db
+      .select({ count: count() })
+      .from(schema.financeTransactions)
+      .where(
+        and(
+          inArray(schema.financeTransactions.invoiceId, ids),
+          eq(schema.financeTransactions.type, "writeoff"),
+        ),
+      )
+    writeoffCount = Number(result?.count ?? 0)
   }
 
   flags.push({
@@ -384,11 +439,15 @@ async function evaluateCreditReport(
   })
 
   // ── 3. Unfamiliar / duplicate accounts ────────────────────────────────────
-  const { data: customer } = await client
-    .from("customers")
-    .select("full_name, email, notes")
-    .eq("id", customerId)
-    .single()
+  const [customer] = await db
+    .select({
+      fullName: schema.customers.fullName,
+      email:    schema.customers.email,
+      notes:    schema.customers.notes,
+    })
+    .from(schema.customers)
+    .where(eq(schema.customers.id, customerId))
+    .limit(1)
 
   const notesText = (customer?.notes ?? "").toLowerCase()
   const hasSuspiciousNote = /duplicate|fraud|suspicious|identity|theft/.test(notesText)
@@ -402,19 +461,19 @@ async function evaluateCreditReport(
   })
 
   // ── 4. Maxed-out credit (high open balance vs lifetime value) ─────────────
-  const openInvoices = (allInvoices ?? []).filter((i) =>
+  const openInvoices = allInvoices.filter((i) =>
     ["sent", "pending", "overdue"].includes(i.status),
   )
   const totalOpen = openInvoices.reduce(
-    (sum, i) => sum + (Number(i.total_amount) - 0),
+    (sum, i) => sum + (Number(i.totalAmount) - 0),
     0,
   )
-  const { data: cust } = await client
-    .from("customers")
-    .select("lifetime_value")
-    .eq("id", customerId)
-    .single()
-  const ltv = Number(cust?.lifetime_value ?? 0)
+  const [cust] = await db
+    .select({ lifetimeValue: schema.customers.lifetimeValue })
+    .from(schema.customers)
+    .where(eq(schema.customers.id, customerId))
+    .limit(1)
+  const ltv = Number(cust?.lifetimeValue ?? 0)
   const utilizationPct = ltv > 0 ? (totalOpen / ltv) * 100 : 0
 
   flags.push({
@@ -424,18 +483,22 @@ async function evaluateCreditReport(
     detail:
       ltv === 0
         ? "No lifetime value on record to assess utilization"
-        : `$${totalOpen.toFixed(2)} open vs $${ltv.toFixed(2)} lifetime value (${utilizationPct.toFixed(0)}% utilization)`,
+        : `${totalOpen.toFixed(2)} open vs ${ltv.toFixed(2)} lifetime value (${utilizationPct.toFixed(0)}% utilization)`,
   })
 
   // ── 5. Frequent recent address / contact changes ──────────────────────────
-  const { data: events } = await client
-    .from("appointment_events")
-    .select("created_at")
-    .eq("organization_id", organizationId)
-    .eq("event_type", "reservation.rescheduled")
-    .gte("created_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+  const events = await db
+    .select({ createdAt: schema.appointmentEvents.createdAt })
+    .from(schema.appointmentEvents)
+    .where(
+      and(
+        eq(schema.appointmentEvents.organizationId, organizationId),
+        eq(schema.appointmentEvents.eventType, "reservation.rescheduled"),
+        gte(schema.appointmentEvents.createdAt, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)),
+      ),
+    )
 
-  const recentReschedules = (events ?? []).length
+  const recentReschedules = events.length
   flags.push({
     flag:     "address_changes",
     label:    "Frequent Recent Changes",
@@ -463,7 +526,7 @@ function buildActionDraft(
   totalOverdue: number,
   daysOverdue: number,
 ): string {
-  const amount = `$${totalOverdue.toFixed(2)}`
+  const amount = `${totalOverdue.toFixed(2)}`
   switch (action) {
     case "reminder":
       return `Hi ${customerName}, this is a friendly reminder that you have an outstanding balance of ${amount}. Please let us know if you have any questions about your invoice. We appreciate your business and look forward to hearing from you.`
@@ -575,7 +638,6 @@ export interface RunInvestigationInput {
 }
 
 export async function runReceivablesInvestigation(
-  supabase: SupabaseClient,
   input: RunInvestigationInput,
 ): Promise<ReceivablesInvestigationResult> {
   const agentSteps: AgentStep[] = []
@@ -588,136 +650,55 @@ export async function runReceivablesInvestigation(
   let openInvData:  Record<string, unknown> | null = null
   let verData:      VerificationChecks | null = null
   let creditData:   CreditReport | null = null
-  let externalData:  ExternalSignals | null = null
-  let watchlistData: WatchlistScreening | null = null
 
-  // ── Tool execution handler ────────────────────────────────────────────────
-  async function handleToolCall(name: string, toolInput: unknown): Promise<unknown> {
-    const args = toolInput as Record<string, unknown>
+  // ── Phase 1: gather data via tool calls ──────────────────────────────────
+  const toolModel = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash-lite",
+    tools: [{ functionDeclarations: FUNCTION_DECLARATIONS }],
+    systemInstruction: SYSTEM_INSTRUCTION,
+  })
 
-    if (name === "get_invoice_status") {
-      const invoiceId = (args.invoice_id as string) ?? input.invoiceIds[0]
-      const result = await getInvoiceStatus(supabase, invoiceId)
-      invoiceData = result as Record<string, unknown>
-      return result
-    }
-    if (name === "get_payment_history") {
-      const result = await getPaymentHistory(supabase, input.customerId, input.organizationId)
-      paymentData = result as Record<string, unknown>
-      return result
-    }
-    if (name === "get_customer_profile") {
-      const result = await getCustomerProfile(supabase, input.customerId)
-      profileData = result as Record<string, unknown>
-      return result
-    }
-    if (name === "get_appointment_behavior") {
-      const result = await getAppointmentBehavior(supabase, input.customerId, input.organizationId)
-      behaviorData = result as Record<string, unknown>
-      return result
-    }
-    if (name === "get_all_open_invoices") {
-      const result = await getAllOpenInvoices(supabase, input.customerId, input.organizationId)
-      openInvData = result as Record<string, unknown>
-      return result
-    }
-    if (name === "run_verification_checks") {
-      verData = buildVerificationChecks(
-        (profileData ?? {}) as Parameters<typeof buildVerificationChecks>[0],
-        (paymentData ?? {}) as Parameters<typeof buildVerificationChecks>[1],
-      )
-      return verData
-    }
-    if (name === "evaluate_credit_report") {
-      creditData = await evaluateCreditReport(supabase, input.customerId, input.organizationId)
-      return creditData
-    }
-    if (name === "search_external_signals") {
-      const customerName = (args.customer_name as string) ?? "Customer"
-      const industryHint = args.industry_hint as string | undefined
-      const queries = [
-        `${customerName} bankruptcy insolvency news 2025 2026`,
-        `${customerName} business financial difficulties`,
-        ...(industryHint ? [`${industryHint} industry payment delays market conditions 2026`] : []),
-      ]
-      const results = await Promise.all(queries.map(async (q) => {
-        const r = await tinyFishSearch(q, { limit: 3 })
-        return r.degradedFromLive ? mockCollectionsSearch(customerName, q) : r
-      }))
-      const allArticles = results.flatMap((r) => r.results)
-      const mode = results[0]?.mode ?? "mock"
-      const nameLower = customerName.toLowerCase()
-      const industryLower = (industryHint ?? "").toLowerCase()
-      externalData = {
-        searched: true,
-        articles: allArticles.slice(0, 6).map((a) => ({
-          title:     a.title,
-          url:       a.url,
-          snippet:   a.snippet,
-          relevance: (a.title.toLowerCase().includes(nameLower) ? "high"
-                     : industryLower && a.title.toLowerCase().includes(industryLower) ? "medium"
-                     : "low") as "high" | "medium" | "low",
-        })),
-        marketContext: results.find((r) => /market|industry/i.test(r.query))?.results[0]?.snippet ?? "",
-        dataSource: mode === "live" ? "live" : "mock",
-      }
-      return externalData
-    }
-    if (name === "screen_watchlists") {
-      const names = (args.names as string[]) ?? []
-      const namesToScreen = names.slice(0, 3)
+  const chat = toolModel.startChat()
+  let result = await chat.sendMessage(
+    `Investigate overdue receivables for customer ID: ${input.customerId}, invoice IDs: ${input.invoiceIds.join(", ")}. Call all 6 tools now.`,
+  )
 
-      const LIST_CLUSTERS: Array<{ ids: WatchlistId[]; buildQuery: (n: string) => string }> = [
-        {
-          ids: ["ofac", "sdl"],
-          buildQuery: (n) => `"${n}" OFAC SDN sanctions blocked designated Treasury`,
-        },
-        {
-          ids: ["interpol", "un_security_council", "fatf"],
-          buildQuery: (n) => `"${n}" Interpol most wanted UN Security Council sanctions FATF`,
-        },
-        {
-          ids: ["eu_sanctions", "world_bank", "bis_entity"],
-          buildQuery: (n) => `"${n}" EU consolidated sanctions "World Bank" debarred BIS entity list`,
-        },
-      ]
+  for (let turn = 0; turn < 10; turn++) {
+    const calls = result.response.functionCalls()
+    if (!calls || calls.length === 0) break
 
-      const allHits: WatchlistHit[] = []
-      let wlDataSource: "live" | "mock" = "mock"
+    const responses: Part[] = []
 
-      for (const name of namesToScreen) {
-        const clusterResults = await Promise.all(
-          LIST_CLUSTERS.map(async ({ ids, buildQuery }) => {
-            const q = buildQuery(name)
-            const r = await tinyFishSearch(q, { limit: 5 })
-            if (r.mode === "live") wlDataSource = "live"
-            const usedResult = r.degradedFromLive ? mockWatchlistSearch(name, q) : r
-            return { ids, usedResult, screenedName: name }
-          })
+    for (const call of calls) {
+      let toolResult: unknown
+
+      if (call.name === "get_invoice_status") {
+        const { invoice_id } = call.args as { invoice_id: string }
+        toolResult = await getInvoiceStatus(invoice_id)
+        invoiceData = toolResult as Record<string, unknown>
+      } else if (call.name === "get_payment_history") {
+        toolResult = await getPaymentHistory(input.customerId, input.organizationId)
+        paymentData = toolResult as Record<string, unknown>
+      } else if (call.name === "get_customer_profile") {
+        toolResult = await getCustomerProfile(input.customerId)
+        profileData = toolResult as Record<string, unknown>
+      } else if (call.name === "get_appointment_behavior") {
+        toolResult = await getAppointmentBehavior(input.customerId, input.organizationId)
+        behaviorData = toolResult as Record<string, unknown>
+      } else if (call.name === "get_all_open_invoices") {
+        toolResult = await getAllOpenInvoices(input.customerId, input.organizationId)
+        openInvData = toolResult as Record<string, unknown>
+      } else if (call.name === "run_verification_checks") {
+        verData = buildVerificationChecks(
+          (profileData ?? {}) as Parameters<typeof buildVerificationChecks>[0],
+          (paymentData ?? {}) as Parameters<typeof buildVerificationChecks>[1],
         )
-
-        for (const { ids, usedResult, screenedName } of clusterResults) {
-          const combined = usedResult.results
-            .map((r) => `${r.title} ${r.snippet}`)
-            .join(" ")
-            .toLowerCase()
-          const nameTokens = screenedName.toLowerCase().split(/\s+/).filter(Boolean)
-          const nameFound = nameTokens.every((token) => combined.includes(token))
-          const isMatch =
-            nameFound &&
-            /sanction|wanted|debarred|designated|blocked|prohibited|bounty|criminal|fugitive/.test(combined)
-
-          for (const listId of ids) {
-            allHits.push({
-              list:   listId,
-              label:  WATCHLIST_LABELS[listId],
-              status: isMatch ? "flagged" : "clear",
-              detail: isMatch
-                ? `Potential match found for "${screenedName}" — manual review required`
-                : `No match found for "${screenedName}"`,
-            })
-          }
-        }
+        toolResult = verData
+      } else if (call.name === "evaluate_credit_report") {
+        creditData = await evaluateCreditReport(input.customerId, input.organizationId)
+        toolResult = creditData
+      } else {
+        toolResult = { error: `Unknown tool: ${call.name}` }
       }
 
       const flaggedCount = allHits.filter((h) => h.status === "flagged").length

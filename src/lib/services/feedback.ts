@@ -1,5 +1,7 @@
 import "server-only"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and, desc, count, ilike } from "drizzle-orm"
 import { ReviewAnalysisSchema, type ReviewAnalysis } from "@/lib/schemas/feedback-ai"
 import {
   parseAndApplyReviewBusinessRules,
@@ -16,63 +18,90 @@ function mapRiskStatusToCustomerColumn(update: ReviewAnalysis["risk_status_updat
 }
 
 export async function buildGuestHistory(
-  client: SupabaseClient,
   organizationId: string,
   customerId: string
 ): Promise<GuestHistoryInput> {
-  const { data: customerRow, error: customerError } = await client
-    .from("customers")
-    .select("lifetime_value, last_visit_at, notes, risk_status")
-    .eq("id", customerId)
-    .eq("organization_id", organizationId)
-    .maybeSingle()
+  const [customerRow] = await db
+    .select({
+      lifetimeValue: schema.customers.lifetimeValue,
+      lastVisitAt:   schema.customers.lastVisitAt,
+      notes:         schema.customers.notes,
+      riskStatus:    schema.customers.riskStatus,
+    })
+    .from(schema.customers)
+    .where(
+      and(
+        eq(schema.customers.id, customerId),
+        eq(schema.customers.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (customerError || !customerRow) return null
+  if (!customerRow) return null
 
-  const { data: recentAppointments, error: appointmentError, count: visitCount } = await client
-    .from("appointments")
-    .select("starts_at, notes", { count: "exact" })
-    .eq("customer_id", customerId)
-    .eq("organization_id", organizationId)
-    .order("starts_at", { ascending: false })
+  const recentAppointments = await db
+    .select({
+      startsAt: schema.appointments.startsAt,
+      notes:    schema.appointments.notes,
+    })
+    .from(schema.appointments)
+    .where(
+      and(
+        eq(schema.appointments.customerId, customerId),
+        eq(schema.appointments.organizationId, organizationId),
+      ),
+    )
+    .orderBy(desc(schema.appointments.startsAt))
     .limit(3)
 
-  if (appointmentError) throw new Error(appointmentError.message)
+  // Get total visit count
+  const [visitCountResult] = await db
+    .select({ count: count() })
+    .from(schema.appointments)
+    .where(
+      and(
+        eq(schema.appointments.customerId, customerId),
+        eq(schema.appointments.organizationId, organizationId),
+      ),
+    )
 
-  const lifetime = Number(customerRow.lifetime_value) || 0
-  const customerNotes = (customerRow.notes as string | null) ?? ""
-  const appointmentNotes = (recentAppointments ?? [])
-    .map((row) => (row.notes as string | null) ?? "")
+  const visitCount = Number(visitCountResult?.count ?? 0)
+  const lifetime = Number(customerRow.lifetimeValue) || 0
+  const customerNotes = customerRow.notes ?? ""
+  const appointmentNotes = recentAppointments
+    .map((row) => row.notes ?? "")
     .filter(Boolean)
     .join(" ")
   const combinedNotes = [customerNotes, appointmentNotes].filter(Boolean).join(" ").trim()
-  const mostRecentVisit = (recentAppointments ?? [])[0]?.starts_at as string | undefined
+  const mostRecentVisit = recentAppointments[0]?.startsAt?.toISOString()
 
   return {
-    visitCount:    visitCount ?? undefined,
+    visitCount:    visitCount || undefined,
     lifetimeSpend: lifetime,
-    lastVisit:     mostRecentVisit ?? (customerRow.last_visit_at as string | null) ?? undefined,
+    lastVisit:     mostRecentVisit ?? customerRow.lastVisitAt?.toISOString() ?? undefined,
     vip:           lifetime >= 1200 || /\bVIP\b/i.test(combinedNotes),
     dietaryNotes:  combinedNotes.match(/allergy|nut|gluten|dairy|shellfish/i) ? combinedNotes : null,
   }
 }
 
 export async function findFeedbackByExternalRef(
-  client: SupabaseClient,
   organizationId: string,
   externalSource: string,
   externalReviewId: string
 ) {
-  const { data, error } = await client
-    .from("feedback")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .eq("external_source", externalSource)
-    .eq("external_review_id", externalReviewId)
-    .maybeSingle()
+  const [row] = await db
+    .select({ id: schema.feedback.id })
+    .from(schema.feedback)
+    .where(
+      and(
+        eq(schema.feedback.organizationId, organizationId),
+        eq(schema.feedback.externalSource, externalSource),
+        eq(schema.feedback.externalReviewId, externalReviewId),
+      ),
+    )
+    .limit(1)
 
-  if (error) throw new Error(error.message)
-  return data?.id as string | undefined
+  return row?.id as string | undefined
 }
 
 export interface IngestFeedbackInput {
@@ -92,12 +121,10 @@ export interface IngestFeedbackInput {
  * Creates feedback row. Returns existing id if external ref already ingested (idempotent).
  */
 export async function ingestFeedbackRow(
-  client: SupabaseClient,
   input: IngestFeedbackInput
 ): Promise<{ feedbackId: string; created: boolean }> {
   if (input.externalReviewId && input.externalSource) {
     const existing = await findFeedbackByExternalRef(
-      client,
       input.organizationId,
       input.externalSource,
       input.externalReviewId
@@ -109,61 +136,67 @@ export async function ingestFeedbackRow(
   const appointmentId = input.appointmentId ?? null
 
   if (customerId) {
-    const { data: custRow, error: custErr } = await client
-      .from("customers")
-      .select("id")
-      .eq("id", customerId)
-      .eq("organization_id", input.organizationId)
-      .maybeSingle()
-    if (custErr) throw new Error(custErr.message)
+    const [custRow] = await db
+      .select({ id: schema.customers.id })
+      .from(schema.customers)
+      .where(
+        and(
+          eq(schema.customers.id, customerId),
+          eq(schema.customers.organizationId, input.organizationId),
+        ),
+      )
+      .limit(1)
     if (!custRow) {
       throw new Error("customer_id does not belong to this organization")
     }
   }
   if (appointmentId) {
-    const { data: apptRow, error: apptErr } = await client
-      .from("appointments")
-      .select("id")
-      .eq("id", appointmentId)
-      .eq("organization_id", input.organizationId)
-      .maybeSingle()
-    if (apptErr) throw new Error(apptErr.message)
+    const [apptRow] = await db
+      .select({ id: schema.appointments.id })
+      .from(schema.appointments)
+      .where(
+        and(
+          eq(schema.appointments.id, appointmentId),
+          eq(schema.appointments.organizationId, input.organizationId),
+        ),
+      )
+      .limit(1)
     if (!apptRow) {
       throw new Error("appointment_id does not belong to this organization")
     }
   }
 
-  const { data, error } = await client
-    .from("feedback")
-    .insert({
-      organization_id:            input.organizationId,
-      customer_id:                customerId,
-      appointment_id:             appointmentId,
-      integration_sync_event_id:  input.integrationSyncEventId ?? null,
-      source:                       input.source,
-      guest_name_snapshot:          input.guestName,
-      score:                        input.score,
-      comment:                      input.comment,
-      external_review_id:         input.externalReviewId ?? null,
-      external_source:              input.externalSource ?? null,
-      analysis_source:              "none",
-    })
-    .select("id")
-    .single()
+  try {
+    const [row] = await db
+      .insert(schema.feedback)
+      .values({
+        organizationId:          input.organizationId,
+        customerId,
+        appointmentId,
+        integrationSyncEventId:  input.integrationSyncEventId ?? null,
+        source:                  input.source,
+        guestNameSnapshot:       input.guestName,
+        score:                   input.score,
+        comment:                 input.comment,
+        externalReviewId:        input.externalReviewId ?? null,
+        externalSource:          input.externalSource ?? null,
+        analysisSource:          "none",
+      })
+      .returning({ id: schema.feedback.id })
 
-  if (error) {
-    if (error.code === "23505") {
+    if (!row) throw new Error("Failed to insert feedback")
+    return { feedbackId: row.id, created: true }
+  } catch (err) {
+    if ((err as { code?: string }).code === "23505") {
       const sid = input.externalSource ?? ""
       const rid = input.externalReviewId ?? ""
       if (sid && rid) {
-        const id = await findFeedbackByExternalRef(client, input.organizationId, sid, rid)
+        const id = await findFeedbackByExternalRef(input.organizationId, sid, rid)
         if (id) return { feedbackId: id, created: false }
       }
     }
-    throw new Error(error.message)
+    throw err
   }
-
-  return { feedbackId: data!.id as string, created: true }
 }
 
 async function importAnalyzeReview(): Promise<
@@ -192,7 +225,6 @@ function stripAgentMeta(raw: Record<string, unknown>) {
 }
 
 async function maybeInsertFollowUp(
-  client: SupabaseClient,
   organizationId: string,
   feedbackId: string,
   analysis: ReviewAnalysis
@@ -200,80 +232,84 @@ async function maybeInsertFollowUp(
   const t = analysis.recovery_action.type
   if (t === "none" || t === "thank_you_email") return
 
-  const { data: existingRows, error: existingErr } = await client
-    .from("follow_up_actions")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .eq("feedback_id", feedbackId)
-    .eq("action_type", t)
-    .order("created_at", { ascending: false })
+  const existingRows = await db
+    .select({ id: schema.followUpActions.id })
+    .from(schema.followUpActions)
+    .where(
+      and(
+        eq(schema.followUpActions.organizationId, organizationId),
+        eq(schema.followUpActions.feedbackId, feedbackId),
+        eq(schema.followUpActions.actionType, t),
+      ),
+    )
+    .orderBy(desc(schema.followUpActions.createdAt))
     .limit(1)
 
-  if (existingErr) throw new Error(existingErr.message)
-  if ((existingRows ?? []).length > 0) return
+  if (existingRows.length > 0) return
 
-  const { error } = await client.from("follow_up_actions").insert({
-    organization_id: organizationId,
-    feedback_id:     feedbackId,
-    action_type:     t,
-    status:          "pending",
-    channel:         analysis.recovery_action.channel,
-    priority:        analysis.recovery_action.priority,
-    message_draft:
+  await db.insert(schema.followUpActions).values({
+    organizationId,
+    feedbackId,
+    actionType:   t,
+    status:       "pending",
+    channel:      analysis.recovery_action.channel,
+    priority:     analysis.recovery_action.priority,
+    messageDraft:
       analysis.recovery_action.message_draft ??
       analysis.recovery_action.subject ??
       null,
   })
-  if (error) throw new Error(error.message)
 }
 
 export async function patchCustomerRiskOnly(
-  client: SupabaseClient,
   organizationId: string,
   customerId: string,
   analysis: ReviewAnalysis
 ) {
   const risk = mapRiskStatusToCustomerColumn(analysis.risk_status_update)
-  const { error } = await client
-    .from("customers")
-    .update({ risk_status: risk, updated_at: new Date().toISOString() })
-    .eq("id", customerId)
-    .eq("organization_id", organizationId)
-
-  if (error) throw new Error(error.message)
+  await db
+    .update(schema.customers)
+    .set({ riskStatus: risk, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.customers.id, customerId),
+        eq(schema.customers.organizationId, organizationId),
+      ),
+    )
 }
 
 async function readStoredAnalysis(
-  client: SupabaseClient,
   organizationId: string,
   feedbackId: string
 ): Promise<{
   analysis: ReviewAnalysis
   analysisSource: "model" | "rules_fallback" | "invalid_model"
 } | null> {
-  const { data, error } = await client
-    .from("feedback")
-    .select("analysis_source, analysis_json")
-    .eq("id", feedbackId)
-    .eq("organization_id", organizationId)
-    .maybeSingle()
+  const [row] = await db
+    .select({
+      analysisSource: schema.feedback.analysisSource,
+      analysisJson:   schema.feedback.analysisJson,
+    })
+    .from(schema.feedback)
+    .where(
+      and(
+        eq(schema.feedback.id, feedbackId),
+        eq(schema.feedback.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (error) throw new Error(error.message)
-  if (!data) throw new Error("Feedback not found")
+  if (!row) throw new Error("Feedback not found")
 
-  const row = data as {
-    analysis_source?: string | null
-    analysis_json?: unknown
-  }
-  if (!row.analysis_source || row.analysis_source === "none") return null
+  if (!row.analysisSource || row.analysisSource === "none") return null
 
-  const parsed = ReviewAnalysisSchema.safeParse(row.analysis_json)
+  const parsed = ReviewAnalysisSchema.safeParse(row.analysisJson)
   if (!parsed.success) return null
 
   const analysisSource =
-    row.analysis_source === "model"
+    row.analysisSource === "model"
       ? "model"
-      : row.analysis_source === "invalid_model"
+      : row.analysisSource === "invalid_model"
         ? "invalid_model"
         : "rules_fallback"
 
@@ -284,27 +320,27 @@ async function readStoredAnalysis(
 }
 
 async function readCurrentFeedbackState(
-  client: SupabaseClient,
   organizationId: string,
   feedbackId: string
 ): Promise<{ followUpStatus: string; flagged: boolean }> {
-  const { data, error } = await client
-    .from("feedback")
-    .select("follow_up_status, flagged")
-    .eq("id", feedbackId)
-    .eq("organization_id", organizationId)
-    .maybeSingle()
+  const [row] = await db
+    .select({
+      followUpStatus: schema.feedback.followUpStatus,
+      flagged:        schema.feedback.flagged,
+    })
+    .from(schema.feedback)
+    .where(
+      and(
+        eq(schema.feedback.id, feedbackId),
+        eq(schema.feedback.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (error) throw new Error(error.message)
-  if (!data) throw new Error("Feedback not found")
-
-  const row = data as {
-    follow_up_status?: string | null
-    flagged?: boolean | null
-  }
+  if (!row) throw new Error("Feedback not found")
 
   return {
-    followUpStatus: row.follow_up_status ?? "none",
+    followUpStatus: row.followUpStatus ?? "none",
     flagged: Boolean(row.flagged),
   }
 }
@@ -319,7 +355,6 @@ type PersistFeedbackAnalysisContext = {
 }
 
 async function persistNormalizedFeedbackAnalysis(
-  client: SupabaseClient,
   organizationId: string,
   feedbackId: string,
   ctx: PersistFeedbackAnalysisContext,
@@ -327,7 +362,7 @@ async function persistNormalizedFeedbackAnalysis(
   analysisSource: "model" | "rules_fallback" | "invalid_model"
 ) {
   const flagged = analysis.safety_flag || analysis.urgency >= 4 || analysis.sentiment === "negative"
-  const currentState = await readCurrentFeedbackState(client, organizationId, feedbackId)
+  const currentState = await readCurrentFeedbackState(organizationId, feedbackId)
 
   let persistedFollowUpStatus = analysis.follow_up_status
   let persistedFlagged = flagged
@@ -340,34 +375,36 @@ async function persistNormalizedFeedbackAnalysis(
     persistedFlagged = false
   }
 
-  const { error: upErr } = await client
-    .from("feedback")
-    .update({
-      sentiment:        analysis.sentiment,
-      topics:           analysis.topics,
-      urgency:          analysis.urgency,
-      safety_flag:      analysis.safety_flag,
-      follow_up_status: persistedFollowUpStatus,
-      flagged:          persistedFlagged,
-      reply_draft:      analysis.reply_draft ?? null,
-      internal_note:    analysis.internal_note,
-      manager_summary:  analysis.manager_summary,
-      analysis_json:    analysis as unknown as Record<string, unknown>,
-      analysis_source:  analysisSource,
-      updated_at:       new Date().toISOString(),
+  await db
+    .update(schema.feedback)
+    .set({
+      sentiment:      analysis.sentiment,
+      topics:         analysis.topics,
+      urgency:        analysis.urgency,
+      safetyFlag:     analysis.safety_flag,
+      followUpStatus: persistedFollowUpStatus,
+      flagged:        persistedFlagged,
+      replyDraft:     analysis.reply_draft ?? null,
+      internalNote:   analysis.internal_note,
+      managerSummary: analysis.manager_summary,
+      analysisJson:   analysis as unknown as Record<string, unknown>,
+      analysisSource,
+      updatedAt:      new Date(),
     })
-    .eq("id", feedbackId)
-    .eq("organization_id", organizationId)
-
-  if (upErr) throw new Error(upErr.message)
+    .where(
+      and(
+        eq(schema.feedback.id, feedbackId),
+        eq(schema.feedback.organizationId, organizationId),
+      ),
+    )
 
   if (ctx.customerId) {
-    await patchCustomerRiskOnly(client, organizationId, ctx.customerId, analysis)
+    await patchCustomerRiskOnly(organizationId, ctx.customerId, analysis)
   }
 
-  await maybeInsertFollowUp(client, organizationId, feedbackId, analysis)
+  await maybeInsertFollowUp(organizationId, feedbackId, analysis)
 
-  await recordAiAction(client, {
+  await recordAiAction({
     organizationId,
     entityType:   "feedback",
     entityId:     feedbackId,
@@ -392,7 +429,6 @@ async function persistNormalizedFeedbackAnalysis(
 }
 
 export async function persistAgentFeedbackAnalysis(
-  client: SupabaseClient,
   organizationId: string,
   feedbackId: string,
   ctx: PersistFeedbackAnalysisContext,
@@ -408,7 +444,6 @@ export async function persistAgentFeedbackAnalysis(
   })
 
   return persistNormalizedFeedbackAnalysis(
-    client,
     organizationId,
     feedbackId,
     ctx,
@@ -416,11 +451,11 @@ export async function persistAgentFeedbackAnalysis(
     analysisSource
   )
 }
+
 /**
  * Runs model (if key present) + deterministic rules, persists analysis, ai_action, optional follow_up.
  */
 export async function analyzeAndPersistFeedback(
-  client: SupabaseClient,
   organizationId: string,
   feedbackId: string,
   ctx: {
@@ -436,7 +471,7 @@ export async function analyzeAndPersistFeedback(
 
   let guestHistory: GuestHistoryInput = null
   if (ctx.customerId) {
-    guestHistory = await buildGuestHistory(client, organizationId, ctx.customerId)
+    guestHistory = await buildGuestHistory(organizationId, ctx.customerId)
   }
 
   let stored = null as {
@@ -445,7 +480,7 @@ export async function analyzeAndPersistFeedback(
   } | null
 
   if (opts?.skipIfAlreadyAnalyzed) {
-    stored = await readStoredAnalysis(client, organizationId, feedbackId)
+    stored = await readStoredAnalysis(organizationId, feedbackId)
   }
 
   let analysis: ReviewAnalysis
@@ -502,7 +537,6 @@ export async function analyzeAndPersistFeedback(
   }
 
   await persistNormalizedFeedbackAnalysis(
-    client,
     organizationId,
     feedbackId,
     {
@@ -515,177 +549,203 @@ export async function analyzeAndPersistFeedback(
 }
 
 export async function markFeedbackReplyApproved(
-  client: SupabaseClient,
   organizationId: string,
   feedbackId: string
 ) {
-  const { data, error } = await client
-    .from("feedback")
-    .select("id, source, reply_draft")
-    .eq("id", feedbackId)
-    .eq("organization_id", organizationId)
-    .maybeSingle()
+  const [row] = await db
+    .select({
+      id:         schema.feedback.id,
+      source:     schema.feedback.source,
+      replyDraft: schema.feedback.replyDraft,
+    })
+    .from(schema.feedback)
+    .where(
+      and(
+        eq(schema.feedback.id, feedbackId),
+        eq(schema.feedback.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (error) throw new Error(error.message)
-  if (!data) throw new Error("Feedback not found")
+  if (!row) throw new Error("Feedback not found")
 
-  const row = data as { source?: string | null; reply_draft?: string | null }
   if (row.source !== "google" && row.source !== "yelp") {
     throw new Error("Only public Google or Yelp reviews can be approved from this card.")
   }
-  if (!row.reply_draft?.trim()) {
+  if (!row.replyDraft?.trim()) {
     throw new Error("No public reply draft is available for this review.")
   }
 
-  const { count: pendingCount, error: pendingErr } = await client
-    .from("follow_up_actions")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .eq("feedback_id", feedbackId)
-    .eq("status", "pending")
+  const [pendingCountResult] = await db
+    .select({ count: count() })
+    .from(schema.followUpActions)
+    .where(
+      and(
+        eq(schema.followUpActions.organizationId, organizationId),
+        eq(schema.followUpActions.feedbackId, feedbackId),
+        eq(schema.followUpActions.status, "pending"),
+      ),
+    )
 
-  if (pendingErr) throw new Error(pendingErr.message)
-  if ((pendingCount ?? 0) > 0) {
+  if (Number(pendingCountResult?.count ?? 0) > 0) {
     throw new Error("This review already has a pending follow-up plan. Approve or dismiss that plan below instead.")
   }
 
-  const { error: updateErr } = await client
-    .from("feedback")
-    .update({
-      flagged:          false,
-      follow_up_status: "resolved",
-      updated_at:       new Date().toISOString(),
+  await db
+    .update(schema.feedback)
+    .set({
+      flagged:        false,
+      followUpStatus: "resolved",
+      updatedAt:      new Date(),
     })
-    .eq("id", feedbackId)
-    .eq("organization_id", organizationId)
-
-  if (updateErr) throw new Error(updateErr.message)
+    .where(
+      and(
+        eq(schema.feedback.id, feedbackId),
+        eq(schema.feedback.organizationId, organizationId),
+      ),
+    )
 }
 
 export async function setFollowUpActionDecision(
-  client: SupabaseClient,
   organizationId: string,
   actionId: string,
   decision: "approve" | "dismiss"
 ) {
-  const { data: actionRow, error: actionErr } = await client
-    .from("follow_up_actions")
-    .select("id, feedback_id")
-    .eq("id", actionId)
-    .eq("organization_id", organizationId)
-    .maybeSingle()
+  const [actionRow] = await db
+    .select({
+      id:         schema.followUpActions.id,
+      feedbackId: schema.followUpActions.feedbackId,
+    })
+    .from(schema.followUpActions)
+    .where(
+      and(
+        eq(schema.followUpActions.id, actionId),
+        eq(schema.followUpActions.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (actionErr) throw new Error(actionErr.message)
   if (!actionRow) throw new Error("Follow-up action not found")
 
   const status = decision === "approve" ? "approved" : "dismissed"
-  const { error } = await client
-    .from("follow_up_actions")
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq("id", actionId)
-    .eq("organization_id", organizationId)
+  await db
+    .update(schema.followUpActions)
+    .set({ status, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.followUpActions.id, actionId),
+        eq(schema.followUpActions.organizationId, organizationId),
+      ),
+    )
 
-  if (error) throw new Error(error.message)
+  const feedbackId = actionRow.feedbackId
+  const [pendingCountResult] = await db
+    .select({ count: count() })
+    .from(schema.followUpActions)
+    .where(
+      and(
+        eq(schema.followUpActions.organizationId, organizationId),
+        eq(schema.followUpActions.feedbackId, feedbackId),
+        eq(schema.followUpActions.status, "pending"),
+      ),
+    )
 
-  const feedbackId = (actionRow as { feedback_id: string }).feedback_id
-  const { count: pendingCount, error: pendingErr } = await client
-    .from("follow_up_actions")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .eq("feedback_id", feedbackId)
-    .eq("status", "pending")
-
-  if (pendingErr) throw new Error(pendingErr.message)
-
-  if ((pendingCount ?? 0) === 0) {
-    const { error: feedbackErr } = await client
-      .from("feedback")
-      .update({
-        flagged:          false,
-        follow_up_status: "resolved",
-        updated_at:       new Date().toISOString(),
+  if (Number(pendingCountResult?.count ?? 0) === 0) {
+    await db
+      .update(schema.feedback)
+      .set({
+        flagged:        false,
+        followUpStatus: "resolved",
+        updatedAt:      new Date(),
       })
-      .eq("id", feedbackId)
-      .eq("organization_id", organizationId)
-
-    if (feedbackErr) throw new Error(feedbackErr.message)
+      .where(
+        and(
+          eq(schema.feedback.id, feedbackId),
+          eq(schema.feedback.organizationId, organizationId),
+        ),
+      )
   }
 }
 
 export async function setFeedbackFlagged(
-  client: SupabaseClient,
   organizationId: string,
   feedbackId: string,
   flagged: boolean
 ) {
-  await readCurrentFeedbackState(client, organizationId, feedbackId)
+  await readCurrentFeedbackState(organizationId, feedbackId)
 
-  const { error } = await client
-    .from("feedback")
-    .update({ flagged, updated_at: new Date().toISOString() })
-    .eq("id", feedbackId)
-    .eq("organization_id", organizationId)
-
-  if (error) throw new Error(error.message)
+  await db
+    .update(schema.feedback)
+    .set({ flagged, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.feedback.id, feedbackId),
+        eq(schema.feedback.organizationId, organizationId),
+      ),
+    )
 }
 
 export async function enqueueFollowUpFromBody(
-  client: SupabaseClient,
   organizationId: string,
   feedbackId: string,
   body: { actionType: string; channel: string; priority: string; messageDraft?: string }
 ) {
-  await readCurrentFeedbackState(client, organizationId, feedbackId)
+  await readCurrentFeedbackState(organizationId, feedbackId)
 
-  const { data: existingRows, error: existingErr } = await client
-    .from("follow_up_actions")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .eq("feedback_id", feedbackId)
-    .eq("action_type", body.actionType)
-    .eq("status", "pending")
+  const existingRows = await db
+    .select({ id: schema.followUpActions.id })
+    .from(schema.followUpActions)
+    .where(
+      and(
+        eq(schema.followUpActions.organizationId, organizationId),
+        eq(schema.followUpActions.feedbackId, feedbackId),
+        eq(schema.followUpActions.actionType, body.actionType),
+        eq(schema.followUpActions.status, "pending"),
+      ),
+    )
     .limit(1)
 
-  if (existingErr) throw new Error(existingErr.message)
-
-  if ((existingRows ?? []).length === 0) {
-    const { error } = await client.from("follow_up_actions").insert({
-      organization_id: organizationId,
-      feedback_id:     feedbackId,
-      action_type:     body.actionType,
-      status:          "pending",
-      channel:         body.channel,
-      priority:        body.priority,
-      message_draft:   body.messageDraft ?? null,
+  if (existingRows.length === 0) {
+    await db.insert(schema.followUpActions).values({
+      organizationId,
+      feedbackId,
+      actionType:   body.actionType,
+      status:       "pending",
+      channel:      body.channel,
+      priority:     body.priority,
+      messageDraft: body.messageDraft ?? null,
     })
-    if (error) throw new Error(error.message)
   }
 
-  const { error: feedbackErr } = await client
-    .from("feedback")
-    .update({
-      flagged:          true,
-      follow_up_status: "callback_needed",
-      updated_at:       new Date().toISOString(),
+  await db
+    .update(schema.feedback)
+    .set({
+      flagged:        true,
+      followUpStatus: "callback_needed",
+      updatedAt:      new Date(),
     })
-    .eq("id", feedbackId)
-    .eq("organization_id", organizationId)
-
-  if (feedbackErr) throw new Error(feedbackErr.message)
+    .where(
+      and(
+        eq(schema.feedback.id, feedbackId),
+        eq(schema.feedback.organizationId, organizationId),
+      ),
+    )
 }
 
 export async function resolveCustomerIdByEmail(
-  client: SupabaseClient,
   organizationId: string,
   email: string
 ): Promise<string | null> {
-  const { data, error } = await client
-    .from("customers")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .ilike("email", email.trim())
-    .maybeSingle()
-  if (error) throw new Error(error.message)
-  return (data?.id as string) ?? null
-}
+  const [row] = await db
+    .select({ id: schema.customers.id })
+    .from(schema.customers)
+    .where(
+      and(
+        eq(schema.customers.organizationId, organizationId),
+        ilike(schema.customers.email, email.trim()),
+      ),
+    )
+    .limit(1)
 
+  return row?.id ?? null
+}

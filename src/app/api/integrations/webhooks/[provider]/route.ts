@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { ingestWebhookPayload } from "@/lib/services/integrations"
 import { normalizeWebhookPayload } from "@/lib/schemas/integrations"
 import {
@@ -49,9 +49,7 @@ export async function POST(
   }
 
   try {
-    const client = createServerSupabaseClient()
     const result = await ingestWebhookPayload(
-      client,
       DEMO_ORG_ID,
       provider,
       payload,

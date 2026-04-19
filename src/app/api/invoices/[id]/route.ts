@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { getInvoiceDetailQuery } from "@/lib/queries/invoices"
 
 export async function GET(
@@ -8,8 +8,7 @@ export async function GET(
 ) {
   try {
     const { id } = await ctx.params
-    const client  = createServerSupabaseClient()
-    const data    = await getInvoiceDetailQuery(client, id, DEMO_ORG_ID)
+    const data    = await getInvoiceDetailQuery(id, DEMO_ORG_ID)
 
     return Response.json({ data })
   } catch (err) {

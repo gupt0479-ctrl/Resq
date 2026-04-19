@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { rescheduleAppointment } from "@/lib/services/appointments"
 import { RescheduleBodySchema } from "@/lib/schemas/appointment"
 
@@ -14,8 +14,7 @@ export async function PATCH(
     if (!parsed.success) {
       return Response.json({ error: "Validation failed", details: parsed.error.issues }, { status: 422 })
     }
-    const client = createServerSupabaseClient()
-    await rescheduleAppointment(client, id, DEMO_ORG_ID, parsed.data.startsAt, parsed.data.endsAt)
+    await rescheduleAppointment(id, DEMO_ORG_ID, parsed.data.startsAt, parsed.data.endsAt)
     return Response.json({ data: { status: "rescheduled", startsAt: parsed.data.startsAt, endsAt: parsed.data.endsAt } })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error"

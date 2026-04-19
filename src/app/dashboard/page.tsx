@@ -1,9 +1,21 @@
 import Link from "next/link"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
+import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { getDashboardSummary } from "@/lib/queries/dashboard"
-import { isSupabaseConfigured } from "@/lib/env"
-import { KpiCard } from "@/components/KpiCard"
-import { ArrowUpRight, Zap, CheckCircle, AlertTriangle } from "lucide-react"
+import { isDatabaseConfigured } from "@/lib/env"
+import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  Clock,
+  DollarSign,
+  MessageSquare,
+  Plug,
+  TrendingUp,
+} from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -19,7 +31,7 @@ function timeAgo(iso: string) {
 }
 
 export default async function DashboardPage() {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return (
       <div className="m-8 rounded-lg border border-amber/30 bg-amber/10 p-6 text-sm text-amber">
         Supabase not configured.
@@ -27,8 +39,20 @@ export default async function DashboardPage() {
     )
   }
 
-  const client = createServerSupabaseClient()
-  const summary = await getDashboardSummary(client, DEMO_ORG_ID).catch(() => null)
+  const schema = await getLedgerSchemaHealth()
+
+  if (!schema.ok) {
+    return <LedgerSchemaBanner message={schema.message} />
+  }
+
+  const summaryResult = await getDashboardSummary(DEMO_ORG_ID)
+    .then((data) => ({ summary: data, error: null as string | null }))
+    .catch((err: unknown) => ({
+      summary: null,
+      error: err instanceof Error ? err.message : String(err),
+    }))
+
+  const { summary, error: loadError } = summaryResult
 
   if (!summary) {
     return (

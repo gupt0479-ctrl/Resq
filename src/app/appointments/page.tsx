@@ -1,18 +1,17 @@
 import { Suspense } from "react"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { listAppointmentsQuery } from "@/lib/queries/appointments"
-import { isSupabaseConfigured } from "@/lib/env"
+import { isDatabaseConfigured } from "@/lib/env"
 import { ReservationsClient } from "./ReservationsClient"
 
 async function ReservationsData() {
-  const client = createServerSupabaseClient()
-  const appointments = await listAppointmentsQuery(client, DEMO_ORG_ID, { limit: 100 }).catch(() => [])
+  const appointments = await listAppointmentsQuery(DEMO_ORG_ID, { limit: 100 }).catch(() => [])
 
   return <ReservationsClient initialAppointments={appointments} />
 }
 
 export default function AppointmentsPage() {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">
         <p className="font-semibold text-amber-800">Supabase not configured — connect a project to see reservations.</p>

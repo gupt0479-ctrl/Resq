@@ -1,5 +1,11 @@
 import "server-only"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import {
+  invoices,
+  integrationConnectors,
+  aiSummaries,
+  financeTransactions,
+} from "@/lib/db/schema"
 
 export type LedgerSchemaHealth =
   | { ok: true }
@@ -9,47 +15,51 @@ export type LedgerSchemaHealth =
  * Verifies the remote DB matches migrations/0001_core_ledger.sql (and follow-ups).
  * Call before ledger-backed reads so users see an actionable message instead of a generic failure.
  */
-export async function getLedgerSchemaHealth(client: SupabaseClient): Promise<LedgerSchemaHealth> {
-  const { error: invErr } = await client
-    .from("invoices")
-    .select("organization_id, invoice_number, total_amount, amount_paid")
-    .limit(1)
-
-  if (invErr) {
+export async function getLedgerSchemaHealth(): Promise<LedgerSchemaHealth> {
+  try {
+    await db.select().from(invoices).limit(1)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
     const hint =
-      invErr.message.includes("organization_id") ||
-      invErr.message.includes("invoice_number") ||
-      invErr.message.includes("total_amount") ||
-      invErr.message.includes("amount_paid")
+      msg.includes("organization_id") ||
+      msg.includes("invoice_number") ||
+      msg.includes("total_amount") ||
+      msg.includes("amount_paid")
         ? " Your project still has a pre-ledger invoices shape (often columns like total, line_items). Replace it by applying 0001 on a fresh database or following a deliberate migration plan—do not mix both shapes in one table."
         : ""
     return {
       ok:      false,
-      message: `Invoices table is not on the Phase-2 ledger schema: ${invErr.message}.${hint} If an old invoices table blocks migration, run supabase/migrations/003_reset_billing_for_ledger.sql (dev only), then 0001_core_ledger.sql, 002_invoice_reminders.sql, and supabase/seed.sql.`,
+      message: `Invoices table is not on the Phase-2 ledger schema: ${msg}.${hint} If an old invoices table blocks migration, run supabase/migrations/003_reset_billing_for_ledger.sql (dev only), then 0001_core_ledger.sql, 002_invoice_reminders.sql, and supabase/seed.sql.`,
     }
   }
 
-  const { error: connErr } = await client.from("integration_connectors").select("id").limit(1)
-  if (connErr) {
+  try {
+    await db.select().from(integrationConnectors).limit(1)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
     return {
       ok:      false,
-      message: `integration_connectors: ${connErr.message}. Apply migrations through 0001_core_ledger.sql.`,
+      message: `integration_connectors: ${msg}. Apply migrations through 0001_core_ledger.sql.`,
     }
   }
 
-  const { error: aiErr } = await client.from("ai_summaries").select("id").limit(1)
-  if (aiErr) {
+  try {
+    await db.select().from(aiSummaries).limit(1)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
     return {
       ok:      false,
-      message: `ai_summaries: ${aiErr.message}. Apply migrations through 0001_core_ledger.sql.`,
+      message: `ai_summaries: ${msg}. Apply migrations through 0001_core_ledger.sql.`,
     }
   }
 
-  const { error: ftErr } = await client.from("finance_transactions").select("id").limit(1)
-  if (ftErr) {
+  try {
+    await db.select().from(financeTransactions).limit(1)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
     return {
       ok:      false,
-      message: `finance_transactions: ${ftErr.message}. Apply migrations through 0001_core_ledger.sql.`,
+      message: `finance_transactions: ${msg}. Apply migrations through 0001_core_ledger.sql.`,
     }
   }
 

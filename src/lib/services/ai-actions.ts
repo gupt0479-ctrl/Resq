@@ -1,5 +1,7 @@
 import "server-only"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and, desc } from "drizzle-orm"
 import type { AiActionStatus, AiActionType } from "@/lib/constants/enums"
 
 export interface RecordAiActionInput {
@@ -14,57 +16,65 @@ export interface RecordAiActionInput {
 }
 
 export async function recordAiAction(
-  client: SupabaseClient,
   input: RecordAiActionInput
 ): Promise<string> {
   // Prevent duplicate audit rows when a webhook is replayed after a partial failure.
-  const { data: existingRows, error: existingErr } = await client
-    .from("ai_actions")
-    .select("id")
-    .eq("organization_id", input.organizationId)
-    .eq("entity_type", input.entityType)
-    .eq("entity_id", input.entityId)
-    .eq("trigger_type", input.triggerType)
-    .eq("action_type", input.actionType)
-    .order("created_at", { ascending: false })
+  const existingRows = await db
+    .select({ id: schema.aiActions.id })
+    .from(schema.aiActions)
+    .where(
+      and(
+        eq(schema.aiActions.organizationId, input.organizationId),
+        eq(schema.aiActions.entityType, input.entityType),
+        eq(schema.aiActions.entityId, input.entityId),
+        eq(schema.aiActions.triggerType, input.triggerType),
+        eq(schema.aiActions.actionType, input.actionType),
+      ),
+    )
+    .orderBy(desc(schema.aiActions.createdAt))
     .limit(1)
 
-  if (existingErr) throw new Error(existingErr.message)
-  const existingId = (existingRows ?? [])[0]?.id as string | undefined
+  const existingId = existingRows[0]?.id
   if (existingId) return existingId
 
-  const { data, error } = await client
-    .from("ai_actions")
-    .insert({
-      organization_id:       input.organizationId,
-      entity_type:           input.entityType,
-      entity_id:             input.entityId,
-      trigger_type:          input.triggerType,
-      action_type:           input.actionType,
-      input_summary:         input.inputSummary,
-      output_payload_json:   input.outputPayload,
-      status:                input.status ?? "executed",
-      executed_at:           input.status === "failed" ? null : new Date().toISOString(),
+  const [row] = await db
+    .insert(schema.aiActions)
+    .values({
+      organizationId:    input.organizationId,
+      entityType:        input.entityType,
+      entityId:          input.entityId,
+      triggerType:       input.triggerType,
+      actionType:        input.actionType,
+      inputSummary:      input.inputSummary,
+      outputPayloadJson: input.outputPayload,
+      status:            input.status ?? "executed",
+      executedAt:        input.status === "failed" ? null : new Date(),
     })
-    .select("id")
-    .single()
+    .returning({ id: schema.aiActions.id })
 
-  if (error || !data) throw new Error(error?.message ?? "Failed to record ai_action")
-  return data.id as string
+  if (!row) throw new Error("Failed to record ai_action")
+  return row.id
 }
 
 export async function listRecentAiActions(
-  client: SupabaseClient,
   organizationId: string,
   limit = 12
 ) {
-  const { data, error } = await client
-    .from("ai_actions")
-    .select("id, entity_type, entity_id, trigger_type, action_type, input_summary, status, created_at")
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false })
+  const data = await db
+    .select({
+      id:           schema.aiActions.id,
+      entityType:   schema.aiActions.entityType,
+      entityId:     schema.aiActions.entityId,
+      triggerType:  schema.aiActions.triggerType,
+      actionType:   schema.aiActions.actionType,
+      inputSummary: schema.aiActions.inputSummary,
+      status:       schema.aiActions.status,
+      createdAt:    schema.aiActions.createdAt,
+    })
+    .from(schema.aiActions)
+    .where(eq(schema.aiActions.organizationId, organizationId))
+    .orderBy(desc(schema.aiActions.createdAt))
     .limit(limit)
 
-  if (error) throw new Error(error.message)
-  return data ?? []
+  return data
 }

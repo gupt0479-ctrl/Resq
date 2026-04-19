@@ -1,5 +1,7 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { db, DEMO_ORG_ID } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 import { listAppointmentsQuery } from "@/lib/queries/appointments"
 import { createAppointment } from "@/lib/services/appointments"
 import { APPOINTMENT_STATUS } from "@/lib/constants/enums"
@@ -18,8 +20,7 @@ export async function GET(request: NextRequest) {
         ? (rawStatus as AppointmentStatus)
         : undefined
 
-    const client = createServerSupabaseClient()
-    const appointments = await listAppointmentsQuery(client, DEMO_ORG_ID, {
+    const appointments = await listAppointmentsQuery(DEMO_ORG_ID, {
       status,
       limit,
       offset,
@@ -43,8 +44,7 @@ export async function POST(request: NextRequest) {
     const startsDate = new Date(starts_at)
     const endsDate = ends_at ? new Date(ends_at) : new Date(startsDate.getTime() + 2 * 60 * 60 * 1000)
 
-    const client = createServerSupabaseClient()
-    const appointmentId = await createAppointment(client, DEMO_ORG_ID, {
+    const appointmentId = await createAppointment(DEMO_ORG_ID, {
       customerName: customer_name,
       customerEmail: customer_email,
       customerPhone: customer_phone,
@@ -55,11 +55,17 @@ export async function POST(request: NextRequest) {
       notes,
     })
 
-    const { data: reservation } = await client
-      .from("appointments")
-      .select("id, status, starts_at, ends_at, covers")
-      .eq("id", appointmentId)
-      .single()
+    const [reservation] = await db
+      .select({
+        id:       schema.appointments.id,
+        status:   schema.appointments.status,
+        startsAt: schema.appointments.startsAt,
+        endsAt:   schema.appointments.endsAt,
+        covers:   schema.appointments.covers,
+      })
+      .from(schema.appointments)
+      .where(eq(schema.appointments.id, appointmentId))
+      .limit(1)
 
     return Response.json({ data: reservation || { id: appointmentId } }, { status: 201 })
   } catch (err) {
