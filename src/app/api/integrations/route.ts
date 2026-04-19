@@ -1,18 +1,17 @@
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { listConnectors } from "@/lib/services/integrations"
 
 export async function GET() {
   try {
-    const client     = createServerSupabaseClient()
-    const connectors = await listConnectors(client, DEMO_ORG_ID)
+    const connectors = await listConnectors(DEMO_ORG_ID)
 
-    const data = connectors.map((c: Record<string, unknown>) => ({
+    const data = connectors.map((c) => ({
       id:          c.id,
       provider:    c.provider,
-      displayName: c.display_name,
+      displayName: c.displayName,
       status:      c.status,
-      lastSyncAt:  c.last_sync_at ?? null,
-      lastError:   c.last_error ?? null,
+      lastSyncAt:  c.lastSyncAt?.toISOString() ?? null,
+      lastError:   c.lastError ?? null,
     }))
 
     return Response.json({ data })

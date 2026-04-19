@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { sendInvoice } from "@/lib/services/invoices"
 import { SendInvoiceBodySchema } from "@/lib/schemas/invoice"
 
@@ -25,8 +25,7 @@ export async function POST(
       )
     }
 
-    const client = createServerSupabaseClient()
-    await sendInvoice(client, id, DEMO_ORG_ID, parsed.data.notes)
+    await sendInvoice(id, DEMO_ORG_ID, parsed.data.notes)
 
     return Response.json({ data: { invoiceId: id, status: "sent" } })
   } catch (err) {

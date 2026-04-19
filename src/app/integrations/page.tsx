@@ -1,15 +1,15 @@
 import { Fragment } from "react"
 import { AlertTriangle, CheckCircle2, MinusCircle, Plug, XCircle } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
-import { ClearConnectorErrorButton } from "@/components/integrations/clear-connector-error-button"
+import { DEMO_ORG_ID } from "@/lib/db"
+import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
+import { isDatabaseConfigured } from "@/lib/env"
 import { CONNECTOR_STATUS_LABEL } from "@/lib/constants/enums"
 import type { ConnectorStatus } from "@/lib/constants/enums"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
-import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
-import { isSupabaseConfigured } from "@/lib/env"
 import { listConnectors } from "@/lib/services/integrations"
 import { healthCheck } from "@/lib/tinyfish/client"
+import { ClearConnectorErrorButton } from "@/components/integrations/clear-connector-error-button"
+import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export const dynamic = "force-dynamic"
 
@@ -88,14 +88,13 @@ export default async function IntegrationsPage() {
   let connectors: Record<string, unknown>[] = []
   let connectorsLoadError: string | null = null
 
-  if (isSupabaseConfigured()) {
-    const client = createServerSupabaseClient()
-    const schema = await getLedgerSchemaHealth(client)
+  if (isDatabaseConfigured()) {
+    const schema = await getLedgerSchemaHealth()
     if (!schema.ok) {
       return <LedgerSchemaBanner message={schema.message} />
     }
     try {
-      connectors = (await listConnectors(client, DEMO_ORG_ID)) as Record<string, unknown>[]
+      connectors = (await listConnectors(DEMO_ORG_ID)) as unknown as Record<string, unknown>[]
     } catch (err: unknown) {
       connectorsLoadError = err instanceof Error ? err.message : String(err)
     }
@@ -139,7 +138,7 @@ export default async function IntegrationsPage() {
         <CardContent className="space-y-1 pt-4 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">Why this page matters</p>
           <p>
-            Supabase and deterministic services remain the source of truth. TinyFish is the external
+            PostgreSQL and deterministic services remain the source of truth. TinyFish is the external
             investigation layer. If live dependencies degrade, the demo still works through mock fixtures and an auditable warning path.
           </p>
         </CardContent>
@@ -159,9 +158,9 @@ export default async function IntegrationsPage() {
             </p>
           ) : connectors.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {isSupabaseConfigured()
-                ? "No connector rows found for this organization. Seed data adds demo-safe connector state."
-                : "Supabase not configured - connect a project to see connector state."}
+              {isDatabaseConfigured()
+                ? "No connectors found for this organization. Seed the database with the provided SQL scripts or register connectors via webhooks."
+                : "DATABASE_URL not configured — connect a PostgreSQL database to load connectors."}
             </p>
           ) : (
             <div className="space-y-3">

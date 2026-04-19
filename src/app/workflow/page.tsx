@@ -117,7 +117,6 @@ export default async function WorkflowPage() {
     .limit(20)
 
   const timeline = (data ?? []) as TimelineEvent[]
-
   return (
     <div className="space-y-5 p-6">
       <div>

@@ -9,9 +9,12 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Eye,
+  EyeOff,
   Loader2,
   Zap,
   Mail,
+  Globe,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RiskBadge, type RiskLevel } from "@/components/RiskBadge"
@@ -19,11 +22,28 @@ import { InvestigationPanel } from "@/components/receivables/investigation-panel
 import type { RescueInvoice } from "@/lib/queries/rescue"
 import { SurvivalScanPanel } from "@/components/rescue/SurvivalScanPanel"
 
+import type { CollectionsDecision, CustomerClassification } from "@/lib/schemas/collections-decision"
+
 interface RunResult {
   actionType: string
   summary: string
   detail: string | null
   nextRecommendedStep?: string
+  decision?: CollectionsDecision
+}
+
+const CLASSIFICATION_LABELS: Record<CustomerClassification, string> = {
+  forgot:     "Forgot to pay",
+  cash_flow:  "Cash flow issue",
+  disputing:  "Disputing quality",
+  bad_actor:  "Bad actor",
+}
+
+const CLASSIFICATION_STYLES: Record<CustomerClassification, string> = {
+  forgot:    "bg-teal/10 text-teal border-teal/20",
+  cash_flow: "bg-amber/10 text-amber border-amber/20",
+  disputing: "bg-steel/10 text-steel border-steel/20",
+  bad_actor: "bg-crimson/10 text-crimson border-crimson/20",
 }
 
 const STATE_LABELS: Record<RescueInvoice["rescueState"], string> = {
@@ -39,15 +59,17 @@ const ACTION_LABELS: Record<string, string> = {
   customer_followup_sent:    "Follow-up Drafted",
   financing_options_scouted: "Financing Scouted",
   payment_plan_suggested:    "Plan Proposed",
-  rescue_case_resolved:      "Case Resolved",
+  rescue_case_resolved:      "Case Escalated",
+  dispute_clarification_sent: "Clarification Sent",
 }
 
 const ACTION_ICONS: Record<string, string> = {
-  receivable_risk_detected:  "🔍",
-  customer_followup_sent:    "✉️",
-  financing_options_scouted: "💰",
-  payment_plan_suggested:    "📋",
-  rescue_case_resolved:      "✅",
+  receivable_risk_detected:   "🔍",
+  customer_followup_sent:     "✉️",
+  financing_options_scouted:  "💰",
+  payment_plan_suggested:     "📋",
+  rescue_case_resolved:       "⚡",
+  dispute_clarification_sent: "💬",
 }
 
 function fmt(n: number) {
@@ -86,12 +108,21 @@ function AgentTimeline({ trail, latestResult }: {
   trail: RescueInvoice["auditTrail"]
   latestResult?: RunResult
 }) {
-  type Entry = { actionType: string; summary: string; detail: string | null; nextStep: string | null; createdAt: string; isNew: boolean }
+  type Entry = {
+    actionType: string
+    summary: string
+    detail: string | null
+    nextStep: string | null
+    decision?: CollectionsDecision
+    createdAt: string
+    isNew: boolean
+  }
   const steps: Entry[] = trail.map((s) => ({
     actionType: s.actionType,
     summary: s.inputSummary,
     detail: (s.outputPayload?.detail as string | null) ?? null,
     nextStep: (s.outputPayload?.nextRecommendedStep as string | null) ?? null,
+    decision: (s.outputPayload?.decision as CollectionsDecision | undefined),
     createdAt: s.createdAt,
     isNew: false,
   }))
@@ -101,6 +132,7 @@ function AgentTimeline({ trail, latestResult }: {
       summary: latestResult.summary,
       detail: latestResult.detail,
       nextStep: latestResult.nextRecommendedStep ?? null,
+      decision: latestResult.decision,
       createdAt: new Date().toISOString(),
       isNew: true,
     })
@@ -122,11 +154,20 @@ function AgentTimeline({ trail, latestResult }: {
 }
 
 function TimelineStep({ step, isLast, isNew }: {
-  step: { actionType: string; summary: string; detail: string | null; nextStep: string | null; createdAt: string }
+  step: {
+    actionType: string
+    summary: string
+    detail: string | null
+    nextStep: string | null
+    decision?: CollectionsDecision
+    createdAt: string
+  }
   isLast: boolean
   isNew: boolean
 }) {
   const [open, setOpen] = useState(isNew && isLast)
+  const d = step.decision
+
   return (
     <div className={cn(
       "relative rounded-md border p-3 text-xs transition-all",
@@ -138,29 +179,155 @@ function TimelineStep({ step, isLast, isNew }: {
       )} />
       <button className="w-full text-left" onClick={() => setOpen(v => !v)}>
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span>{ACTION_ICONS[step.actionType] ?? "⚙️"}</span>
             <span className={cn("font-semibold", isNew ? "text-foreground" : "")}>
               {ACTION_LABELS[step.actionType] ?? step.actionType.replace(/_/g, " ")}
             </span>
+            {d && (
+              <span className={cn(
+                "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+                CLASSIFICATION_STYLES[d.classification]
+              )}>
+                {CLASSIFICATION_LABELS[d.classification]}
+              </span>
+            )}
+            {d && (
+              <span className="text-[10px] text-steel font-mono">
+                {d.confidence}% confidence
+              </span>
+            )}
             {isNew && (
               <span className="rounded-full bg-foreground px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-background">new</span>
             )}
           </div>
-          <div className="flex items-center gap-1 text-steel">
+          <div className="flex items-center gap-1 text-steel shrink-0">
             <span>{timeAgo(step.createdAt)}</span>
             {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           </div>
         </div>
         <p className="mt-1 text-steel leading-relaxed">{step.summary}</p>
       </button>
-      {open && step.detail && (
-        <div className="mt-2 border-t border-border pt-2">
-          <pre className="whitespace-pre-wrap font-sans leading-relaxed text-[12px]">{step.detail}</pre>
-          {step.nextStep && (
-            <div className="mt-2 flex items-start gap-1.5 text-steel">
-              <ArrowRight className="mt-0.5 h-3 w-3 shrink-0" />
-              <span>Next: {step.nextStep}</span>
+
+      {open && (
+        <div className="mt-2 border-t border-border pt-2 space-y-3">
+          {/* Human review banner */}
+          {d?.humanReviewFlag && (
+            <div className="flex items-start gap-2 rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-[11.5px] text-amber">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold">Flagged for human review</span>
+                {d.humanReviewReason && <span className="ml-1 text-amber/80">— {d.humanReviewReason}</span>}
+              </div>
+            </div>
+          )}
+
+          {/* Structured agent reasoning - "agent working" format */}
+          {d && (
+            <div className="space-y-3">
+              {/* Assessment block */}
+              <div>
+                <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Assessment</div>
+                <div className="rounded-md bg-surface-muted px-3 py-2.5 space-y-1.5 text-[12px]">
+                  {d.chainOfThought && (
+                    <p className="leading-relaxed text-foreground/90">{d.chainOfThought}</p>
+                  )}
+                  {d.confidence && (
+                    <p className="text-steel">
+                      <span className="font-medium text-foreground/70">Confidence:</span> {d.confidence}%
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Portal Reconnaissance */}
+              {d.portalReconnaissance && (
+                <PortalReconSection recon={d.portalReconnaissance} dataSource={d.externalSignals?.dataSource} />
+              )}
+
+              {/* Action block */}
+              <div>
+                <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Action</div>
+                <div className="rounded-md bg-surface-muted px-3 py-2.5 space-y-1.5 text-[12px]">
+                  <p className="text-foreground/90">
+                    <span className="font-medium">Selected action:</span> {d.selectedAction.replace(/_/g, " ")}
+                  </p>
+                  <p className="text-foreground/90">
+                    <span className="font-medium">Channel:</span> {d.channel}
+                  </p>
+                  <p className="text-foreground/90">
+                    <span className="font-medium">Tone:</span> {d.tone}
+                  </p>
+                </div>
+              </div>
+
+              {/* Contingency block */}
+              {d.responsePlan && (
+                <div>
+                  <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Contingency</div>
+                  <div className="rounded-md bg-surface-muted px-3 py-2.5 space-y-1.5 text-[12px]">
+                    <p className="text-foreground/90">
+                      <span className="font-medium">If no reply:</span> {d.responsePlan.noReply}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Outreach draft */}
+          {(step.detail || d?.outreachDraft) && (
+            <div>
+              <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Message drafted</div>
+              <pre className="whitespace-pre-wrap font-sans leading-relaxed text-[12px] rounded-md bg-surface-muted px-3 py-2.5">
+                {d?.outreachDraft ?? step.detail}
+              </pre>
+            </div>
+          )}
+
+          {/* External signals */}
+          {d?.externalSignals && (
+            <div>
+              <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5 flex items-center gap-1.5">
+                📡 External signals
+                <span className="font-mono text-[8px] bg-surface-muted px-1 py-0.5 rounded">{d.externalSignals.dataSource}</span>
+                {d.externalSignals.distressFlag && (
+                  <span className="text-crimson font-semibold text-[9px]">⚠ distress detected</span>
+                )}
+              </div>
+              {/* AI news summary */}
+              <p className={`text-[12px] leading-relaxed mb-2 ${d.externalSignals.distressFlag ? "text-crimson font-medium" : "text-foreground"}`}>
+                {d.externalSignals.newsSummary ?? (d.externalSignals as unknown as { summary?: string }).summary ?? "—"}
+              </p>
+              {/* Raw snippets */}
+              {(d.externalSignals.rawSnippets ?? []).length > 0 && (
+                <div className="space-y-1.5">
+                  {(d.externalSignals.rawSnippets ?? []).map((s, i) => (
+                    <div key={i} className="rounded bg-surface-muted px-3 py-2 text-[11px] text-steel leading-relaxed">
+                      <span className="font-mono text-[9px] text-steel/50 mr-1.5">[{i + 1}]</span>{s}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Full response plan (collapsed by default, shown on expand) */}
+          {d?.responsePlan && (
+            <div>
+              <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Full response plan</div>
+              <div className="space-y-1">
+                {([
+                  ["No reply", d.responsePlan.noReply],
+                  ["Customer disputes", d.responsePlan.dispute],
+                  ["Partial payment", d.responsePlan.partialPayment],
+                ] as [string, string][]).map(([label, text]) => (
+                  <div key={label} className="flex items-start gap-2 text-[12px]">
+                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-steel" />
+                    <span><span className="font-medium text-foreground/70">{label}:</span> <span className="text-foreground/80">{text}</span></span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -168,6 +335,187 @@ function TimelineStep({ step, isLast, isNew }: {
     </div>
   )
 }
+
+// ─── Portal Reconnaissance Card (inline, always visible after agent run) ───
+
+function PortalReconCard({ recon }: {
+  recon: NonNullable<CollectionsDecision["portalReconnaissance"]>
+}) {
+  return (
+    <div className="mt-6 rounded-lg border border-foreground/10 bg-surface overflow-hidden animate-in slide-in-from-bottom-2 duration-300">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-muted">
+        <Globe className="h-3.5 w-3.5 text-steel" />
+        <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-steel">Portal Reconnaissance</span>
+        <span className="ml-auto font-mono text-[9px] text-steel/60">mock</span>
+      </div>
+      <div className="px-4 py-4 space-y-4">
+        {/* Status pills row */}
+        <div className="flex flex-wrap gap-2">
+          <span className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+            recon.visibility ? "bg-teal/10 text-teal border-teal/20" : "bg-crimson/10 text-crimson border-crimson/20"
+          )}>
+            {recon.visibility ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+            Invoice {recon.visibility ? "visible in portal" : "NOT visible in portal"}
+          </span>
+
+          <span className={cn(
+            "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize",
+            recon.paymentStatus === "paid" || recon.paymentStatus === "processing"
+              ? "bg-teal/10 text-teal border-teal/20"
+              : recon.paymentStatus === "unpaid" || recon.paymentStatus === "failed"
+              ? "bg-crimson/10 text-crimson border-crimson/20"
+              : "bg-steel/10 text-steel border-steel/20"
+          )}>
+            {recon.paymentStatus === "processing" ? "⏳ " : recon.paymentStatus === "paid" ? "✓ " : ""}
+            {recon.paymentStatus}
+          </span>
+
+          <span className={cn(
+            "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize",
+            recon.engagementLevel === "high" ? "bg-teal/10 text-teal border-teal/20"
+            : recon.engagementLevel === "medium" ? "bg-amber/10 text-amber border-amber/20"
+            : "bg-steel/10 text-steel border-steel/20"
+          )}>
+            {recon.engagementLevel} engagement
+          </span>
+
+          {recon.hasRecentActivity && (
+            <span className="inline-flex items-center rounded-full border border-teal/20 bg-teal/10 px-2.5 py-1 text-[11px] font-semibold text-teal">
+              Active recently
+            </span>
+          )}
+        </div>
+
+        {/* Key signals */}
+        <div className="grid grid-cols-2 gap-3 text-[12px]">
+          {recon.shouldSkipCollection && (
+            <div className="col-span-2 rounded-md bg-teal/10 border border-teal/20 px-3 py-2.5 text-teal font-medium">
+              Payment already processing — collection skipped automatically
+            </div>
+          )}
+          {recon.messageSent && (
+            <div className="col-span-2 rounded-md bg-teal/10 border border-teal/20 px-3 py-2.5 text-teal font-medium">
+              ✉ Message sent via customer portal
+            </div>
+          )}
+          <div className="rounded-md bg-surface-muted px-3 py-2">
+            <div className="text-[10px] text-steel mb-0.5">Confidence</div>
+            <div className="font-semibold">{recon.confidence}%</div>
+          </div>
+          <div className="rounded-md bg-surface-muted px-3 py-2">
+            <div className="text-[10px] text-steel mb-0.5">Portal activity</div>
+            <div className="font-semibold">{recon.hasRecentActivity ? "Within 7 days" : "None recent"}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Portal Reconnaissance Section ─────────────────────────────────────────
+
+const VISIBILITY_STYLES: Record<string, string> = {
+  true:  "bg-teal/10 text-teal border-teal/20",
+  false: "bg-crimson/10 text-crimson border-crimson/20",
+}
+
+const PAYMENT_STYLES: Record<string, string> = {
+  paid:       "bg-teal/10 text-teal border-teal/20",
+  processing: "bg-amber/10 text-amber border-amber/20",
+  unpaid:     "bg-crimson/10 text-crimson border-crimson/20",
+  failed:     "bg-crimson/10 text-crimson border-crimson/20",
+  unknown:    "bg-steel/10 text-steel border-steel/20",
+}
+
+const ENGAGEMENT_STYLES: Record<string, string> = {
+  high:   "bg-teal/10 text-teal border-teal/20",
+  medium: "bg-amber/10 text-amber border-amber/20",
+  low:    "bg-steel/10 text-steel border-steel/20",
+  none:   "bg-steel/10 text-steel border-steel/20",
+}
+
+const MODE_STYLES: Record<string, string> = {
+  live:          "bg-teal/10 text-teal border-teal/20",
+  mock:          "bg-steel/10 text-steel border-steel/20",
+  misconfigured: "bg-amber/10 text-amber border-amber/20",
+}
+
+function PortalReconSection({ recon, dataSource }: {
+  recon: NonNullable<CollectionsDecision["portalReconnaissance"]>
+  dataSource?: "live" | "mock"
+}) {
+  const mode = dataSource ?? "mock"
+
+  return (
+    <div>
+      <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5 flex items-center gap-1.5">
+        <Globe className="h-3 w-3" />
+        Portal reconnaissance
+        <span className={cn(
+          "rounded-full border px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide",
+          MODE_STYLES[mode] ?? MODE_STYLES.mock
+        )}>
+          {mode}
+        </span>
+      </div>
+      <div className="rounded-md bg-surface-muted px-3 py-2.5 space-y-2">
+        {/* Badges row */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* Visibility */}
+          <span className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+            VISIBILITY_STYLES[String(recon.visibility)]
+          )}>
+            {recon.visibility
+              ? <><Eye className="h-2.5 w-2.5" /> Visible</>
+              : <><EyeOff className="h-2.5 w-2.5" /> Not visible</>}
+          </span>
+
+          {/* Payment status */}
+          <span className={cn(
+            "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+            PAYMENT_STYLES[recon.paymentStatus] ?? PAYMENT_STYLES.unknown
+          )}>
+            {recon.paymentStatus}
+          </span>
+
+          {/* Engagement level */}
+          <span className={cn(
+            "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+            ENGAGEMENT_STYLES[recon.engagementLevel] ?? ENGAGEMENT_STYLES.none
+          )}>
+            {recon.engagementLevel} engagement
+          </span>
+
+          {/* Skip collection flag */}
+          {recon.shouldSkipCollection && (
+            <span className="rounded-full border border-teal/20 bg-teal/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-teal">
+              skip collection
+            </span>
+          )}
+
+          {/* Message sent */}
+          {recon.messageSent && (
+            <span className="rounded-full border border-teal/20 bg-teal/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-teal">
+              ✉ portal msg sent
+            </span>
+          )}
+        </div>
+
+        {/* Confidence */}
+        {recon.confidence > 0 && (
+          <p className="text-[11px] text-steel">
+            <span className="font-medium text-foreground/70">Confidence:</span> {recon.confidence}%
+            {recon.hasRecentActivity && <span className="ml-2">· Recent portal activity</span>}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────
 
 type Filter = "all" | "collections" | "high"
 
@@ -180,6 +528,9 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
   const [reminderLoading, setReminderLoading] = useState<string | null>(null)
   const [reminderDone, setReminderDone]       = useState<Record<string, { hostedUrl?: string; emailSent?: boolean; mode?: string }>>({})
   const [reminderError, setReminderError]     = useState<Record<string, string>>({})
+  const [executeLoading, setExecuteLoading]   = useState<string | null>(null)
+  const [executeDone, setExecuteDone]         = useState<Record<string, { channel: string; tone: string; mode: string }>>({})
+  const [executeError, setExecuteError]       = useState<Record<string, string>>({})
   const router = useRouter()
 
   const filtered = queue.filter(item => {
@@ -210,6 +561,32 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
       setReminderError(prev => ({ ...prev, [invoiceId]: e instanceof Error ? e.message : "Error" }))
     } finally {
       setReminderLoading(null)
+    }
+  }
+
+  async function executeAgentDecision(invoiceId: string, decision: CollectionsDecision, customerEmail?: string) {
+    setExecuteLoading(invoiceId)
+    setExecuteError(prev => { const n = { ...prev }; delete n[invoiceId]; return n })
+    try {
+      const res  = await fetch("/api/receivables/send-reminder", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          invoiceId,
+          channel:       decision.channel,
+          tone:          decision.tone,
+          outreachDraft: decision.outreachDraft,
+          customerEmail,
+        }),
+      })
+      const json = await res.json() as { ok: boolean; channel?: string; tone?: string; mode?: string; error?: string }
+      if (!json.ok) throw new Error(json.error ?? "Failed")
+      setExecuteDone(prev => ({ ...prev, [invoiceId]: { channel: json.channel ?? decision.channel, tone: json.tone ?? decision.tone, mode: json.mode ?? "mock" } }))
+      router.refresh()
+    } catch (e) {
+      setExecuteError(prev => ({ ...prev, [invoiceId]: e instanceof Error ? e.message : "Error" }))
+    } finally {
+      setExecuteLoading(null)
     }
   }
 
@@ -400,7 +777,6 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
 
                   {/* Actions */}
                   <div className="mt-6 flex flex-wrap items-center gap-3">
-                    {selected.rescueState !== "resolved" && selected.rescueState !== "escalated" ? (
                       <button
                         onClick={() => runAgent(selected.id)}
                         disabled={isRunning || running !== null}
@@ -410,11 +786,6 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
                           ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running…</>
                           : <><Zap className="h-3.5 w-3.5" /> Run Agent</>}
                       </button>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-md border border-teal/30 bg-teal/10 px-4 py-2 text-[12.5px] font-medium text-teal">
-                        <CheckCircle className="h-3.5 w-3.5" /> Resolved
-                      </span>
-                    )}
 
                     <InvestigationPanel
                       invoiceId={selected.id}
@@ -451,11 +822,53 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
                             : <><Mail className="h-3.5 w-3.5" /> Send Reminder</>}
                         </button>
                         {reminderError[selected.id] && (
-                          <span className="text-[11.5px] text-crimson">{reminderError[selected.id]}</span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[11.5px] text-crimson font-medium">
+                              {reminderError[selected.id].includes("frequency") && "⏱ "}
+                              {reminderError[selected.id].includes("Time restriction") && "🕐 "}
+                              {reminderError[selected.id].includes("do-not-contact") && "🚫 "}
+                              {reminderError[selected.id].includes("requires approval") && "⚠️ "}
+                              {reminderError[selected.id]}
+                            </span>
+                            {reminderError[selected.id].includes("requires approval") && (
+                              <span className="text-[11px] text-steel">Contact your manager to approve this action</span>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
                   </div>
+
+                  {/* Portal Reconnaissance Card — shown inline after agent runs */}
+                  {result?.decision?.portalReconnaissance && (
+                    <PortalReconCard recon={result.decision.portalReconnaissance} />
+                  )}
+
+                  {/* Execute Agent Recommendation */}
+                  {result?.decision && !result.decision.portalReconnaissance?.shouldSkipCollection && (
+                    <div className="mt-4">
+                      {executeDone[selected.id] ? (
+                        <div className="flex items-center gap-2 rounded-md border border-teal/20 bg-teal/10 px-4 py-2.5 text-[12.5px] text-teal font-medium">
+                          <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+                          Sent via {executeDone[selected.id].channel} · {executeDone[selected.id].tone} tone
+                          <span className="ml-auto font-mono text-[10px] opacity-70">{executeDone[selected.id].mode}</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => executeAgentDecision(selected.id, result.decision!, selected.customerEmail)}
+                          disabled={executeLoading === selected.id}
+                          className="inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-[12.5px] font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                        >
+                          {executeLoading === selected.id
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending…</>
+                            : <><Mail className="h-3.5 w-3.5" /> Send {result.decision.tone} {result.decision.channel === "email" || result.decision.channel === "formal_notice" ? "email" : result.decision.channel}</>}
+                        </button>
+                      )}
+                      {executeError[selected.id] && (
+                        <p className="mt-1.5 text-[11.5px] text-crimson">{executeError[selected.id]}</p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Timeline */}
                   <AgentTimeline trail={selected.auditTrail} latestResult={result} />

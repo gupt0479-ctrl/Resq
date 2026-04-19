@@ -1,6 +1,9 @@
 import "server-only"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DEMO_ORG_ID } from "@/lib/env"
+import { DEMO_ORG_ID } from "@/lib/env"
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? ""
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? ""
 
 /**
  * Server-side Supabase client using the service role key.

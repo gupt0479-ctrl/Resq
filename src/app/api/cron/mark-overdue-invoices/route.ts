@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { markOverdueInvoices } from "@/lib/services/invoices"
 
 async function runJob(request: NextRequest) {
@@ -17,8 +17,7 @@ async function runJob(request: NextRequest) {
   }
 
   try {
-    const client = createServerSupabaseClient()
-    const updated = await markOverdueInvoices(client, DEMO_ORG_ID)
+    const updated = await markOverdueInvoices(DEMO_ORG_ID)
     return NextResponse.json({ data: { invoicesMarkedOverdue: updated } })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error"

@@ -26,8 +26,8 @@ import { TaxFilterPills } from "@/components/finance/TaxFilterPills"
 import type { TaxTransaction } from "@/components/finance/TaxFilterPills"
 import { CountUpNumber } from "@/components/finance/CountUpNumber"
 import { FinanceAnimations } from "@/components/finance/FinanceAnimations"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
-import { isSupabaseConfigured } from "@/lib/env"
+import { DEMO_ORG_ID } from "@/lib/db"
+import { isDatabaseConfigured } from "@/lib/env"
 import { getFinanceSummaryQuery, listTransactionsQuery } from "@/lib/queries/finance"
 import { listInvoicesQuery } from "@/lib/queries/invoices"
 import type { FinanceTransactionResponse } from "@/lib/schemas/finance"
@@ -306,7 +306,7 @@ function InsightCard({
 export default async function FinancePage() {
   await connection()
 
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return (
       <div className="p-6">
         <p className="text-sm text-muted-foreground">
@@ -316,11 +316,10 @@ export default async function FinancePage() {
     )
   }
 
-  const client = createServerSupabaseClient()
   const [summary, transactions, invoices] = await Promise.all([
-    getFinanceSummaryQuery(client, DEMO_ORG_ID),
-    listTransactionsQuery(client, DEMO_ORG_ID, { limit: 50 }),
-    listInvoicesQuery(client, DEMO_ORG_ID),
+    getFinanceSummaryQuery(DEMO_ORG_ID),
+    listTransactionsQuery(DEMO_ORG_ID, { limit: 50 }),
+    listInvoicesQuery(DEMO_ORG_ID),
   ])
 
   // ── Derived transaction data ────────────────────────────────────────────────

@@ -20,8 +20,11 @@ import {
   Users,
   X,
   Search,
+  ChevronRight,
 } from "lucide-react"
 import type { ReceivablesInvestigationResult, VerificationChecks } from "@/lib/schemas/receivables-agent"
+import { AnalystWorkspace } from "./analyst-workspace"
+import type { CheckKey } from "./analyst-workspace"
 
 // ── Verification check row ────────────────────────────────────────────────────
 
@@ -58,31 +61,41 @@ function checkPassed(key: keyof VerificationChecks, val: boolean | string): bool
   return val === true
 }
 
-type CheckState = "pending" | "checking" | "pass" | "fail"
+type CheckState = "pending" | "pass" | "fail"
 
-function VerificationRow({ label, state }: { label: string; state: CheckState }) {
+function VerificationRow({ label, state, revealed, onClick, active }: { label: string; state: CheckState; revealed: boolean; onClick?: () => void; active?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-border/50 last:border-0">
+    <div
+      onClick={revealed ? onClick : undefined}
+      className={cn(
+        "flex items-center justify-between gap-3 py-2 border-b border-border/50 last:border-0 transition-all duration-300",
+        !revealed && "opacity-40 blur-[1.5px]",
+        revealed && onClick && "cursor-pointer hover:bg-muted/50",
+        active && "bg-primary/5",
+      )}
+    >
       <span className={cn(
         "text-sm transition-colors duration-300",
-        state === "pending"  && "text-muted-foreground/50",
-        state === "checking" && "text-foreground font-medium",
-        (state === "pass" || state === "fail") && "text-foreground",
+        !revealed && "text-muted-foreground/50",
+        revealed && (state === "pass" || state === "fail") && "text-foreground",
       )}>
         {label}
       </span>
-      <span className="shrink-0">
-        {state === "pending" && (
+      <span className="shrink-0 flex items-center gap-1.5">
+        {!revealed && (
           <Square className="size-5 text-muted-foreground/30" />
         )}
-        {state === "checking" && (
-          <Loader2 className="size-5 text-primary animate-spin" />
-        )}
-        {state === "pass" && (
+        {revealed && state === "pass" && (
           <CheckSquare className="size-5 text-emerald-500 fill-emerald-50 animate-in zoom-in-50 duration-200" />
         )}
-        {state === "fail" && (
+        {revealed && state === "fail" && (
           <MinusSquare className="size-5 text-red-500 fill-red-50 animate-in zoom-in-50 duration-200" />
+        )}
+        {revealed && state === "pending" && (
+          <Square className="size-5 text-muted-foreground/30" />
+        )}
+        {revealed && onClick && (state === "pass" || state === "fail") && (
+          <ChevronRight className="size-3.5 text-muted-foreground/50" />
         )}
       </span>
     </div>
@@ -135,6 +148,113 @@ function ScoreRing({ score, level }: { score: number; level: ReceivablesInvestig
   )
 }
 
+// ── Agent Memo (polished summary) ─────────────────────────────────────────────
+
+function AgentMemo({ result }: { result: ReceivablesInvestigationResult }) {
+  const checks = result.verificationChecks
+  const passedCount = CHECK_KEYS.filter((k) => checkPassed(k, checks[k])).length
+  const failedCount = CHECK_KEYS.length - passedCount
+
+  const levelWord = {
+    low: "low",
+    medium: "moderate",
+    high: "elevated",
+    critical: "critical",
+  }[result.riskLevel]
+
+  const actionWord = result.recommendedAction.replace("_", " ")
+
+  // Build the polished memo sections from the raw result data
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      {/* Memo header */}
+      <div className="px-5 py-4 border-b bg-muted/30">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Investigation Summary</p>
+        <p className="text-[13px] font-medium text-foreground leading-snug">
+          {result.customerName} — {result.invoiceIds.length} open invoice{result.invoiceIds.length !== 1 ? "s" : ""}, ${result.totalOverdue.toFixed(2)} outstanding, {result.overdueDays} days overdue
+        </p>
+      </div>
+
+      <div className="px-5 py-4 space-y-4">
+        {/* Executive takeaway */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Executive Takeaway</p>
+          <p className="text-sm text-foreground leading-relaxed">
+            This account presents {levelWord} collection risk. Of {CHECK_KEYS.length} verification checks performed, {passedCount} passed and {failedCount} flagged concerns. The recommended course of action is <span className="font-medium">{actionWord}</span>.
+          </p>
+        </div>
+
+        {/* What stands out */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">What Stands Out</p>
+          <div className="text-sm text-foreground leading-relaxed space-y-2">
+            {!checks.tinMatch && (
+              <p>The entity&apos;s tax identification number could not be matched against IRS records, which may indicate the business has no prior filing history with us or the TIN on file is incorrect.</p>
+            )}
+            {!checks.bankAccountVerified && (
+              <p>No verified payment method is on file. Without a card or bank account, automated payment collection is not possible and manual follow-up will be required.</p>
+            )}
+            {checks.creditHistoryCheck !== "passed" && (
+              <p>
+                {checks.creditHistoryCheck === "limited_data"
+                  ? "Credit history is limited — fewer than three invoices have been processed, making it difficult to assess payment reliability."
+                  : "The credit history check flagged concerning payment patterns, including late or missed payments."}
+              </p>
+            )}
+            {checks.watchlistsClear && checks.tinMatch && checks.bankAccountVerified && checks.creditHistoryCheck === "passed" && (
+              <p>No major red flags were identified across identity, compliance, or payment checks. The entity appears to be a legitimate business with a reasonable payment track record.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Verification findings */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Verification Findings</p>
+          <p className="text-sm text-foreground leading-relaxed">
+            Business name {checks.businessNameVerified ? "verified" : "could not be verified"} against public records.
+            Office address {checks.addressVerified ? "confirmed" : "unconfirmed"}.
+            {checks.peopleVerified
+              ? " Key personnel verified through corporate registries."
+              : " People verification incomplete — director or key personnel records could not be confirmed."}
+            {checks.ownerKycComplete
+              ? " Owner identity verification is complete."
+              : " Owner KYC remains incomplete."}
+          </p>
+        </div>
+
+        {/* Compliance signals */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Compliance Signals</p>
+          <p className="text-sm text-foreground leading-relaxed">
+            {checks.watchlistsClear
+              ? "No matches found across OFAC, EU sanctions, UN sanctions, or PEP watchlists."
+              : "Potential watchlist match detected — manual review required before any collection action."}
+            {" "}
+            {checks.taxCompliant
+              ? "Tax compliance checks returned no issues."
+              : "Tax compliance could not be confirmed."}
+            {" "}
+            {checks.onlinePresenceVerified
+              ? "The entity has a verifiable online presence."
+              : "No verifiable online presence was found, which may indicate a newly formed or inactive entity."}
+          </p>
+        </div>
+
+        {/* Recommended action */}
+        <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-3">
+          <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">Recommended Action</p>
+          <p className="text-sm text-foreground leading-relaxed">
+            {result.recommendedAction === "reminder" && "Send a payment reminder. The risk profile does not warrant escalation at this time, but the account should be monitored for continued non-payment."}
+            {result.recommendedAction === "payment_plan" && "Offer a structured payment plan. The account shows enough positive signals to warrant continued engagement, but the overdue balance and risk factors suggest a flexible approach will improve recovery odds."}
+            {result.recommendedAction === "escalation" && "Escalate to senior collections or legal review. The combination of overdue balance, verification gaps, and risk signals warrants direct human intervention rather than continued automated follow-up."}
+            {result.recommendedAction === "write_off" && "Consider writing off this receivable. The risk profile is severe enough that further collection efforts are unlikely to yield results and may not be worth the operational cost."}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 interface InvestigationPanelProps {
@@ -158,51 +278,31 @@ export function InvestigationPanel({
   const [loading, setLoading]       = useState(false)
   const [result, setResult]         = useState<ReceivablesInvestigationResult | null>(null)
   const [error, setError]           = useState<string | null>(null)
-  const [reminderLoading, setReminderLoading] = useState(false)
-  const [reminderSent, setReminderSent]       = useState<{ invoiceId: string; hostedUrl?: string; emailSent?: boolean; mode: string } | null>(null)
-  const [reminderError, setReminderError]     = useState<string | null>(null)
-  // Per-check animation state: index of the furthest revealed check (-1 = none yet)
-  const [revealedUpto, setRevealedUpto] = useState(-1)
+  // Per-check animation state
+  const [revealedCount, setRevealedCount] = useState(0)
+  const [animating, setAnimating]         = useState(false)
+  // Which check is selected for the 3-panel analyst workspace (null = closed)
+  const [selectedCheck, setSelectedCheck] = useState<CheckKey | null>(null)
 
-  // When a result arrives, tick through each check with a 220ms stagger
+  // When result arrives, progressively reveal rows one by one from top to bottom
   useEffect(() => {
     if (!result) return
-    setRevealedUpto(-1)
-    CHECK_KEYS.forEach((_, i) => {
-      setTimeout(() => setRevealedUpto(i), i * 220)
-    })
+    setAnimating(true)
+    setRevealedCount(0)
+
+    let i = 0
+    const total = CHECK_KEYS.length
+    const timer = setInterval(() => {
+      i += 1
+      setRevealedCount(i)
+      if (i >= total) {
+        setAnimating(false)
+        clearInterval(timer)
+      }
+    }, 400)
+
+    return () => clearInterval(timer)
   }, [result])
-
-  // While loading, advance a "checking" cursor every 600ms to show progress
-  useEffect(() => {
-    if (!loading) return
-    setRevealedUpto(-1)
-    let idx = 0
-    const interval = setInterval(() => {
-      setRevealedUpto(idx)
-      idx = (idx + 1) % CHECK_KEYS.length
-    }, 600)
-    return () => clearInterval(interval)
-  }, [loading])
-
-  async function sendReminder() {
-    setReminderLoading(true)
-    setReminderError(null)
-    try {
-      const res = await fetch("/api/receivables/send-reminder", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ invoiceId }),
-      })
-      const json = await res.json() as { ok: boolean; stripeInvoiceId?: string; hostedUrl?: string; emailSent?: boolean; mode?: string; error?: string }
-      if (!json.ok) throw new Error(json.error ?? "Failed to send reminder")
-      setReminderSent({ invoiceId: json.stripeInvoiceId ?? "", hostedUrl: json.hostedUrl, emailSent: json.emailSent, mode: json.mode ?? "mock" })
-    } catch (e) {
-      setReminderError(e instanceof Error ? e.message : "Unknown error")
-    } finally {
-      setReminderLoading(false)
-    }
-  }
 
   async function runInvestigation() {
     setLoading(true)
@@ -223,15 +323,15 @@ export function InvestigationPanel({
     }
   }
 
-  function getCheckState(index: number, key: keyof VerificationChecks): CheckState {
-    if (loading) {
-      if (index < revealedUpto) return "pending"
-      if (index === revealedUpto) return "checking"
-      return "pending"
+  function getCheckState(index: number, key: keyof VerificationChecks): { state: CheckState; revealed: boolean } {
+    if (!result) {
+      return { state: "pending", revealed: false }
     }
-    if (!result) return "pending"
-    if (index > revealedUpto) return "pending"
-    return checkPassed(key, result.verificationChecks[key]) ? "pass" : "fail"
+    if (index < revealedCount) {
+      const passed = checkPassed(key, result.verificationChecks[key])
+      return { state: passed ? "pass" : "fail", revealed: true }
+    }
+    return { state: "pending", revealed: false }
   }
 
   return (
@@ -296,19 +396,36 @@ export function InvestigationPanel({
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                     Verification Checks
                   </p>
+
+                  {/* Global loading indicator while API is in flight */}
+                  {loading && !result && (
+                    <div className="flex items-center gap-2.5 mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+                      <Loader2 className="size-4 text-primary animate-spin" />
+                      <span className="text-sm font-medium text-primary">
+                        Running verification checks…
+                      </span>
+                    </div>
+                  )}
+
                   <div className="rounded-lg border border-border bg-card px-4">
-                    {CHECK_KEYS.map((key, i) => (
-                      <VerificationRow
-                        key={key}
-                        label={CHECK_LABELS[key]}
-                        state={getCheckState(i, key)}
-                      />
-                    ))}
+                    {CHECK_KEYS.map((key, i) => {
+                      const { state, revealed } = getCheckState(i, key)
+                      return (
+                        <VerificationRow
+                          key={key}
+                          label={CHECK_LABELS[key]}
+                          state={state}
+                          revealed={revealed}
+                          onClick={revealed && !loading && result && !animating ? () => setSelectedCheck(key as CheckKey) : undefined}
+                          active={selectedCheck === key}
+                        />
+                      )
+                    })}
                   </div>
-                  {loading && (
+                  {animating && (
                     <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5">
                       <Loader2 className="size-3 animate-spin" />
-                      Agent is investigating…
+                      Revealing results…
                     </p>
                   )}
                 </div>
@@ -330,7 +447,7 @@ export function InvestigationPanel({
                 </div>
               )}
 
-              {result && !loading && (
+              {result && !loading && !animating && (
                 <div className="px-6 pb-6 space-y-6 mt-6">
                   {/* Risk score + level */}
                   <div className="flex items-center gap-6">
@@ -620,17 +737,8 @@ export function InvestigationPanel({
                     </div>
                   )}
 
-                  {/* Agent reasoning */}
-                  {result.reasoning && (
-                    <div className="rounded-lg bg-muted/50 border border-border p-4">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                        Agent Summary
-                      </p>
-                      <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                        {result.reasoning}
-                      </p>
-                    </div>
-                  )}
+                  {/* Agent reasoning — polished memo */}
+                  <AgentMemo result={result} />
 
                   {/* Suggested action draft */}
                   <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
@@ -694,6 +802,44 @@ export function InvestigationPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 3-panel analyst workspace — opens when a check is clicked */}
+      {selectedCheck !== null && result && (
+        <AnalystWorkspace
+          selectedCheck={selectedCheck}
+          result={result}
+          onClose={() => setSelectedCheck(null)}
+          checklistPanel={
+            <div className="px-4 pt-4 pb-4">
+              <div className="rounded-lg border border-border bg-card px-3">
+                {CHECK_KEYS.map((key, i) => {
+                  const { state, revealed } = getCheckState(i, key)
+                  return (
+                    <VerificationRow
+                      key={key}
+                      label={CHECK_LABELS[key]}
+                      state={state}
+                      revealed={revealed}
+                      onClick={revealed ? () => setSelectedCheck(key as CheckKey) : undefined}
+                      active={selectedCheck === key}
+                    />
+                  )
+                })}
+              </div>
+              <div className="mt-4 flex items-center gap-3">
+                <ScoreRing score={result.riskScore} level={result.riskLevel} />
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Risk Score</p>
+                  <RiskBadge level={result.riskLevel} />
+                  <p className="text-xs text-muted-foreground capitalize">
+                    Recommended: <span className="font-medium text-foreground">{result.recommendedAction.replace("_", " ")}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          }
+        />
       )}
     </>
   )

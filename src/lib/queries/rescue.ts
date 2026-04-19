@@ -27,12 +27,14 @@ const RESCUE_ACTION_TYPES = [
   "financing_options_scouted",
   "payment_plan_suggested",
   "escalation_triggered",
+  "rescue_case_resolved",
+  "dispute_clarification_sent",
 ]
 
 function inferState(actions: string[]): RescueInvoice["rescueState"] {
   if (actions.includes("escalation_triggered")) return "escalated"
-  if (actions.includes("payment_plan_suggested")) return "resolved"
-  if (actions.includes("customer_followup_sent") || actions.includes("financing_options_scouted")) return "action_taken"
+  if (actions.includes("payment_plan_suggested") || actions.includes("rescue_case_resolved")) return "resolved"
+  if (actions.includes("customer_followup_sent") || actions.includes("financing_options_scouted") || actions.includes("dispute_clarification_sent")) return "action_taken"
   if (actions.includes("receivable_risk_detected")) return "investigating"
   return "detected"
 }

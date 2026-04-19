@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { db, DEMO_ORG_ID } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and } from "drizzle-orm"
 import { analyzeReview } from "../../../../agents/customer-service/agent.js"
 
 const ReviewInputSchema = z.object({
@@ -26,28 +28,37 @@ export async function POST(req: NextRequest) {
   }
 
   const { guestName, score, comment, source, guestId } = parsed.data
-  const supabase = createServerSupabaseClient()
 
   // 2. Fetch customer and build guestHistory
   let customerId: string | null = guestId ?? null
   let guestHistory = null
 
   if (guestId) {
-    const { data: customer } = await supabase
-      .from("customers")
-      .select("id, full_name, lifetime_value, last_visit_at, avg_feedback_score, notes")
-      .eq("id", guestId)
-      .eq("organization_id", DEMO_ORG_ID)
-      .maybeSingle()
+    const [customer] = await db
+      .select({
+        id:               schema.customers.id,
+        fullName:         schema.customers.fullName,
+        lifetimeValue:    schema.customers.lifetimeValue,
+        lastVisitAt:      schema.customers.lastVisitAt,
+        avgFeedbackScore: schema.customers.avgFeedbackScore,
+        notes:            schema.customers.notes,
+      })
+      .from(schema.customers)
+      .where(
+        and(
+          eq(schema.customers.id, guestId),
+          eq(schema.customers.organizationId, DEMO_ORG_ID),
+        ),
+      )
+      .limit(1)
 
     if (customer) {
       customerId = customer.id
       guestHistory = {
-        lifetimeSpend: customer.lifetime_value,
-        lastVisit: customer.last_visit_at,
+        lifetimeSpend: Number(customer.lifetimeValue),
+        lastVisit: customer.lastVisitAt?.toISOString() ?? null,
         dietaryNotes: customer.notes ?? null,
-        // Derive vip from high lifetime value or high avg score
-        vip: (customer.lifetime_value ?? 0) > 1000 || (customer.avg_feedback_score ?? 0) >= 4.9,
+        vip: Number(customer.lifetimeValue ?? 0) > 1000 || Number(customer.avgFeedbackScore ?? 0) >= 4.9,
       }
     }
   }
@@ -56,7 +67,7 @@ export async function POST(req: NextRequest) {
   let analysis: Record<string, unknown>
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  analysis = await (analyzeReview as any)({ guestName, score, comment, source, guestHistory })
+    analysis = await (analyzeReview as any)({ guestName, score, comment, source, guestHistory })
   } catch (err) {
     return NextResponse.json(
       { error: "Analysis failed", detail: String(err) },
@@ -68,37 +79,36 @@ export async function POST(req: NextRequest) {
     (analysis.urgency as number) >= 4 || analysis.safety_flag === true
 
   // 4. Insert into feedback
-  const { data: feedbackRow, error: feedbackError } = await supabase
-    .from("feedback")
-    .insert({
-      organization_id: DEMO_ORG_ID,
-      customer_id: customerId,
+  const [feedbackRow] = await db
+    .insert(schema.feedback)
+    .values({
+      organizationId:    DEMO_ORG_ID,
+      customerId,
       source,
-      guest_name_snapshot: guestName,
+      guestNameSnapshot: guestName,
       score,
       comment,
-      sentiment: analysis.sentiment,
-      topics: analysis.topics,
-      urgency: analysis.urgency,
-      safety_flag: analysis.safety_flag,
-      follow_up_status: analysis.follow_up_status,
+      sentiment:      analysis.sentiment as string,
+      topics:         analysis.topics as unknown[],
+      urgency:        analysis.urgency as number,
+      safetyFlag:     analysis.safety_flag as boolean,
+      followUpStatus: analysis.follow_up_status as string,
       flagged,
-      reply_draft: analysis.reply_draft ?? null,
-      internal_note: analysis.internal_note ?? null,
-      manager_summary: analysis.manager_summary ?? null,
-      analysis_json: {
-        churn_risk: analysis.churn_risk,
+      replyDraft:     (analysis.reply_draft as string) ?? null,
+      internalNote:   (analysis.internal_note as string) ?? null,
+      managerSummary: (analysis.manager_summary as string) ?? null,
+      analysisJson: {
+        churn_risk:      analysis.churn_risk,
         recovery_action: analysis.recovery_action,
       },
-      analysis_source: "claude_api",
-      received_at: new Date().toISOString(),
+      analysisSource: "claude_api",
+      receivedAt:     new Date(),
     })
-    .select("id")
-    .single()
+    .returning({ id: schema.feedback.id })
 
-  if (feedbackError) {
+  if (!feedbackRow) {
     return NextResponse.json(
-      { error: "Failed to save feedback", detail: feedbackError.message },
+      { error: "Failed to save feedback" },
       { status: 500 }
     )
   }
@@ -106,18 +116,18 @@ export async function POST(req: NextRequest) {
   const feedbackId = feedbackRow.id
 
   // 5. Insert into ai_actions
-  await supabase.from("ai_actions").insert({
-    organization_id: DEMO_ORG_ID,
-    entity_type: "feedback",
-    entity_id: feedbackId,
-    trigger_type: "feedback.received",
-    action_type: "customer_service.analyze_review",
-    input_summary: `${guestName} · score ${score} · ${source}`,
-    output_payload_json: {
-      urgency: analysis.urgency,
-      sentiment: analysis.sentiment,
-      safety_flag: analysis.safety_flag,
-      churn_risk: analysis.churn_risk,
+  await db.insert(schema.aiActions).values({
+    organizationId: DEMO_ORG_ID,
+    entityType:     "feedback",
+    entityId:       feedbackId,
+    triggerType:    "feedback.received",
+    actionType:     "customer_service.analyze_review",
+    inputSummary:   `${guestName} · score ${score} · ${source}`,
+    outputPayloadJson: {
+      urgency:         analysis.urgency,
+      sentiment:       analysis.sentiment,
+      safety_flag:     analysis.safety_flag,
+      churn_risk:      analysis.churn_risk,
       recovery_action: (analysis.recovery_action as Record<string, unknown>)?.type,
     },
     status: "executed",
@@ -132,11 +142,15 @@ export async function POST(req: NextRequest) {
     }
     const newRisk = riskMap[analysis.risk_status_update as string]
     if (newRisk) {
-      await supabase
-        .from("customers")
-        .update({ risk_status: newRisk })
-        .eq("id", customerId)
-        .eq("organization_id", DEMO_ORG_ID)
+      await db
+        .update(schema.customers)
+        .set({ riskStatus: newRisk })
+        .where(
+          and(
+            eq(schema.customers.id, customerId),
+            eq(schema.customers.organizationId, DEMO_ORG_ID),
+          ),
+        )
     }
   }
 

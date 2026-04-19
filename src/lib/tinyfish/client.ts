@@ -7,8 +7,10 @@ import {
   TINYFISH_SEARCH_BASE_URL,
   TINYFISH_TIMEOUT_MS,
   getTinyFishMode,
+  getPortalReconMode,
   isTinyFishLiveReady,
   isTinyFishMockMode,
+  isPortalReconLiveReady,
 } from "@/lib/env"
 import {
   TinyFishAgentRunResultSchema,
@@ -25,7 +27,11 @@ import {
   type TinyFishSearchResult,
 } from "./schemas"
 import type { FetchOptions, RunAgentOptions, SearchOptions } from "./types"
+import type { PortalReconOptions } from "./portal-types"
+import type { PortalLoginResult } from "./portal-schemas"
+import { PortalLoginResultSchema } from "./portal-schemas"
 import { FINANCING_OFFERS, mockAgentRun, mockFetch, mockSearch } from "./mock-data"
+import { getMockPortalRecon, selectScenarioByInvoiceId } from "./portal-mock-data"
 
 interface FinancingEvidence {
   url: string
@@ -230,6 +236,234 @@ export async function runAgent(
     warning: `TinyFish live mode is implemented for financing scout first; scenario "${scenario}" is using demo fixtures.`,
   }
 }
+
+// ─── Portal Login ──────────────────────────────────────────────────────────
+
+export async function runPortalLogin(
+  opts: PortalReconOptions
+): Promise<PortalLoginResult> {
+  if (!opts.invoiceId) {
+    throw new TinyFishError("parse", "TinyFish runPortalLogin: invoiceId is required")
+  }
+
+  const mode = getPortalReconMode()
+  const scenario = opts.scenario ?? selectScenarioByInvoiceId(opts.invoiceId)
+
+  // ── Mock mode: return fixture data, no network calls ──
+  if (mode === "mock") {
+    return mockPortalLoginResult(scenario, opts)
+  }
+
+  // ── Misconfigured mode: return fixture with warning ──
+  if (mode === "misconfigured" || !isPortalReconLiveReady()) {
+    return {
+      ...mockPortalLoginResult(scenario, opts),
+      mode: "misconfigured",
+      warning: missingPortalConfigMessage(),
+    }
+  }
+
+  // ── Live mode: call TinyFish with vault credentials ──
+  try {
+    return await runPortalLoginLive(opts)
+  } catch (err) {
+    // Graceful degradation: fall back to fixtures
+    return {
+      ...mockPortalLoginResult(scenario, opts),
+      mode: "mock",
+      degradedFromLive: true,
+      warning: liveFailureMessage(err),
+    }
+  }
+}
+
+async function runPortalLoginLive(
+  opts: PortalReconOptions
+): Promise<PortalLoginResult> {
+  const portalUrl = opts.portalUrl ?? "https://customer-portal.example.com"
+  const invoiceNumber = opts.invoiceNumber ?? opts.invoiceId
+  const amount = opts.invoiceAmount != null ? `$${opts.invoiceAmount}` : "unknown amount"
+
+  const goalParts = [
+    `Log into the customer payment portal at ${portalUrl} using vault credentials.`,
+    "Navigate to the invoices or billing section.",
+    `Find invoice #${invoiceNumber} (amount: ${amount}).`,
+    "Extract: invoice visibility, payment status, payment date, payment method.",
+    "Extract: customer last login, invoice view count, invoice view timestamps.",
+  ]
+  if (opts.sendMessage && opts.messageDraft) {
+    goalParts.push(`Send the following message through the portal's native messaging interface: "${opts.messageDraft}"`)
+  }
+  goalParts.push(
+    "Capture screenshots at each step: login, invoice list, invoice detail, payment status, message sent.",
+    "Return structured JSON with all extracted data."
+  )
+
+  const { json } = await tinyFishRequest({
+    url: resolveEndpoint(TINYFISH_AGENT_BASE_URL, TINYFISH_AGENT_PATH),
+    method: "POST",
+    headers: {
+      "X-API-Key": TINYFISH_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: {
+      url: portalUrl,
+      goal: goalParts.join(" "),
+      browser_profile: "stealth",
+      use_vault: true,
+      ...(opts.customerId ? { credential_domain: portalUrl } : {}),
+    },
+    signalMs: TINYFISH_TIMEOUT_MS,
+  })
+
+  const payload = asRecord(json)
+  const status = getString(payload.status) ?? "UNKNOWN"
+
+  // Map TinyFish status to our typed status
+  const mappedStatus = mapPortalStatus(status, payload)
+
+  // Extract screenshots from response
+  const rawScreenshots = asArray(
+    payload.screenshots ??
+    asRecord(payload.result).screenshots ??
+    asRecord(payload.data).screenshots
+  )
+  const screenshots = rawScreenshots.map((raw) => {
+    const record = asRecord(raw)
+    return {
+      step: getString(record.step) ?? "login",
+      data: getString(record.data) ?? getString(record.url) ?? getString(record.screenshot) ?? "",
+    }
+  })
+
+  // Extract steps from response
+  const rawSteps = asArray(payload.steps ?? asRecord(payload.data).steps)
+  const steps = rawSteps.map((raw, index) => {
+    const record = asRecord(raw)
+    return {
+      index,
+      label: getString(record.label) ?? getString(record.action) ?? `step_${index}`,
+      observation: getString(record.observation) ?? getString(record.result) ?? "",
+      durationMs: getNumber(record.durationMs) ?? getNumber(record.duration_ms) ?? 0,
+    }
+  })
+
+  // Extract result data
+  const resultData = asRecord(payload.result ?? asRecord(payload.data).result)
+
+  const candidate: PortalLoginResult = {
+    mode: "live",
+    degradedFromLive: false,
+    warning: null,
+    status: mappedStatus,
+    result: {
+      authenticated: mappedStatus !== "AUTH_FAILED",
+      invoiceFound: Boolean(resultData.invoiceFound ?? resultData.invoice_found),
+      invoiceData: asRecord(resultData.invoiceData ?? resultData.invoice_data),
+      activityData: asRecord(resultData.activityData ?? resultData.activity_data),
+      messageSent: Boolean(resultData.messageSent ?? resultData.message_sent),
+      screenshots,
+    },
+    steps,
+    tinyfishRunId: getString(payload.run_id) ?? getString(payload.runId) ?? getString(payload.id) ?? null,
+  }
+
+  const parsed = PortalLoginResultSchema.safeParse(candidate)
+  if (!parsed.success) {
+    throw new TinyFishError("parse", "TinyFish portal login response did not match expected schema")
+  }
+  return parsed.data
+}
+
+function mapPortalStatus(
+  status: string,
+  payload: Record<string, unknown>
+): "COMPLETED" | "FAILED" | "AUTH_FAILED" | "BOT_DETECTED" {
+  const upper = status.toUpperCase()
+  if (upper === "COMPLETED" || upper === "SUCCESS") return "COMPLETED"
+  if (upper === "AUTH_FAILED" || upper === "AUTHENTICATION_FAILED") return "AUTH_FAILED"
+
+  // Check for bot detection signals
+  const error = getString(payload.error) ?? getString(asRecord(payload.result).error) ?? ""
+  const errorLower = error.toLowerCase()
+  if (
+    errorLower.includes("captcha") ||
+    errorLower.includes("bot") ||
+    errorLower.includes("rate limit") ||
+    upper === "BOT_DETECTED"
+  ) {
+    return "BOT_DETECTED"
+  }
+
+  return "FAILED"
+}
+
+function mockPortalLoginResult(
+  scenario: import("./portal-schemas").PortalReconScenario,
+  opts: PortalReconOptions
+): PortalLoginResult {
+  const recon = getMockPortalRecon(scenario, opts.invoiceId)
+  const result = recon.result
+
+  return {
+    mode: "mock",
+    degradedFromLive: false,
+    warning: null,
+    status: result.authFailed
+      ? "AUTH_FAILED"
+      : result.botDetected
+        ? "BOT_DETECTED"
+        : "COMPLETED",
+    result: {
+      authenticated: !result.authFailed,
+      invoiceFound: result.visibility,
+      invoiceData: {
+        visibility: result.visibility,
+        visibilityReason: result.visibilityReason,
+        paymentStatus: result.paymentStatus,
+        paymentDate: result.paymentDate,
+        paymentMethod: result.paymentMethod,
+      },
+      activityData: {
+        lastLoginAt: result.lastLoginAt,
+        hasRecentActivity: result.hasRecentActivity,
+        invoiceViewCount: result.invoiceViewCount,
+        engagementLevel: result.engagementLevel,
+      },
+      messageSent: result.messageSent,
+      screenshots: result.screenshots.map((s) => ({
+        step: s.step,
+        data: s.url,
+      })),
+    },
+    steps: [
+      makeStep(0, "portal_login", "Authenticated to customer portal using vault credentials.", 120),
+      makeStep(1, "navigate_invoices", "Navigated to invoices/billing section.", 80),
+      makeStep(2, "find_invoice", `Searched for invoice ${opts.invoiceNumber ?? opts.invoiceId}.`, 60),
+      makeStep(3, "extract_data", "Extracted invoice visibility, payment status, and customer activity.", 100),
+      ...(result.messageSent
+        ? [makeStep(4, "send_message", "Sent portal-native message.", 90)]
+        : []),
+    ],
+    tinyfishRunId: null,
+  }
+}
+
+function missingPortalConfigMessage(): string {
+  const missing: string[] = []
+  if (!TINYFISH_API_KEY) missing.push("TINYFISH_API_KEY")
+  if (!process.env.TINYFISH_VAULT_ENABLED || process.env.TINYFISH_VAULT_ENABLED !== "true") {
+    missing.push("TINYFISH_VAULT_ENABLED")
+  }
+  if (!process.env.TINYFISH_PORTAL_RECON_ENABLED || process.env.TINYFISH_PORTAL_RECON_ENABLED !== "true") {
+    missing.push("TINYFISH_PORTAL_RECON_ENABLED")
+  }
+  return missing.length > 0
+    ? `Portal reconnaissance live mode missing: ${missing.join(", ")}`
+    : "Portal reconnaissance live mode not ready."
+}
+
+// ─── Search / Fetch / Agent Live Helpers ───────────────────────────────────
 
 async function searchLive(
   query: string,

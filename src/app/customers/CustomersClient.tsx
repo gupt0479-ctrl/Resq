@@ -3,8 +3,8 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { RiskBadge, type RiskLevel } from "@/components/RiskBadge"
-import { Building2, Mail, ArrowUpRight } from "lucide-react"
-import Link from "next/link"
+import { Building2, Mail } from "lucide-react"
+import { InvestigationPanel } from "@/components/receivables/investigation-panel"
 import type { CustomerRow } from "./page"
 
 function fmt(n: number) {
@@ -180,11 +180,25 @@ export function CustomersClient({ customers }: { customers: CustomerRow[] }) {
                       ? "Schedule a soft auto-confirm 72h before due date."
                       : "Account in good standing — no action required."}
                 </div>
-                <Link href="/rescue" className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-foreground hover:underline mt-3">
-                  Open in Rescue Queue
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
               </div>
+
+              {/* Risk investigation */}
+              {selected.overdue > 0 && (() => {
+                const overdueInv = selected.invoices.find(i => i.status === "overdue") ?? selected.invoices[0]
+                if (!overdueInv) return null
+                return (
+                  <div className="mt-3">
+                    <InvestigationPanel
+                      invoiceId={overdueInv.id}
+                      invoiceNumber={overdueInv.number}
+                      customerName={selected.name}
+                      balance={overdueInv.amount}
+                      daysOverdue={selected.overdue > 0 ? 1 : 0}
+                      fullWidth
+                    />
+                  </div>
+                )
+              })()}
             </div>
           </div>
         )}

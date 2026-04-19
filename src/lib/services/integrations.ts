@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and, asc } from "drizzle-orm"
 import type { WebhookPayload } from "@/lib/schemas/integrations"
 import {
   cancelAppointment,
@@ -25,62 +27,64 @@ export { MUTATING_INTEGRATION_EVENTS, normalizeDomainEvent } from "@/lib/integra
 // List connectors
 
 export async function listConnectors(
-  client: SupabaseClient,
   organizationId: string
 ) {
-  const { data, error } = await client
-    .from("integration_connectors")
-    .select("*")
-    .eq("organization_id", organizationId)
-    .order("provider", { ascending: true })
+  const data = await db
+    .select()
+    .from(schema.integrationConnectors)
+    .where(eq(schema.integrationConnectors.organizationId, organizationId))
+    .orderBy(asc(schema.integrationConnectors.provider))
 
-  if (error) throw new Error(error.message)
-  return data ?? []
+  return data
 }
 
 // Get connector by provider
 
 export async function getConnectorByProvider(
-  client: SupabaseClient,
   organizationId: string,
   provider: string
 ) {
-  const { data, error } = await client
-    .from("integration_connectors")
-    .select("*")
-    .eq("organization_id", organizationId)
-    .eq("provider", provider)
-    .maybeSingle()
+  const [row] = await db
+    .select()
+    .from(schema.integrationConnectors)
+    .where(
+      and(
+        eq(schema.integrationConnectors.organizationId, organizationId),
+        eq(schema.integrationConnectors.provider, provider),
+      ),
+    )
+    .limit(1)
 
-  if (error) throw new Error(error.message)
-  return data
+  return row ?? null
 }
 
 export async function clearConnectorError(
-  client: SupabaseClient,
   organizationId: string,
   provider: string
 ) {
-  const connector = await getConnectorByProvider(client, organizationId, provider)
+  const connector = await getConnectorByProvider(organizationId, provider)
   if (!connector) {
     throw new Error(`Connector not found for provider: ${provider}`)
   }
 
-  const nextStatus = connector.last_sync_at ? "connected" : "disabled"
-  const { data, error } = await client
-    .from("integration_connectors")
-    .update({
-      status: nextStatus,
-      last_error: null,
-      updated_at: new Date().toISOString(),
+  const nextStatus = connector.lastSyncAt ? "connected" : "disabled"
+  const [data] = await db
+    .update(schema.integrationConnectors)
+    .set({
+      status:    nextStatus,
+      lastError: null,
+      updatedAt: new Date(),
     })
-    .eq("id", connector.id)
-    .eq("organization_id", organizationId)
-    .select("*")
-    .single()
+    .where(
+      and(
+        eq(schema.integrationConnectors.id, connector.id),
+        eq(schema.integrationConnectors.organizationId, organizationId),
+      ),
+    )
+    .returning()
 
-  if (error || !data) {
-    throw new Error(error?.message ?? "Failed to clear connector error")
+  if (!data) {
+    throw new Error("Failed to clear connector error")
   }
 
   return data
@@ -102,30 +106,28 @@ export interface IngestWebhookResult {
  * Returns a result describing whether the event was processed or skipped as a duplicate.
  */
 export async function ingestWebhookPayload(
-  client: SupabaseClient,
   organizationId: string,
   provider: string,
   payload: WebhookPayload,
   rawPayload: Record<string, unknown> = payload.data
 ): Promise<IngestWebhookResult> {
   // 1. Find or create the connector row
-  let connector = await getConnectorByProvider(client, organizationId, provider)
+  let connector = await getConnectorByProvider(organizationId, provider)
 
   if (!connector) {
-    const { data: newConn, error: createErr } = await client
-      .from("integration_connectors")
-      .insert({
-        organization_id: organizationId,
+    const [newConn] = await db
+      .insert(schema.integrationConnectors)
+      .values({
+        organizationId,
         provider,
-        display_name: providerDisplayName(provider),
-        status: "connected",
-        last_sync_at: new Date().toISOString(),
+        displayName: providerDisplayName(provider),
+        status:      "connected",
+        lastSyncAt:  new Date(),
       })
-      .select("*")
-      .single()
+      .returning()
 
-    if (createErr || !newConn) {
-      throw new Error(createErr?.message ?? "Failed to register connector")
+    if (!newConn) {
+      throw new Error("Failed to register connector")
     }
     connector = newConn
   }
@@ -144,60 +146,69 @@ export async function ingestWebhookPayload(
   }
 
   // 2. Attempt to insert the sync event (unique index handles dedupe)
-  const { data: syncEvent, error: insertErr } = await client
-    .from("integration_sync_events")
-    .insert({
-      connector_id:             connector.id,
-      organization_id:          organizationId,
-      direction:                "inbound",
-      external_event_id:        payload.externalEventId ?? null,
-      event_type:               payload.eventType ?? null,
-      payload_json:             rawPayload,
-      normalized_domain_event:  normalizedEvent,
-      processing_status:        "pending",
-    })
-    .select("id")
-    .single()
+  let syncEvent: { id: string }
+  try {
+    const [inserted] = await db
+      .insert(schema.integrationSyncEvents)
+      .values({
+        connectorId:           connector.id,
+        organizationId,
+        direction:             "inbound",
+        externalEventId:       payload.externalEventId ?? null,
+        eventType:             payload.eventType ?? null,
+        payloadJson:           rawPayload,
+        normalizedDomainEvent: normalizedEvent,
+        processingStatus:      "pending",
+      })
+      .returning({ id: schema.integrationSyncEvents.id })
 
-  if (insertErr) {
+    if (!inserted) throw new Error("Failed to log sync event")
+    syncEvent = inserted
+  } catch (insertErr) {
     // Unique constraint violation -> duplicate event, skip silently
-    if (insertErr.code === "23505") {
+    if ((insertErr as { code?: string }).code === "23505") {
       if (payload.externalEventId && connector) {
-        const { data: existing } = await client
-          .from("integration_sync_events")
-          .select("id, processing_status")
-          .eq("connector_id", connector.id)
-          .eq("external_event_id", payload.externalEventId)
-          .maybeSingle()
+        const [existing] = await db
+          .select({
+            id:               schema.integrationSyncEvents.id,
+            processingStatus: schema.integrationSyncEvents.processingStatus,
+          })
+          .from(schema.integrationSyncEvents)
+          .where(
+            and(
+              eq(schema.integrationSyncEvents.connectorId, connector.id),
+              eq(schema.integrationSyncEvents.externalEventId, payload.externalEventId),
+            ),
+          )
+          .limit(1)
 
-        if (existing && (existing as { processing_status: string }).processing_status === "failed") {
-          const existingId = (existing as { id: string }).id
+        if (existing && existing.processingStatus === "failed") {
+          const existingId = existing.id
           const tRetry = Date.now()
           try {
             await dispatchWebhookCommand(
-              client,
               organizationId,
               provider,
               normalizedEvent,
               payload,
               existingId
             )
-            await client
-              .from("integration_sync_events")
-              .update({
-                processing_status: "processed",
-                processed_at:        new Date().toISOString(),
-                error_message:       null,
+            await db
+              .update(schema.integrationSyncEvents)
+              .set({
+                processingStatus: "processed",
+                processedAt:      new Date(),
+                errorMessage:     null,
               })
-              .eq("id", existingId)
-            await client
-              .from("integration_connectors")
-              .update({
-                last_sync_at: new Date().toISOString(),
-                status:       "connected",
-                last_error:   null,
+              .where(eq(schema.integrationSyncEvents.id, existingId))
+            await db
+              .update(schema.integrationConnectors)
+              .set({
+                lastSyncAt: new Date(),
+                status:     "connected",
+                lastError:  null,
               })
-              .eq("id", connector.id)
+              .where(eq(schema.integrationConnectors.id, connector.id))
             logWebhookProcessed({
               provider,
               normalizedEvent,
@@ -214,22 +225,22 @@ export async function ingestWebhookPayload(
           } catch (retryErr) {
             const msg =
               retryErr instanceof Error ? retryErr.message : "Webhook dispatch failed on retry"
-            await client
-              .from("integration_sync_events")
-              .update({
-                processing_status: "failed",
-                processed_at:      new Date().toISOString(),
-                error_message:     msg.slice(0, 4000),
+            await db
+              .update(schema.integrationSyncEvents)
+              .set({
+                processingStatus: "failed",
+                processedAt:      new Date(),
+                errorMessage:     msg.slice(0, 4000),
               })
-              .eq("id", existingId)
-            await client
-              .from("integration_connectors")
-              .update({
+              .where(eq(schema.integrationSyncEvents.id, existingId))
+            await db
+              .update(schema.integrationConnectors)
+              .set({
                 status:     "error",
-                last_error: msg.slice(0, 2000),
-                updated_at: new Date().toISOString(),
+                lastError:  msg.slice(0, 2000),
+                updatedAt:  new Date(),
               })
-              .eq("id", connector.id)
+              .where(eq(schema.integrationConnectors.id, connector.id))
             throw retryErr
           }
         }
@@ -242,54 +253,53 @@ export async function ingestWebhookPayload(
         skipped:                true,
       }
     }
-    throw new Error(`Failed to log sync event: ${insertErr.message}`)
+    throw new Error(`Failed to log sync event: ${(insertErr as Error).message}`)
   }
 
   // 3. Update connector last_sync_at
-  await client
-    .from("integration_connectors")
-    .update({ last_sync_at: new Date().toISOString(), status: "connected", last_error: null })
-    .eq("id", connector.id)
+  await db
+    .update(schema.integrationConnectors)
+    .set({ lastSyncAt: new Date(), status: "connected", lastError: null })
+    .where(eq(schema.integrationConnectors.id, connector.id))
 
   const t0 = Date.now()
   try {
     await dispatchWebhookCommand(
-      client,
       organizationId,
       provider,
       normalizedEvent,
       payload,
-      syncEvent.id as string
+      syncEvent.id
     )
-    await client
-      .from("integration_sync_events")
-      .update({ processing_status: "processed", processed_at: new Date().toISOString() })
-      .eq("id", syncEvent.id)
+    await db
+      .update(schema.integrationSyncEvents)
+      .set({ processingStatus: "processed", processedAt: new Date() })
+      .where(eq(schema.integrationSyncEvents.id, syncEvent.id))
   } catch (error) {
     const message = error instanceof Error ? error.message : "Webhook dispatch failed"
-    await client
-      .from("integration_sync_events")
-      .update({
-        processing_status: "failed",
-        processed_at: new Date().toISOString(),
-        error_message: message.slice(0, 4000),
+    await db
+      .update(schema.integrationSyncEvents)
+      .set({
+        processingStatus: "failed",
+        processedAt:      new Date(),
+        errorMessage:     message.slice(0, 4000),
       })
-      .eq("id", syncEvent.id)
-    await client
-      .from("integration_connectors")
-      .update({
+      .where(eq(schema.integrationSyncEvents.id, syncEvent.id))
+    await db
+      .update(schema.integrationConnectors)
+      .set({
         status:     "error",
-        last_error: message.slice(0, 2000),
-        updated_at: new Date().toISOString(),
+        lastError:  message.slice(0, 2000),
+        updatedAt:  new Date(),
       })
-      .eq("id", connector.id)
+      .where(eq(schema.integrationConnectors.id, connector.id))
     throw error
   }
 
   logWebhookProcessed({
     provider,
     normalizedEvent,
-    syncEventId: syncEvent.id as string,
+    syncEventId: syncEvent.id,
     skipped:     false,
     durationMs:  Date.now() - t0,
   })
@@ -305,7 +315,6 @@ export async function ingestWebhookPayload(
 // Helpers
 
 async function dispatchWebhookCommand(
-  client: SupabaseClient,
   organizationId: string,
   provider: string,
   normalizedEvent: string | null,
@@ -324,7 +333,7 @@ async function dispatchWebhookCommand(
 
   if (normalizedEvent === "reservation.cancelled") {
     if (!appointmentId) throw new Error("reservation.cancelled requires appointmentId in webhook data.")
-    await cancelAppointment(client, appointmentId, organizationId)
+    await cancelAppointment(appointmentId, organizationId)
     return
   }
 
@@ -335,14 +344,13 @@ async function dispatchWebhookCommand(
     if (!startsAt || !endsAt) {
       throw new Error("reservation.rescheduled requires startsAt and endsAt in webhook data.")
     }
-    await rescheduleAppointment(client, appointmentId, organizationId, startsAt, endsAt)
+    await rescheduleAppointment(appointmentId, organizationId, startsAt, endsAt)
     return
   }
 
   if (normalizedEvent === "reservation.completed") {
     if (!appointmentId) throw new Error("reservation.completed requires appointmentId in webhook data.")
     await completeAppointment(
-      client,
       appointmentId,
       organizationId,
       `Completed by ${provider} webhook`
@@ -352,26 +360,31 @@ async function dispatchWebhookCommand(
 
   if (normalizedEvent === "invoice.sent") {
     if (!invoiceId) throw new Error("invoice.sent requires invoiceId in webhook data.")
-    await sendInvoice(client, invoiceId, organizationId, `Sent by ${provider} webhook`)
+    await sendInvoice(invoiceId, organizationId, `Sent by ${provider} webhook`)
     return
   }
 
   if (normalizedEvent === "invoice.paid") {
     if (!invoiceId) throw new Error("invoice.paid requires invoiceId in webhook data.")
     let amountPaid = getNumber(payload.data, "amountPaid", "amount_paid", "amount")
-    const { data: inv } = await client
-      .from("invoices")
-      .select("total_amount")
-      .eq("id", invoiceId)
-      .eq("organization_id", organizationId)
-      .maybeSingle()
+
+    const [inv] = await db
+      .select({ totalAmount: schema.invoices.totalAmount })
+      .from(schema.invoices)
+      .where(
+        and(
+          eq(schema.invoices.id, invoiceId),
+          eq(schema.invoices.organizationId, organizationId),
+        ),
+      )
+      .limit(1)
 
     if (inv && amountPaid != null) {
-      const cap = Number(inv.total_amount) || 0
+      const cap = Number(inv.totalAmount) || 0
       if (amountPaid > cap) amountPaid = cap
     }
 
-    await markInvoicePaid(client, invoiceId, organizationId, {
+    await markInvoicePaid(invoiceId, organizationId, {
       paymentMethod: getString(payload.data, "paymentMethod", "payment_method") ?? "card",
       amountPaid:    amountPaid ?? undefined,
       notes:         `Paid by ${provider} webhook`,
@@ -391,16 +404,20 @@ async function dispatchWebhookCommand(
     let customerId = getString(data, "customerId", "customer_id") ?? null
     const email = getString(data, "guestEmail", "guest_email", "email")
     if (!customerId && email) {
-      customerId = await resolveCustomerIdByEmail(client, organizationId, email)
+      customerId = await resolveCustomerIdByEmail(organizationId, email)
     }
     if (!guestName && customerId) {
-      const { data: cust } = await client
-        .from("customers")
-        .select("full_name")
-        .eq("id", customerId)
-        .eq("organization_id", organizationId)
-        .maybeSingle()
-      guestName = (cust as { full_name?: string } | null)?.full_name ?? "Guest"
+      const [cust] = await db
+        .select({ fullName: schema.customers.fullName })
+        .from(schema.customers)
+        .where(
+          and(
+            eq(schema.customers.id, customerId),
+            eq(schema.customers.organizationId, organizationId),
+          ),
+        )
+        .limit(1)
+      guestName = cust?.fullName ?? "Guest"
     }
     if (!guestName) guestName = "Guest"
 
@@ -418,7 +435,7 @@ async function dispatchWebhookCommand(
       null
     const externalSource = getString(data, "externalSource", "external_source") ?? provider
 
-    const { feedbackId } = await ingestFeedbackRow(client, {
+    const { feedbackId } = await ingestFeedbackRow({
       organizationId,
       customerId,
       appointmentId:            getString(data, "appointmentId", "appointment_id") ?? null,
@@ -431,7 +448,7 @@ async function dispatchWebhookCommand(
       externalSource,
     })
 
-    await analyzeAndPersistFeedback(client, organizationId, feedbackId, {
+    await analyzeAndPersistFeedback(organizationId, feedbackId, {
       guestName,
       score,
       comment,

@@ -2,14 +2,8 @@ import "server-only"
 import { z } from "zod"
 
 const serverSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  DATABASE_URL: z.string().min(1),
   DEMO_ORG_ID: z.string().default("00000000-0000-0000-0000-000000000001"),
-})
-
-const publicEnvSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
 })
 
 function validateServerEnv() {
@@ -25,27 +19,16 @@ export function getServerEnv() {
   return validateServerEnv()
 }
 
-export function getPublicEnv() {
-  const parsed = publicEnvSchema.safeParse(process.env)
-  if (!parsed.success) {
-    const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ")
-    throw new Error(`Missing or invalid public env vars: ${missing}`)
-  }
-  return parsed.data
-}
-
 const DEFAULT_DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
 
 /** Ember Table demo org from seed; trim so blank .env lines do not override the default. */
 export const DEMO_ORG_ID =
   process.env.DEMO_ORG_ID?.trim() || DEFAULT_DEMO_ORG_ID
 
-export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
-export const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
+export const DATABASE_URL = process.env.DATABASE_URL ?? ""
 
-export function isSupabaseConfigured(): boolean {
-  return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+export function isDatabaseConfigured(): boolean {
+  return Boolean(DATABASE_URL)
 }
 
 // ─── TinyFish (server-only, additive) ──────────────────────────────────────
@@ -141,6 +124,41 @@ export function getTinyFishMode(): TinyFishMode {
   if (!hasTinyFishLiveIntent()) return "mock"
   if (isTinyFishLiveReady())    return "live"
   return "misconfigured"
+}
+
+// ─── Portal Reconnaissance (additive) ──────────────────────────────────────
+
+export const TINYFISH_VAULT_ENABLED = parseBooleanDefaultFalse(process.env.TINYFISH_VAULT_ENABLED)
+export const TINYFISH_PORTAL_RECON_ENABLED = parseBooleanDefaultFalse(process.env.TINYFISH_PORTAL_RECON_ENABLED)
+
+/**
+ * Portal reconnaissance is live-ready when:
+ * - TinyFish is live-ready (API key + endpoints configured)
+ * - Vault credentials are enabled
+ * - Portal reconnaissance is explicitly enabled
+ */
+export function isPortalReconLiveReady(): boolean {
+  return (
+    isTinyFishLiveReady() &&
+    TINYFISH_VAULT_ENABLED &&
+    TINYFISH_PORTAL_RECON_ENABLED
+  )
+}
+
+/**
+ * Portal reconnaissance mode follows the same three-mode pattern:
+ * - "mock": safe for demos, no network calls
+ * - "misconfigured": live intent but missing config
+ * - "live": fully configured and ready
+ */
+export function getPortalReconMode(): TinyFishMode {
+  if (isTinyFishMockMode() || !TINYFISH_PORTAL_RECON_ENABLED) {
+    return "mock"
+  }
+  if (!isPortalReconLiveReady()) {
+    return "misconfigured"
+  }
+  return "live"
 }
 
 // ─── AWS (optional, server-only) ───────────────────────────────────────────

@@ -90,6 +90,8 @@ export const AI_ACTION_TYPE = [
   "rescue_case_resolved",
   "external_portal_checked",
   "invoice_status_verified",
+  "portal_reconnaissance",
+  "portal_reconnaissance_error",
 ] as const
 export type AiActionType = (typeof AI_ACTION_TYPE)[number]
 

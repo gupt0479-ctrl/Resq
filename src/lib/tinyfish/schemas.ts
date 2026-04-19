@@ -119,3 +119,29 @@ export const TinyFishAgentRunResultSchema = z.object({
   warning:          z.string().optional(),
 })
 export type TinyFishAgentRunResult = z.infer<typeof TinyFishAgentRunResultSchema>
+
+// ─── Portal Reconnaissance (re-export) ─────────────────────────────────────
+
+export {
+  PortalReconnaissanceModeSchema,
+  PortalReconnaissanceResultSchema,
+  PortalReconnaissanceResponseSchema,
+  ScreenshotSchema,
+  ParsedPortalDataSchema,
+  ParsedInvoiceSchema,
+  ParsedActivitySchema,
+  PortalLoginResultSchema,
+  PortalReconScenarioSchema,
+} from "./portal-schemas"
+
+export type {
+  PortalReconnaissanceMode,
+  PortalReconnaissanceResult,
+  PortalReconnaissanceResponse,
+  Screenshot,
+  ParsedPortalData,
+  ParsedInvoice,
+  ParsedActivity,
+  PortalLoginResult,
+  PortalReconScenario,
+} from "./portal-schemas"

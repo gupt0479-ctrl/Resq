@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { FeedbackSubmitBodySchema } from "@/lib/schemas/feedback"
 import {
   analyzeAndPersistFeedback,
@@ -33,8 +33,7 @@ export async function POST(request: NextRequest) {
   } = parsed.data
 
   try {
-    const client = createServerSupabaseClient()
-    const { feedbackId, created } = await ingestFeedbackRow(client, {
+    const { feedbackId, created } = await ingestFeedbackRow({
       organizationId: DEMO_ORG_ID,
       customerId:     customerId ?? null,
       appointmentId:  appointmentId ?? null,
@@ -47,7 +46,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (analyze) {
-      await analyzeAndPersistFeedback(client, DEMO_ORG_ID, feedbackId, {
+      await analyzeAndPersistFeedback(DEMO_ORG_ID, feedbackId, {
         guestName,
         score,
         comment,
