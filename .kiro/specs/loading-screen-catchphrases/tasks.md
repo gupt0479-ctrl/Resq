@@ -7,6 +7,7 @@ Additive implementation of a full-screen loading overlay for the OpsPilot SMB su
 ## Tasks
 
 - [x] 1. Create catchphrase data file
+- [~] 1. Create catchphrase data file
   - Create `src/lib/catchphrases.ts` exporting the `CATCHPHRASES` readonly string array with all 18 entries from the design
   - This is the single source of truth — no catchphrase logic lives in this file
   - _Requirements: 2.1, 2.5_
