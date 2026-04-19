@@ -5,6 +5,7 @@ export const RECOVERY_STATUS = [
   "queued",
   "reminder_sent",
   "payment_plan_offered",
+  "settlement_offered",
   "escalated",
   "disputed",
   "resolved",
@@ -16,12 +17,14 @@ export type RecoveryStatus = (typeof RECOVERY_STATUS)[number]
 export const RECOVERY_ACTION_TYPE = [
   "send_reminder",
   "offer_payment_plan",
+  "offer_settlement",
   "escalate",
   "dispute_clarification",
   "financing_flagged",
   "write_off",
   "resolve",
   "skip",
+  "drop_back",
 ] as const
 
 export type RecoveryActionType = (typeof RECOVERY_ACTION_TYPE)[number]
@@ -32,11 +35,12 @@ export type CreditTier = "excellent" | "good" | "fair" | "poor" | "new_client"
 
 const TRANSITIONS: Record<RecoveryStatus, RecoveryStatus[]> = {
   none:                 ["queued"],
-  queued:               ["reminder_sent", "payment_plan_offered", "escalated", "written_off"],
-  reminder_sent:        ["reminder_sent", "payment_plan_offered", "escalated", "disputed", "resolved", "written_off"],
-  payment_plan_offered: ["escalated", "disputed", "resolved", "written_off"],
-  escalated:            ["disputed", "resolved", "written_off"],
-  disputed:             ["resolved", "written_off"],
+  queued:               ["reminder_sent", "payment_plan_offered", "settlement_offered", "escalated", "written_off"],
+  reminder_sent:        ["reminder_sent", "payment_plan_offered", "settlement_offered", "escalated", "disputed", "resolved", "written_off"],
+  payment_plan_offered: ["settlement_offered", "escalated", "disputed", "resolved", "written_off", "reminder_sent"],  // Can drop back to reminder
+  settlement_offered:   ["escalated", "disputed", "resolved", "written_off", "payment_plan_offered"],  // Can drop back to payment plan
+  escalated:            ["disputed", "resolved", "written_off", "settlement_offered"],  // Can drop back to settlement
+  disputed:             ["resolved", "written_off", "reminder_sent"],  // Can restart after dispute resolution
   resolved:             [],
   written_off:          [],
 }
@@ -234,6 +238,9 @@ export interface RecoveryContext extends RiskContext {
   // Stripe context
   hasStripeCustomer:   boolean
   stripePaymentFailed: boolean
+  // Partial payment signal
+  partialPaymentReceived?: boolean
+  partialPaymentAmount?: number
 }
 
 export interface RecoveryDecision {
@@ -245,6 +252,7 @@ export interface RecoveryDecision {
   suggestedChannel:    "stripe" | "email"
   escalateToFinancing: boolean
   reason:              string
+  settlementDiscount?: number  // Percentage discount for settlement offers
 }
 
 export function decideNextAction(ctx: RecoveryContext): RecoveryDecision {
@@ -268,6 +276,25 @@ export function decideNextAction(ctx: RecoveryContext): RecoveryDecision {
 
   const base = { riskScore, creditScore, suggestedChannel }
 
+  // Handle partial payment drop-back
+  if (ctx.partialPaymentReceived && ctx.partialPaymentAmount && ctx.partialPaymentAmount > 0) {
+    // Customer is engaging - drop back one rung
+    const dropBackStatus: RecoveryStatus = 
+      ctx.currentStatus === "escalated" ? "settlement_offered" :
+      ctx.currentStatus === "settlement_offered" ? "payment_plan_offered" :
+      ctx.currentStatus === "payment_plan_offered" ? "reminder_sent" :
+      ctx.currentStatus
+    
+    return {
+      ...base,
+      action:              "drop_back",
+      nextRecoveryStatus:  dropBackStatus,
+      urgency:             "low",
+      reason:              `Partial payment of ${ctx.partialPaymentAmount.toFixed(0)} received. Customer is engaging - dropping back to ${dropBackStatus} for gentler approach.`,
+      escalateToFinancing: false,
+    }
+  }
+
   if (ctx.currentStatus === "resolved" || ctx.currentStatus === "written_off") {
     return {
       ...base,
@@ -290,14 +317,34 @@ export function decideNextAction(ctx: RecoveryContext): RecoveryDecision {
     }
   }
 
-  if (riskScore >= 60 || (ctx.daysOverdue >= 60 && ctx.reminderCount >= 2)) {
+  if (riskScore >= 70 || (ctx.daysOverdue >= 75 && ctx.reminderCount >= 2)) {
     return {
       ...base,
       action:              "escalate",
       nextRecoveryStatus:  "escalated",
+      urgency:             "critical",
+      reason:              `Risk ${riskScore}/100, credit ${creditScore.tier}. Formal escalation after ${ctx.reminderCount} reminder(s), ${ctx.daysOverdue}d overdue.`,
+      escalateToFinancing: riskScore >= 75,
+    }
+  }
+
+  // Settlement offer rung (new)
+  if (
+    riskScore >= 55 ||
+    ctx.currentStatus === "payment_plan_offered" ||
+    (ctx.daysOverdue >= 60 && ctx.reminderCount >= 2)
+  ) {
+    // Calculate settlement discount (5-15% based on risk)
+    const discountPct = Math.min(15, Math.max(5, Math.floor((riskScore - 40) / 4)))
+    
+    return {
+      ...base,
+      action:              "offer_settlement",
+      nextRecoveryStatus:  "settlement_offered",
       urgency:             "high",
-      reason:              `Risk ${riskScore}/100, credit ${creditScore.tier}. Escalating after ${ctx.reminderCount} reminder(s), ${ctx.daysOverdue}d overdue.`,
-      escalateToFinancing: riskScore >= 65,
+      reason:              `Risk ${riskScore}/100, credit ${creditScore.tier}. Offering ${discountPct}% settlement discount to close ${ctx.daysOverdue}d overdue invoice.`,
+      escalateToFinancing: riskScore >= 60,
+      settlementDiscount:  discountPct,
     }
   }
 

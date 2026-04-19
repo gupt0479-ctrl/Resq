@@ -143,6 +143,41 @@ export function getTinyFishMode(): TinyFishMode {
   return "misconfigured"
 }
 
+// ─── Portal Reconnaissance (additive) ──────────────────────────────────────
+
+export const TINYFISH_VAULT_ENABLED = parseBooleanDefaultFalse(process.env.TINYFISH_VAULT_ENABLED)
+export const TINYFISH_PORTAL_RECON_ENABLED = parseBooleanDefaultFalse(process.env.TINYFISH_PORTAL_RECON_ENABLED)
+
+/**
+ * Portal reconnaissance is live-ready when:
+ * - TinyFish is live-ready (API key + endpoints configured)
+ * - Vault credentials are enabled
+ * - Portal reconnaissance is explicitly enabled
+ */
+export function isPortalReconLiveReady(): boolean {
+  return (
+    isTinyFishLiveReady() &&
+    TINYFISH_VAULT_ENABLED &&
+    TINYFISH_PORTAL_RECON_ENABLED
+  )
+}
+
+/**
+ * Portal reconnaissance mode follows the same three-mode pattern:
+ * - "mock": safe for demos, no network calls
+ * - "misconfigured": live intent but missing config
+ * - "live": fully configured and ready
+ */
+export function getPortalReconMode(): TinyFishMode {
+  if (isTinyFishMockMode() || !TINYFISH_PORTAL_RECON_ENABLED) {
+    return "mock"
+  }
+  if (!isPortalReconLiveReady()) {
+    return "misconfigured"
+  }
+  return "live"
+}
+
 // ─── AWS (optional, server-only) ───────────────────────────────────────────
 
 export const AWS_REGION            = process.env.AWS_REGION?.trim()            ?? ""

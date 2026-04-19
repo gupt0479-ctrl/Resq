@@ -370,3 +370,11 @@ export function mockFetch(url: string): TinyFishFetchResult {
     fetchedAt: DEMO_FIXED_ISO,
   }
 }
+
+// ─── Portal Reconnaissance (re-export) ─────────────────────────────────────
+
+export {
+  PORTAL_RECON_FIXTURES,
+  getMockPortalRecon,
+  selectScenarioByInvoiceId,
+} from "./portal-mock-data"

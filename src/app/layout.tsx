@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="h-full">
+      <body className="h-full" suppressHydrationWarning>
         <ConditionalShell>{children}</ConditionalShell>
       </body>
     </html>

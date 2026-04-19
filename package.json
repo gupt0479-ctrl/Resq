@@ -7,8 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "node --import ./dns-patch.mjs ./node_modules/vitest/vitest.mjs run",
+    "test:watch": "node --import ./dns-patch.mjs ./node_modules/vitest/vitest.mjs",
     "db:check": "node scripts/repro-dashboard-data.mjs"
   },
   "dependencies": {
