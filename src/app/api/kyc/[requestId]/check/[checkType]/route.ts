@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
 import { getKycRequest } from "@/lib/services/kyc"
-import { runSingleCheck, mapRowToRequest } from "@/lib/services/kyc/orchestrator"
+import { runSingleCheck } from "@/lib/services/kyc/orchestrator"
 import { RunCheckOverrideSchema } from "@/lib/schemas/kyc"
 import type { KycCheckType } from "@/lib/types/kyc"
 import { KYC_CHECK_ORDER } from "@/lib/types/kyc"

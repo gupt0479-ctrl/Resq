@@ -16,7 +16,7 @@ const SOS_URLS: Record<string, string> = {
 export async function runBusinessNameCheck(
   request: KycVerificationRequest
 ): Promise<KycCheckRunResult> {
-  const { businessName, registeredState, directorName } = request
+  const { businessName, registeredState } = request
 
   if (!businessName) {
     return {
@@ -32,7 +32,6 @@ export async function runBusinessNameCheck(
   const sosUrl = SOS_URLS[state] ?? `https://www.google.com/search?q=${encodeURIComponent(state + " secretary of state business search")}`
 
   // TinyFish: fetch the SOS registry page and search for the business
-  const searchQuery = `"${businessName}" site:${new URL(sosUrl).hostname} business registration`
   const [sosPageResult, searchResult] = await Promise.all([
     fetchUrl(sosUrl, { selector: "table, .business-details, #results" }),
     search(`${businessName} ${state} secretary of state business registration status`),

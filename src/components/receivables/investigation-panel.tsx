@@ -20,9 +20,7 @@ import {
   Users,
   X,
   Search,
-  FileText,
   ChevronRight,
-  ArrowLeft,
 } from "lucide-react"
 import type { ReceivablesInvestigationResult, VerificationChecks } from "@/lib/schemas/receivables-agent"
 import { AnalystWorkspace } from "./analyst-workspace"
@@ -146,150 +144,6 @@ function ScoreRing({ score, level }: { score: number; level: ReceivablesInvestig
         />
       </svg>
       <span className="absolute text-lg font-bold">{score}</span>
-    </div>
-  )
-}
-
-// ── Credit History Detail Pane ─────────────────────────────────────────────────
-
-function CreditDetailPane({
-  result,
-  onClose,
-}: {
-  result: ReceivablesInvestigationResult
-  onClose: () => void
-}) {
-  const cr = result.creditReport
-  const val = result.verificationChecks.creditHistoryCheck
-  const passed = val === "passed"
-  const statusLabel = val === "passed" ? "Passed" : val === "limited_data" ? "Limited Data" : "Failed"
-  const statusColor = passed
-    ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/20 dark:border-emerald-800"
-    : val === "limited_data"
-    ? "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800"
-    : "text-red-700 bg-red-50 border-red-200 dark:text-red-300 dark:bg-red-900/20 dark:border-red-800"
-
-  const overallLabel = cr.overallStatus === "clean" ? "Clean" : cr.overallStatus === "caution" ? "Caution" : "High Risk"
-
-  return (
-    <div className="h-full flex flex-col bg-background border-r">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b shrink-0">
-        <button onClick={onClose} className="rounded-md p-1 hover:bg-muted transition-colors">
-          <ArrowLeft className="size-4" />
-        </button>
-        <div className="flex items-center gap-2 min-w-0">
-          <FileText className="size-4 text-primary shrink-0" />
-          <p className="font-semibold text-sm">Credit History Check</p>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-        {/* Status badge */}
-        <div className={cn("inline-flex items-center gap-2 rounded-lg border px-3 py-2", statusColor)}>
-          {passed ? <CheckSquare className="size-4" /> : <MinusSquare className="size-4" />}
-          <span className="text-sm font-semibold">{statusLabel}</span>
-        </div>
-
-        {/* Quick takeaway */}
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Quick Takeaway</p>
-          <p className="text-sm text-foreground leading-relaxed">
-            {val === "passed"
-              ? "This entity has a sufficient payment history with us. On-time payment rate meets the threshold for a clean credit assessment."
-              : val === "limited_data"
-              ? "There is not enough payment history on file to make a confident credit determination. Fewer than three invoices have been processed for this entity."
-              : "Payment history shows concerning patterns. The on-time payment rate falls below acceptable thresholds, indicating elevated credit risk."}
-          </p>
-        </div>
-
-        {/* What was checked */}
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">What Was Checked</p>
-          <p className="text-sm text-foreground leading-relaxed">
-            We reviewed the entity&apos;s complete invoice and payment history within OpsPilot, including total invoices processed, on-time payment percentage, payment methods used, and any patterns of late or missed payments.
-          </p>
-        </div>
-
-        {/* What was found */}
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">What Was Found</p>
-          <div className="rounded-lg border border-border bg-card divide-y divide-border/50">
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-xs text-muted-foreground">Overall Assessment</span>
-              <span className={cn(
-                "text-xs font-semibold px-2 py-0.5 rounded",
-                cr.overallStatus === "clean" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
-                cr.overallStatus === "caution" && "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-                cr.overallStatus === "high_risk" && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-              )}>
-                {overallLabel}
-              </span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-xs text-muted-foreground">Red Flags Detected</span>
-              <span className="text-xs font-medium">{cr.flagCount}</span>
-            </div>
-          </div>
-
-          {cr.redFlags.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {cr.redFlags.map((flag) => (
-                <div key={flag.flag} className={cn(
-                  "rounded-lg border px-4 py-3",
-                  flag.severity === "critical" && "border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20",
-                  flag.severity === "warning"  && "border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20",
-                  flag.severity === "none"     && "border-border bg-card",
-                )}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={cn(
-                      "size-2 rounded-full shrink-0",
-                      flag.severity === "critical" && "bg-red-500",
-                      flag.severity === "warning"  && "bg-amber-500",
-                      flag.severity === "none"     && "bg-emerald-500",
-                    )} />
-                    <p className="text-xs font-semibold">{flag.label}</p>
-                    <span className={cn(
-                      "ml-auto text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded",
-                      flag.severity === "critical" && "text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900/30",
-                      flag.severity === "warning"  && "text-amber-600 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/30",
-                      flag.severity === "none"     && "text-emerald-600 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/30",
-                    )}>
-                      {flag.severity}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{flag.detail}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Why it matters */}
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Why It Matters</p>
-          <p className="text-sm text-foreground leading-relaxed">
-            {val === "passed"
-              ? "A clean credit history means the collections agent can pursue standard recovery actions with confidence. The entity has demonstrated willingness to pay in the past."
-              : val === "limited_data"
-              ? "Without enough payment history, the system cannot reliably predict whether this entity will pay. This increases the risk of any automated collection action and may require a more cautious approach."
-              : "A failed credit check signals that this entity has a pattern of late or missed payments. Automated collection actions should be paired with closer human oversight, and escalation timelines should be shortened."}
-          </p>
-        </div>
-
-        {/* Recommended next step */}
-        <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-3">
-          <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">Recommended Next Step</p>
-          <p className="text-sm text-foreground leading-relaxed">
-            {val === "passed"
-              ? "Proceed with standard collection workflow. No additional credit-related holds are needed."
-              : val === "limited_data"
-              ? "Consider requesting a payment upfront or offering a structured payment plan before extending further credit. Flag this entity for manual review on future invoices."
-              : "Escalate to a senior collections review. Consider shortening payment terms for future engagements and requiring deposits before service delivery."}
-          </p>
-        </div>
-      </div>
     </div>
   )
 }
@@ -424,9 +278,6 @@ export function InvestigationPanel({
   const [loading, setLoading]       = useState(false)
   const [result, setResult]         = useState<ReceivablesInvestigationResult | null>(null)
   const [error, setError]           = useState<string | null>(null)
-  const [reminderLoading, setReminderLoading] = useState(false)
-  const [reminderSent, setReminderSent]       = useState<{ invoiceId: string; hostedUrl?: string; emailSent?: boolean; mode: string } | null>(null)
-  const [reminderError, setReminderError]     = useState<string | null>(null)
   // Per-check animation state
   const [revealedCount, setRevealedCount] = useState(0)
   const [animating, setAnimating]         = useState(false)
@@ -452,25 +303,6 @@ export function InvestigationPanel({
 
     return () => clearInterval(timer)
   }, [result])
-
-  async function sendReminder() {
-    setReminderLoading(true)
-    setReminderError(null)
-    try {
-      const res = await fetch("/api/receivables/send-reminder", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ invoiceId }),
-      })
-      const json = await res.json() as { ok: boolean; stripeInvoiceId?: string; hostedUrl?: string; emailSent?: boolean; mode?: string; error?: string }
-      if (!json.ok) throw new Error(json.error ?? "Failed to send reminder")
-      setReminderSent({ invoiceId: json.stripeInvoiceId ?? "", hostedUrl: json.hostedUrl, emailSent: json.emailSent, mode: json.mode ?? "mock" })
-    } catch (e) {
-      setReminderError(e instanceof Error ? e.message : "Unknown error")
-    } finally {
-      setReminderLoading(false)
-    }
-  }
 
   async function runInvestigation() {
     setLoading(true)

@@ -31,7 +31,7 @@ function parseCompaniesFromText(text: string): CompanyRecord[] {
 export async function runPeopleVerificationCheck(
   request: KycVerificationRequest
 ): Promise<KycCheckRunResult> {
-  const { directorName, businessName } = request
+  const { directorName } = request
 
   if (!directorName) {
     return {

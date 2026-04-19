@@ -138,8 +138,9 @@ export default async function DashboardPage() {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const cust  = (Array.isArray(inv.customers) ? inv.customers[0] : inv.customers) as { full_name: string } | null
                 const bal   = Number(inv.total_amount) - Number(inv.amount_paid)
+                const now   = new Date().getTime()
                 const daysO = inv.due_at
-                  ? Math.max(0, Math.floor((Date.now() - new Date(inv.due_at).getTime()) / 86400000))
+                  ? Math.max(0, Math.floor((now - new Date(inv.due_at).getTime()) / 86400000))
                   : 0
                 return (
                   <div key={inv.id} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">

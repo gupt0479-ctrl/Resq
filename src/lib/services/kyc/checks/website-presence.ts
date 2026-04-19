@@ -1,5 +1,5 @@
 import "server-only"
-import { fetchUrl, search } from "@/lib/tinyfish/client"
+import { fetchUrl } from "@/lib/tinyfish/client"
 import type { KycVerificationRequest, KycCheckRunResult } from "@/lib/types/kyc"
 
 function extractCopyrightYear(text: string): number | null {

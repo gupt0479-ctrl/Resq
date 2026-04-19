@@ -17,7 +17,7 @@ function isVirtualOfficePattern(address: string): boolean {
 export async function runOfficeAddressCheck(
   request: KycVerificationRequest
 ): Promise<KycCheckRunResult> {
-  const { businessAddress, businessName } = request
+  const { businessAddress } = request
 
   if (!businessAddress) {
     return {

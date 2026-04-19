@@ -50,7 +50,7 @@ export function calculateScore(checks: KycCheck[]): ScoreResult {
   }
 
   const rawScore = rawEarned
-  let normalizedScore = Math.round((rawEarned / KYC_MAX_RAW_POINTS) * 100)
+  const normalizedScore = Math.round((rawEarned / KYC_MAX_RAW_POINTS) * 100)
 
   let finalScore = normalizedScore
 
