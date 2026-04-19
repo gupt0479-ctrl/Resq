@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { db, DEMO_ORG_ID } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, desc } from "drizzle-orm"
 
 export const dynamic = "force-dynamic"
 
@@ -9,7 +11,7 @@ type TimelineEvent = {
   action_type: string
   input_summary: string | null
   status: string
-  created_at: string
+  created_at: Date | string
   entity_type: string
   output_payload_json?: unknown
 }
@@ -108,15 +110,21 @@ function getRunMeta(outputPayload: unknown) {
 }
 
 export default async function WorkflowPage() {
-  const client = createServerSupabaseClient()
-  const { data } = await client
-    .from("ai_actions")
-    .select("id, action_type, input_summary, status, created_at, entity_type, output_payload_json")
-    .eq("organization_id", DEMO_ORG_ID)
-    .order("created_at", { ascending: false })
+  const timeline = await db
+    .select({
+      id:           schema.aiActions.id,
+      action_type:  schema.aiActions.actionType,
+      input_summary: schema.aiActions.inputSummary,
+      status:       schema.aiActions.status,
+      created_at:   schema.aiActions.createdAt,
+      entity_type:  schema.aiActions.entityType,
+      output_payload_json: schema.aiActions.outputPayloadJson,
+    })
+    .from(schema.aiActions)
+    .where(eq(schema.aiActions.organizationId, DEMO_ORG_ID))
+    .orderBy(desc(schema.aiActions.createdAt))
     .limit(20)
 
-  const timeline = (data ?? []) as TimelineEvent[]
   return (
     <div className="space-y-5 p-6">
       <div>

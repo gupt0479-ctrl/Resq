@@ -40,7 +40,8 @@ export default async function CustomersPage() {
     )
   }
 
-  const customers: CustomerRow[] = data.map((c) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const customers: CustomerRow[] = (data as any[]).map((c: any) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const invoices = (Array.isArray(c.invoices) ? c.invoices : []) as any[]
     const outstanding = invoices
@@ -66,7 +67,7 @@ export default async function CustomersPage() {
         dueAt:  i.due_at ? new Date(i.due_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null,
       })),
     }
-  }).sort((a, b) => b.outstanding - a.outstanding)
+  }).sort((a: CustomerRow, b: CustomerRow) => b.outstanding - a.outstanding)
 
   return <CustomersClient customers={customers} />
 }

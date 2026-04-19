@@ -528,27 +528,45 @@ export const clientReminders = pgTable(
   ],
 )
 
-// ─── Obligations (known future outflows) ────────────────────────────────
+// ─── Cash Obligations ──────────────────────────────────────────────────────
 
-export const obligations = pgTable(
-  "obligations",
+export const cashObligations = pgTable(
+  "cash_obligations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-    label: text("label").notNull(),
-    category: text("category").notNull().default("other"),
+    category: text("category").notNull(),
+    description: text("description").notNull(),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-    dueAt: date("due_at").notNull(),
-    recurring: boolean("recurring").notNull().default(false),
-    recurrenceRule: text("recurrence_rule"),
-    status: text("status").notNull().default("upcoming"),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    recurrence: text("recurrence").notNull().default("one_time"),
+    isActive: boolean("is_active").notNull().default(true),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index("idx_obligations_org").on(table.organizationId, table.dueAt),
-    index("idx_obligations_org_status").on(table.organizationId, table.status),
+    index("idx_cash_obligations_org").on(table.organizationId, table.dueAt),
+    index("idx_cash_obligations_active").on(table.organizationId, table.isActive),
+  ],
+)
+
+// ─── Cash Forecast Snapshots ───────────────────────────────────────────────
+
+export const cashForecastSnapshots = pgTable(
+  "cash_forecast_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    forecastJson: jsonb("forecast_json").notNull(),
+    breakpointWeek: integer("breakpoint_week"),
+    breakpointAmount: numeric("breakpoint_amount", { precision: 12, scale: 2 }),
+    thresholdUsed: numeric("threshold_used", { precision: 12, scale: 2 }).notNull(),
+    scenarioType: text("scenario_type").notNull().default("base"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_cash_forecast_snapshots_org").on(table.organizationId, table.createdAt),
   ],
 )
 
