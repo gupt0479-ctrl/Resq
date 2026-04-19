@@ -43,7 +43,7 @@ describe("poll handler — mock mode", () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.status).toBe("COMPLETED")
-    expect(body.result).toMatchObject({ ok: true, fixture: true })
+    expect(body.result).toEqual({ ok: true, fixture: true })
     expect(body.mode).toBe("mock")
     expect(body.runId).toBe("test-run-123")
   })
@@ -78,7 +78,7 @@ describe("Property 3: Poll response always echoes runId", () => {
   it("response.runId === runId for every input", async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1 }).filter((value) => value.trim().length > 0),
+        fc.string({ minLength: 1 }),
         fc.constantFrom("mock" as const, "misconfigured" as const),
         async (runId, mode) => {
           vi.mocked(getTinyFishMode).mockReturnValue(mode)
