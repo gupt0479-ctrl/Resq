@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { createServerSupabaseClient } from "@/lib/db/supabase-server"
 import { DEMO_ORG_ID } from "@/lib/db"
+import { createServerSupabaseClient } from "@/lib/db/supabase-server"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { getDashboardSummary } from "@/lib/queries/dashboard"
 import { isDatabaseConfigured } from "@/lib/env"
