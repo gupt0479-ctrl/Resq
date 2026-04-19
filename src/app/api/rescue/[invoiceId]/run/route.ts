@@ -108,11 +108,11 @@ export async function POST(
 
   // Build prompt for Claude
   const actionLabels: Record<string, string> = {
-    receivable_risk_detected: "detect and summarize the receivable risk",
-    customer_followup_sent: "draft a professional follow-up message to the customer",
+    receivable_risk_detected:  "detect and summarize the receivable risk",
+    customer_followup_sent:    "draft a professional follow-up message to the customer",
     financing_options_scouted: "research and suggest financing or factoring options for this receivable",
-    payment_plan_suggested: "propose a specific payment plan to resolve this overdue amount",
-    escalation_triggered: "escalate this case with a summary for the collections team",
+    payment_plan_suggested:    "propose a specific payment plan to resolve this overdue amount",
+    rescue_case_resolved:      "write a final recovery summary and close out this case",
   }
 
   const prompt = `You are OpsPilot's cashflow recovery agent. Your task is to ${actionLabels[nextActionType] ?? "take the next recovery step"} for an overdue invoice.

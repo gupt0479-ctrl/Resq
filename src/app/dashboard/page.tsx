@@ -3,7 +3,7 @@ import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-serve
 import { getDashboardSummary } from "@/lib/queries/dashboard"
 import { isSupabaseConfigured } from "@/lib/env"
 import { KpiCard } from "@/components/KpiCard"
-import { ArrowUpRight, Zap, CheckCircle, AlertTriangle } from "lucide-react"
+import { ArrowUpRight, Zap, AlertTriangle } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -16,6 +16,23 @@ function timeAgo(iso: string) {
   if (diff < 60) return `${diff}m ago`
   if (diff < 1440) return `${Math.floor(diff / 60)}h ago`
   return `${Math.floor(diff / 1440)}d ago`
+}
+
+type InvoiceCustomer = { full_name: string } | null
+
+function getInvoiceCustomer(
+  customer: InvoiceCustomer | InvoiceCustomer[] | null | undefined
+): InvoiceCustomer {
+  if (Array.isArray(customer)) return customer[0] ?? null
+  return customer ?? null
+}
+
+function formatDueDateLabel(iso: string | null | undefined) {
+  if (!iso) return "Due date unavailable"
+  return `Due ${new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })}`
 }
 
 export default async function DashboardPage() {
@@ -53,8 +70,7 @@ export default async function DashboardPage() {
     .limit(5)
 
   const topInvoice = overdueInvoices?.[0]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const topCust    = (Array.isArray(topInvoice?.customers) ? topInvoice.customers[0] : topInvoice?.customers) as { full_name: string } | null
+  const topCust = getInvoiceCustomer(topInvoice?.customers as InvoiceCustomer | InvoiceCustomer[] | undefined)
 
   return (
     <div className="p-8 lg:p-10 max-w-[1280px] mx-auto">
@@ -135,17 +151,13 @@ export default async function DashboardPage() {
             <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-4">Top risks</div>
             <div className="space-y-3">
               {(overdueInvoices ?? []).slice(0, 3).map((inv) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const cust  = (Array.isArray(inv.customers) ? inv.customers[0] : inv.customers) as { full_name: string } | null
+                const cust  = getInvoiceCustomer(inv.customers as InvoiceCustomer | InvoiceCustomer[] | undefined)
                 const bal   = Number(inv.total_amount) - Number(inv.amount_paid)
-                const daysO = inv.due_at
-                  ? Math.max(0, Math.floor((Date.now() - new Date(inv.due_at).getTime()) / 86400000))
-                  : 0
                 return (
                   <div key={inv.id} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">
                     <div>
                       <p className="text-[13px] font-medium">{cust?.full_name ?? "Unknown"}</p>
-                      <p className="text-[11px] text-steel">{daysO}d overdue · {inv.invoice_number}</p>
+                      <p className="text-[11px] text-steel">{formatDueDateLabel(inv.due_at)} · {inv.invoice_number}</p>
                     </div>
                     <span className="font-display text-base text-crimson shrink-0">{fmt(bal)}</span>
                   </div>

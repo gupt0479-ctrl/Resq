@@ -361,7 +361,6 @@ async function evaluateCreditReport(
   })
 
   // ── 2. Charged-off accounts ───────────────────────────────────────────────
-  const invoiceIds = (allInvoices ?? []).map((_, i) => i) // placeholder — use actual IDs
   const { data: invoiceRows } = await client
     .from("invoices")
     .select("id")
@@ -378,7 +377,6 @@ async function evaluateCreditReport(
       .eq("type", "writeoff")
     writeoffCount = count ?? 0
   }
-  void invoiceIds // suppress lint
 
   flags.push({
     flag:     "charged_off",

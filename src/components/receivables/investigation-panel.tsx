@@ -642,6 +642,53 @@ export function InvestigationPanel({
                     </p>
                   </div>
 
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          Next collection action
+                        </p>
+                        <p className="mt-1 text-sm text-foreground">
+                          Send a Stripe-backed reminder for this overdue invoice and log it to the audit trail.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={sendReminder}
+                        disabled={reminderLoading}
+                        className="gap-2 self-start sm:self-auto"
+                      >
+                        {reminderLoading ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                        {reminderLoading ? "Sending reminder..." : "Send Reminder"}
+                      </Button>
+                    </div>
+
+                    {reminderSent ? (
+                      <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                        Reminder prepared in <span className="font-semibold uppercase">{reminderSent.mode}</span> mode.
+                        {reminderSent.emailSent === true ? " Email send succeeded." : " Invoice was created for follow-up."}
+                        {reminderSent.hostedUrl ? (
+                          <>
+                            {" "}
+                            <a
+                              href={reminderSent.hostedUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium underline"
+                            >
+                              Open hosted invoice
+                            </a>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {reminderError ? (
+                      <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                        {reminderError}
+                      </div>
+                    ) : null}
+                  </div>
+
                 </div>
               )}
             </div>

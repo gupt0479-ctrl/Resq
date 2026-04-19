@@ -180,9 +180,9 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-24 grid lg:grid-cols-2 gap-12 items-center">
           <div>
             <span className="text-[11px] uppercase tracking-[0.18em] text-amber font-medium">Tool execution layer</span>
-            <h2 className="mt-3 font-display text-3xl md:text-4xl tracking-tight">An MCP bridge to the systems that already run the business.</h2>
+            <h2 className="mt-3 font-display text-3xl md:text-4xl tracking-tight">TinyFish for web research. Deterministic services for financial truth.</h2>
             <p className="mt-5 text-base text-steel max-w-lg leading-relaxed">
-              OpsPilot orchestrates external tools — TinyFish for the open web, Stripe for ledger truth, Gmail for outreach, vendor and insurance sources for live quotes. The agent acts; the audit trail proves it.
+              OpsPilot uses TinyFish to search public financing sources and normalize lender terms, while Supabase-backed invoice, reminder, and ledger flows stay deterministic and auditable.
             </p>
             <div className="mt-8">
               <Link href="/rescue" className="inline-flex items-center gap-2 rounded-md bg-foreground text-background px-5 h-10 text-sm font-medium hover:opacity-90 transition-opacity">
