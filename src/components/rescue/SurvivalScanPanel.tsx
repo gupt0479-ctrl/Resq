@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { Loader2, Zap, CheckCircle, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -105,6 +105,8 @@ export function SurvivalScanPanel() {
     if (timerRef.current) clearTimeout(timerRef.current)
   }, [])
 
+  const pollRef = useRef<((id: string) => Promise<void>) | null>(null)
+
   const poll = useCallback(async (id: string) => {
     if (pollCount.current >= MAX_POLLS) {
       stopPolling()
@@ -140,14 +142,17 @@ export function SurvivalScanPanel() {
         return
       }
 
-      // Still running — schedule next poll
-      timerRef.current = setTimeout(() => poll(id), POLL_INTERVAL_MS)
+      // Still running — schedule next poll via ref to avoid declaration-order lint error
+      timerRef.current = setTimeout(() => pollRef.current?.(id), POLL_INTERVAL_MS)
     } catch (err) {
       stopPolling()
       setPhase("error")
       setErrorMsg(err instanceof Error ? err.message : "Poll failed")
     }
   }, [stopPolling])
+
+  // Keep pollRef in sync — assigned outside render via useEffect
+  useEffect(() => { pollRef.current = poll }, [poll])
 
   async function startScan() {
     setPhase("starting")
