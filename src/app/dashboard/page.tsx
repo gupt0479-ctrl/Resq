@@ -4,17 +4,20 @@ import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { getDashboardSummary } from "@/lib/queries/dashboard"
 import { isDatabaseConfigured } from "@/lib/env"
 import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
+import { KpiCard } from "@/components/KpiCard"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowUpRight,
   CalendarDays,
   Clock,
   DollarSign,
   MessageSquare,
   Plug,
   TrendingUp,
+  Zap,
 } from "lucide-react"
 
 export const dynamic = "force-dynamic"
@@ -68,17 +71,31 @@ export default async function DashboardPage() {
   const runwayDays  = weeklyBurn > 0 ? Math.round((cashOnHand / weeklyBurn) * 7) : 0
 
   // Top overdue invoices for survival briefing + top risks
-  const { data: overdueInvoices } = await client
-    .from("invoices")
-    .select("id, invoice_number, total_amount, amount_paid, due_at, customers(full_name)")
-    .eq("organization_id", DEMO_ORG_ID)
-    .eq("status", "overdue")
-    .order("total_amount", { ascending: false })
-    .limit(5)
+  const overdueInvoices = await (async () => {
+    try {
+      const { db: database } = await import("@/lib/db")
+      const { invoices, customers } = await import("@/lib/db/schema")
+      const { eq, and, desc } = await import("drizzle-orm")
+      const rows = await database
+        .select({
+          id: invoices.id,
+          invoice_number: invoices.invoiceNumber,
+          total_amount: invoices.totalAmount,
+          amount_paid: invoices.amountPaid,
+          due_at: invoices.dueAt,
+          customers: { full_name: customers.fullName },
+        })
+        .from(invoices)
+        .leftJoin(customers, eq(invoices.customerId, customers.id))
+        .where(and(eq(invoices.organizationId, DEMO_ORG_ID), eq(invoices.status, "overdue")))
+        .orderBy(desc(invoices.totalAmount))
+        .limit(5)
+      return rows
+    } catch { return [] }
+  })()
 
   const topInvoice = overdueInvoices?.[0]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const topCust    = (Array.isArray(topInvoice?.customers) ? topInvoice.customers[0] : topInvoice?.customers) as { full_name: string } | null
+  const topCust    = topInvoice?.customers as { full_name: string } | null
 
   return (
     <div className="p-8 lg:p-10 max-w-[1280px] mx-auto">

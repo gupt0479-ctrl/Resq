@@ -3,7 +3,7 @@ import "./globals.css"
 import { ConditionalShell } from "@/components/layout/conditional-shell"
 
 export const metadata: Metadata = {
-  title: "OpsPilot Rescue",
+  title: "Resq",
   description: "Autonomous SMB survival agent",
 }
 

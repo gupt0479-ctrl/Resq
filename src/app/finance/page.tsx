@@ -465,7 +465,7 @@ export default async function FinancePage() {
       {/* ── AI finance tips ──────────────────────────────────────────────────── */}
       <SectionHeader
         title="Finance insights"
-        sub="Powered by OpsPilot AI"
+        sub="Powered by Resq AI"
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

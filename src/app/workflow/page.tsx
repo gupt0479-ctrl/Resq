@@ -1,8 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
-import { db, DEMO_ORG_ID } from "@/lib/db"
-import * as schema from "@/lib/db/schema"
-import { eq, desc } from "drizzle-orm"
+import { DEMO_ORG_ID } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
 
@@ -11,7 +10,7 @@ type TimelineEvent = {
   action_type: string
   input_summary: string | null
   status: string
-  created_at: string
+  created_at: string | Date
   entity_type: string
   output_payload?: unknown
 }
@@ -104,19 +103,24 @@ function getRunMeta(outputPayload: unknown) {
 }
 
 export default async function WorkflowPage() {
-  const timeline = await db
-    .select({
-      id:           schema.aiActions.id,
-      action_type:  schema.aiActions.actionType,
-      input_summary: schema.aiActions.inputSummary,
-      status:       schema.aiActions.status,
-      created_at:   schema.aiActions.createdAt,
-      entity_type:  schema.aiActions.entityType,
-    })
-    .from(schema.aiActions)
-    .where(eq(schema.aiActions.organizationId, DEMO_ORG_ID))
-    .orderBy(desc(schema.aiActions.createdAt))
+  const { createServerSupabaseClient } = await import("@/lib/db/supabase-server")
+  const sb = createServerSupabaseClient()
+  const { data } = await sb
+    .from("ai_actions")
+    .select("id, action_type, input_summary, status, created_at, entity_type, output_payload_json")
+    .eq("organization_id", DEMO_ORG_ID)
+    .order("created_at", { ascending: false })
     .limit(20)
+
+  const timeline = (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    action_type: r.action_type as string,
+    input_summary: r.input_summary as string | null,
+    status: r.status as string,
+    created_at: r.created_at as string,
+    entity_type: r.entity_type as string,
+    output_payload: r.output_payload_json,
+  }))
   return (
     <div className="space-y-5 p-6">
       <div>
