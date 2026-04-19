@@ -108,14 +108,16 @@ export async function getDashboardSummary(
   // Active rescue actions (investigating or action_taken state)
   let activeRescueActionsCount = 0
   try {
-    const { data: rescueRows } = await client
-      .from("ai_actions")
-      .select("entity_id", { count: "exact" })
-      .eq("organization_id", organizationId)
-      .in("action_type", ["receivable_risk_detected", "customer_followup_sent", "financing_options_scouted", "payment_plan_suggested"])
-      .neq("action_type", "escalation_triggered")
-    // Count distinct invoices with an active rescue action
-    const seen = new Set((rescueRows ?? []).map((r: Record<string, unknown>) => r.entity_id))
+    const rows = await db.query.aiActions.findMany({
+      columns: { entityId: true },
+      where: (a, { eq: eq_, inArray: inArray_, and: and_, ne }) =>
+        and_(
+          eq_(a.organizationId, organizationId),
+          inArray_(a.actionType, ["receivable_risk_detected", "customer_followup_sent", "financing_options_scouted", "payment_plan_suggested"]),
+          ne(a.actionType, "escalation_triggered"),
+        ),
+    })
+    const seen = new Set(rows.map((r) => r.entityId))
     activeRescueActionsCount = seen.size
   } catch { /* ignore */ }
 

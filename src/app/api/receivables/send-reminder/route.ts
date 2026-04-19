@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
 
     // ── Phone channel: log only, no automated send ────────────────────────────
     if (channel === "phone") {
-      await recordAiAction(client, {
+      await recordAiAction({
         organizationId: orgId,
         entityType:     "invoice",
         entityId:       body.invoiceId,
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
         .update({ reminder_count: (Number(inv.reminder_count) || 0) + 1 })
         .eq("id", body.invoiceId)
 
-      await recordAiAction(client, {
+      await recordAiAction({
         organizationId: orgId,
         entityType:     "invoice",
         entityId:       body.invoiceId,
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
       .update({ reminder_count: (Number(inv.reminder_count) || 0) + 1 })
       .eq("id", body.invoiceId)
 
-    await recordAiAction(client, {
+    await recordAiAction({
       organizationId: orgId,
       entityType:     "invoice",
       entityId:       body.invoiceId,

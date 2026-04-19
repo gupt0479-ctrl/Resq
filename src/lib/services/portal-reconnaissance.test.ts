@@ -17,7 +17,7 @@ const mockGetPortalReconMode = vi.fn<() => "mock" | "misconfigured" | "live">()
 const mockIsSupabaseConfigured = vi.fn<() => boolean>()
 vi.mock("@/lib/env", () => ({
   getPortalReconMode: () => mockGetPortalReconMode(),
-  isSupabaseConfigured: () => mockIsSupabaseConfigured(),
+  isDatabaseConfigured: () => mockIsSupabaseConfigured(),
   DEMO_ORG_ID: "00000000-0000-0000-0000-000000000001",
 }))
 
