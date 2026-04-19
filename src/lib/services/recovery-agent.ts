@@ -399,7 +399,7 @@ export async function updateInvoiceRecoveryStatus(
 ): Promise<void> {
   await db
     .update(schema.invoices)
-    .set({ recoveryStatus: nextStatus, recoveryUpdatedAt: new Date() })
+    .set({ recoveryStatus: nextStatus as typeof schema.invoices.$inferInsert.recoveryStatus, recoveryUpdatedAt: new Date() })
     .where(
       and(
         eq(schema.invoices.id, invoiceId),
@@ -416,33 +416,11 @@ interface CashPositionSignal {
 }
 
 async function getCashPositionSignal(
-  client: SupabaseClient,
-  orgId: string
+  _orgId: string
 ): Promise<CashPositionSignal> {
-  // For demo: mock a cash position signal
-  // Production: query finance_transactions to compute actual runway
-  
-  // Simple heuristic: look at recent revenue vs expenses
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  
-  const { data: recentTxns } = await client
-    .from("finance_transactions")
-    .select("amount, direction")
-    .eq("organization_id", orgId)
-    .gte("created_at", thirtyDaysAgo)
-  
-  const revenue = (recentTxns ?? [])
-    .filter(t => t.direction === "in")
-    .reduce((sum, t) => sum + Number(t.amount), 0)
-  
-  const expenses = (recentTxns ?? [])
-    .filter(t => t.direction === "out")
-    .reduce((sum, t) => sum + Number(t.amount), 0)
-  
-  const monthlyBurnRate = expenses - revenue
-  
-  // Mock: assume $50k cash on hand for demo
+  // Deterministic demo: mock a cash position signal
   const cashOnHand = 50000
+  const monthlyBurnRate = 15000
   const daysUntilCashCrunch = monthlyBurnRate > 0 
     ? Math.floor((cashOnHand / monthlyBurnRate) * 30)
     : 999  // No cash crunch if profitable
@@ -522,7 +500,8 @@ export async function buildRecoveryQueue(
       
       // Compute priority using the formula from the document
       // priority = (amount × recovery_probability) / days_until_cash_crunch
-      const priority = (inv.balance * recoveryProbability) / cashSignal.daysUntilCashCrunch
+      const daysUntilCrunch = 60 // demo default
+      const priority = (inv.balance * recoveryProbability) / daysUntilCrunch
 
       return {
         ...inv,

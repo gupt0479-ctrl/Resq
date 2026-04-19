@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
 import { db, DEMO_ORG_ID } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
@@ -11,7 +12,7 @@ type TimelineEvent = {
   action_type: string
   input_summary: string | null
   status: string
-  created_at: string
+  created_at: string | Date
   entity_type: string
   output_payload?: unknown
 }
@@ -156,7 +157,7 @@ export default async function WorkflowPage() {
               <ul className="space-y-0">
                 {timeline.map((event, index) => {
                   const track = getTrackStyle(event)
-                  const meta = getRunMeta(event.output_payload)
+                  const meta = getRunMeta((event as Record<string, unknown>).output_payload)
                   return (
                     <li
                       key={event.id}
