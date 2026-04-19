@@ -5,7 +5,7 @@ Updated: 2026-04-18
 ## The core insight
 
 Large enterprises employ consultants, finance analysts, marketing teams, and HR
-staff. Small business owners cannot. OpsPilot Rescue is the AI operator that
+staff. Small business owners cannot. Resq is the AI operator that
 fills all of those roles simultaneously — at a price a single-location business
 can sustain.
 
