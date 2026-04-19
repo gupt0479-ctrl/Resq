@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     }
 
     const customerName  = invRow.fullName ?? "Customer"
-    const customerEmail = body.customerEmail ?? invRow.email ?? `noreply+${body.invoiceId}@opspilot.app`
+    const customerEmail = body.customerEmail ?? invRow.email ?? `noreply+${body.invoiceId}@resq.app`
     const balance       = Number(invRow.totalAmount) - Number(invRow.amountPaid)
 
     // Legal guardrails
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     if (channel === "email" || channel === "formal_notice") {
       const effectiveTone = channel === "formal_notice" ? "formal" : tone
       const draft = body.outreachDraft
-        ?? `Hi ${customerName},\n\nThis is a reminder about your overdue invoice of $${balance.toFixed(2)} (${invRow.invoiceNumber}). Please contact us to arrange payment.\n\nBest regards,\nOpsPilot`
+        ?? `Hi ${customerName},\n\nThis is a reminder about your overdue invoice of $${balance.toFixed(2)} (${invRow.invoiceNumber}). Please contact us to arrange payment.\n\nBest regards,\nResq`
 
       const { sent, messageId, mode } = await sendOutreachEmail({
         toEmail: customerEmail,

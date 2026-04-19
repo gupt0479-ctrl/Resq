@@ -25,6 +25,7 @@ interface CashflowData {
   waterfall: Array<{ week: string; cashIn: number; cashOut: number; balance: number; isForecast: boolean }>
   topDrivers:  Array<{ category: string; amount: number; direction: "in" | "out"; pct: number }>
   actionQueue: Array<{ label: string; amount: number; urgency: "high" | "medium" | "low" }>
+  transactionStats: { total: number; overdue: number; pendingApproval: number; autoCollected: number }
 }
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
@@ -68,9 +69,12 @@ const MOCK: CashflowData = {
     { category: "Labor",     amount: 14200, direction: "out", pct: 76 },
     { category: "Revenue",   amount: 13100, direction: "in",  pct: 70 },
     { category: "Utilities", amount:  8400, direction: "out", pct: 45 },
+    { category: "Rent",      amount:  6200, direction: "out", pct: 33 },
     { category: "Inventory", amount:  7200, direction: "out", pct: 38 },
     { category: "Platform",  amount:  6800, direction: "in",  pct: 36 },
+    { category: "Software",  amount:  3400, direction: "out", pct: 18 },
   ],
+  transactionStats: { total: 77, overdue: 12, pendingApproval: 5, autoCollected: 48 },
   actionQueue: [
     { label: "Collect from Riverfront Bistro", amount: 8400, urgency: "high"   },
     { label: "Collect from Harbor Grill",       amount: 5200, urgency: "high"   },
@@ -104,6 +108,31 @@ function KpiCard({
       <p className="text-[10.5px] font-semibold uppercase tracking-widest text-stone-400">{label}</p>
       <div className="text-[24px] font-bold leading-tight text-stone-800">{value}</div>
       {sub && <div className="text-[11px] text-stone-400 mt-0.5">{sub}</div>}
+    </div>
+  )
+}
+
+// ── Transaction Stats strip ───────────────────────────────────────────────────
+
+const STAT_BADGES = [
+  { label: "Total Transactions", key: "total",          color: "#78716c" },
+  { label: "Overdue Invoices",   key: "overdue",        color: "#c0522a" },
+  { label: "Pending Approval",   key: "pendingApproval",color: "#f59e0b" },
+  { label: "Auto-Collected",     key: "autoCollected",  color: "#2d9b8a" },
+] as const
+
+function TransactionStats({ stats }: { stats: CashflowData["transactionStats"] }) {
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      {STAT_BADGES.map(({ label, key, color }) => (
+        <div
+          key={key}
+          className="flex items-center gap-2 rounded-full border border-stone-100 bg-white px-4 py-1.5 shadow-sm"
+        >
+          <span className="text-[18px] font-bold tabular-nums" style={{ color }}>{stats[key]}</span>
+          <span className="text-[10.5px] text-stone-400 font-medium">{label}</span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -358,6 +387,9 @@ export function CashflowClient() {
           />
         </div>
 
+        {/* Row 1.5 — Transaction Stats strip */}
+        <TransactionStats stats={d.transactionStats} />
+
         {/* Row 2 — 90-day cards + income gauge */}
         <div className="grid grid-cols-3 gap-4">
           <FlowCard
@@ -391,7 +423,7 @@ export function CashflowClient() {
         {/* Row 4 — Drivers + Queue */}
         <div className="grid grid-cols-2 gap-4">
           <TopDriversList drivers={d.topDrivers} />
-          <ActionQueue     items={d.actionQueue} />
+          <ActionQueue    items={d.actionQueue} />
         </div>
 
       </div>

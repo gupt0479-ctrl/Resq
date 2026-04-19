@@ -40,7 +40,7 @@ export function Sidebar() {
           <Zap className="h-4 w-4 text-background" />
         </div>
         <div className="leading-tight">
-          <p className="text-sm font-semibold text-foreground">OpsPilot</p>
+          <p className="text-sm font-semibold text-foreground">Resq</p>
           <p className="text-[10px] text-steel">SMB Survival</p>
         </div>
       </div>

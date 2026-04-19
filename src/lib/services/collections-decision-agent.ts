@@ -464,7 +464,7 @@ function deterministicDecision(
     : aggressionBudget < 80 ? "formal"
     : "urgent"
 
-  const outreachDraft = `Hi ${customerName},\n\nThis is a ${tone} follow-up regarding invoice overdue by ${daysOverdue} days ($${amount.toFixed(0)}). We'd like to resolve this promptly.\n\nPlease contact us to arrange payment or a payment plan.\n\nBest regards,\nOpsPilot`
+  const outreachDraft = `Hi ${customerName},\n\nThis is a ${tone} follow-up regarding invoice overdue by ${daysOverdue} days ($${amount.toFixed(0)}). We'd like to resolve this promptly.\n\nPlease contact us to arrange payment or a payment plan.\n\nBest regards,\nResq`
 
   return {
     classification,
@@ -551,7 +551,7 @@ async function claudeDecision(params: {
     portalSection = lines.join("\n")
   }
 
-  const prompt = `You are OpsPilot's collections decision agent. Analyze this overdue invoice situation and produce a structured decision.
+  const prompt = `You are Resq's collections decision agent. Analyze this overdue invoice situation and produce a structured decision.
 
 ## Invoice Context
 - Customer: ${params.customerName}

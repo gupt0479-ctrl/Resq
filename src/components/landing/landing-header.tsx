@@ -54,7 +54,7 @@ export function LandingHeader() {
             <Flame className="h-4 w-4" />
           </span>
           <div className="leading-tight">
-            <p className="text-sm font-semibold">OpsPilot</p>
+            <p className="text-sm font-semibold">Resq</p>
             <p className={cn("text-[11px]", isOverHero ? "text-white/65" : "text-muted-foreground")}>
               Ember Table
             </p>

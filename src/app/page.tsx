@@ -6,7 +6,7 @@ import { RiskBadge } from "@/components/RiskBadge"
 import { AgentStatusPill } from "@/components/AgentStatusPill"
 
 export const metadata: Metadata = {
-  title: "OpsPilot Rescue — Autonomous SMB Survival Agent",
+  title: "Resq — Autonomous SMB Survival Agent",
   description: "Autonomous cashflow recovery for small businesses. Collections, financing scout, vendor optimization.",
 }
 
@@ -25,7 +25,7 @@ export default function LandingPage() {
           <Link href="/" className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-md bg-foreground text-background grid place-items-center font-display text-sm font-semibold">O</div>
             <div className="leading-tight">
-              <div className="font-display text-[15px] font-semibold tracking-tight">OpsPilot</div>
+              <div className="font-display text-[15px] font-semibold tracking-tight">Resq</div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-steel -mt-0.5">Rescue</div>
             </div>
           </Link>
@@ -53,7 +53,7 @@ export default function LandingPage() {
               <span className="text-steel">Act before the business feels it.</span>
             </h1>
             <p className="mt-6 text-base md:text-lg text-steel max-w-xl leading-relaxed">
-              OpsPilot Rescue autonomously recovers receivables, scouts financing, and finds vendor and insurance savings — so small businesses survive the gap between cost and cash.
+              Resq autonomously recovers receivables, scouts financing, and finds vendor and insurance savings — so small businesses survive the gap between cost and cash.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link href="/rescue" className="inline-flex items-center gap-2 rounded-md bg-foreground text-background px-5 h-11 text-sm font-medium hover:opacity-90 transition-opacity">
@@ -72,7 +72,7 @@ export default function LandingPage() {
                 <span className="h-2.5 w-2.5 rounded-full bg-crimson/60" />
                 <span className="h-2.5 w-2.5 rounded-full bg-amber/60" />
                 <span className="h-2.5 w-2.5 rounded-full bg-teal/60" />
-                <span className="ml-3 text-[11px] text-steel">opspilot.app/rescue</span>
+                <span className="ml-3 text-[11px] text-steel">resq.app/rescue</span>
               </div>
               <div className="p-5">
                 <div className="flex items-center justify-between mb-4">
@@ -182,7 +182,7 @@ export default function LandingPage() {
             <span className="text-[11px] uppercase tracking-[0.18em] text-amber font-medium">Tool execution layer</span>
             <h2 className="mt-3 font-display text-3xl md:text-4xl tracking-tight">An MCP bridge to the systems that already run the business.</h2>
             <p className="mt-5 text-base text-steel max-w-lg leading-relaxed">
-              OpsPilot orchestrates external tools — TinyFish for the open web, Stripe for ledger truth, Gmail for outreach, vendor and insurance sources for live quotes. The agent acts; the audit trail proves it.
+              Resq orchestrates external tools — TinyFish for the open web, Stripe for ledger truth, Gmail for outreach, vendor and insurance sources for live quotes. The agent acts; the audit trail proves it.
             </p>
             <div className="mt-8">
               <Link href="/rescue" className="inline-flex items-center gap-2 rounded-md bg-foreground text-background px-5 h-10 text-sm font-medium hover:opacity-90 transition-opacity">
@@ -201,7 +201,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-steel">
           <div className="flex items-center gap-2">
             <div className="h-5 w-5 rounded-md bg-foreground text-background grid place-items-center font-display text-[11px]">O</div>
-            <span>OpsPilot Rescue · Autonomous operator for business survival</span>
+            <span>Resq · Autonomous operator for business survival</span>
           </div>
           <div className="flex gap-5">
             <Link href="/rescue"       className="hover:text-foreground transition-colors">Rescue Queue</Link>
