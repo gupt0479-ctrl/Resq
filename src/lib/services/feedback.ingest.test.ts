@@ -115,7 +115,7 @@ describe("ingestFeedbackRow", () => {
     ).rejects.toThrow("appointment_id does not belong to this organization")
   })
 
-  it("handles race-condition duplicate (23505) by returning existing id", async () => {
+  it("handles concurrent duplicate insertion by returning existing id", async () => {
     selectLimitQueue = [[], [{ id: "race-fb-id" }]]
     insertReturningError = Object.assign(new Error("duplicate key"), { code: "23505" })
 

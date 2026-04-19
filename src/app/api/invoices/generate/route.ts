@@ -3,9 +3,14 @@ import { DEMO_ORG_ID } from "@/lib/db"
 import { ensureInvoiceForCompletedAppointment, getInvoiceDetail } from "@/lib/services/invoices"
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as {
+  let body: {
     appointmentId?: string
     reservation_id?: string
+  }
+  try {
+    body = (await req.json()) as typeof body
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 })
   }
 
   const appointmentId = body.appointmentId ?? body.reservation_id

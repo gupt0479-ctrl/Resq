@@ -14,8 +14,9 @@ function isValidTimeRange(startsAt: string, endsAt: string): boolean {
   return new Date(startsAt).getTime() < new Date(endsAt).getTime()
 }
 
-function resolveOrganizationId(req?: { organizationId?: string; organization_id?: string }): string {
-  return req?.organizationId ?? req?.organization_id ?? DEMO_ORG_ID
+function resolveOrganizationId(req: BookReservationRequest): string {
+  const withOrg = req as BookReservationRequest & { organizationId?: string; organization_id?: string }
+  return withOrg.organizationId ?? withOrg.organization_id ?? DEMO_ORG_ID
 }
 
 export async function checkConflict(
@@ -91,7 +92,7 @@ async function findOrCreateCustomer(
 export async function bookReservation(
   req: BookReservationRequest
 ): Promise<ServiceResult<Reservation>> {
-  const organizationId = resolveOrganizationId(req as unknown as { organizationId?: string; organization_id?: string })
+  const organizationId = resolveOrganizationId(req)
 
   if (!isValidTimeRange(req.starts_at, req.ends_at)) {
     return { error: "End time must be after start time." }
@@ -167,7 +168,7 @@ export async function getReservation(id: string): Promise<ServiceResult<Reservat
       .limit(1)
 
     const row = rows[0]
-    if (!row) return { error: "Reservation not found." }
+    if (!row) return { error: `Reservation ${id} not found.` }
     return { data: { ...row.reservations, customer: row.customers } as unknown as Reservation }
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) }
@@ -259,13 +260,10 @@ export async function completeReservation(id: string): Promise<ServiceResult<Res
       .limit(1)
 
     const row = rows[0]
+    if (!row) return { error: `Reservation ${id} not found.` }
 
-    const customerId =
-      row?.reservations.customerId ??
-      (existing.data as unknown as { customer_id?: string; customerId?: string }).customerId ??
-      (existing.data as unknown as { customer_id?: string; customerId?: string }).customer_id
-
-    const organizationId = row?.customers?.organizationId
+    const customerId = row.reservations.customerId
+    const organizationId = row.customers?.organizationId
     let visitCount = 0
 
     if (customerId && organizationId) {
@@ -293,9 +291,9 @@ export async function completeReservation(id: string): Promise<ServiceResult<Res
 
     const customer = row?.customers
       ? { ...row.customers, visit_count: visitCount }
-      : row?.customers
+      : undefined
 
-    return { data: { ...row?.reservations, customer } as unknown as Reservation }
+    return { data: { ...row.reservations, customer } as unknown as Reservation }
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) }
   }

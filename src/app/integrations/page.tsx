@@ -3,13 +3,13 @@ import { AlertTriangle, CheckCircle2, MinusCircle, Plug, XCircle } from "lucide-
 import { DEMO_ORG_ID } from "@/lib/db"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { isDatabaseConfigured } from "@/lib/env"
-import { ClearConnectorErrorButton } from "@/components/integrations/clear-connector-error-button"
-import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CONNECTOR_STATUS_LABEL } from "@/lib/constants/enums"
 import type { ConnectorStatus } from "@/lib/constants/enums"
 import { listConnectors } from "@/lib/services/integrations"
 import { healthCheck } from "@/lib/tinyfish/client"
+import { ClearConnectorErrorButton } from "@/components/integrations/clear-connector-error-button"
+import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export const dynamic = "force-dynamic"
 
@@ -165,7 +165,7 @@ export default async function IntegrationsPage() {
           ) : connectors.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {isDatabaseConfigured()
-                ? "No connectors found for this organization. Seed the database (supabase/seed.sql) or register connectors via webhooks."
+                ? "No connectors found for this organization. Seed the database with the provided SQL scripts or register connectors via webhooks."
                 : "DATABASE_URL not configured — connect a PostgreSQL database to load connectors."}
             </p>
           ) : (

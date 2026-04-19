@@ -5,6 +5,7 @@ import { getInvoiceDetail, recordInvoiceReminderSent } from "@/lib/services/invo
 import Anthropic from "@anthropic-ai/sdk"
 
 const anthropic = new Anthropic()
+type InvoiceDetail = Awaited<ReturnType<typeof getInvoiceDetail>>
 
 // ─── Thank-you generator (Claude with hardcoded fallback) ─────────────────────
 
@@ -43,6 +44,19 @@ Return ONLY valid JSON, no markdown:
   }
 }
 
+function getDbVisitCount(invoice: InvoiceDetail | null): number | undefined {
+  const customer = invoice?.customers
+  if (!customer || typeof customer !== "object") return undefined
+  const visitCount = (customer as Record<string, unknown>).visit_count
+  return typeof visitCount === "number" ? visitCount : undefined
+}
+
+function normalizeDueAt(invoice: InvoiceDetail | null, fallback?: string): string | null {
+  if (invoice?.dueAt instanceof Date) return invoice.dueAt.toISOString()
+  if (typeof invoice?.dueAt === "string") return invoice.dueAt
+  return fallback ?? null
+}
+
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(
@@ -75,27 +89,34 @@ export async function POST(
   }
 
   const customerName = dbInvoice?.customers?.full_name ?? body.invoiceFallback?.customer?.name ?? "Guest"
-  const visitCount   = body.invoiceFallback?.customer?.visit_count ?? 1
-  const total        = Number(dbInvoice?.totalAmount ?? body.invoiceFallback?.total ?? 0)
+  const visitCount   =
+    getDbVisitCount(dbInvoice) ??
+    body.invoiceFallback?.customer?.visit_count ??
+    1
+  const totalDue     = Number(dbInvoice?.totalAmount ?? body.invoiceFallback?.total ?? 0)
   const currentStatus = dbInvoice?.status ?? body.invoiceFallback?.status ?? "pending"
+  const dueAt = normalizeDueAt(dbInvoice, body.invoiceFallback?.due_at)
+  if (!dueAt) {
+    return NextResponse.json({ error: "Invoice due date is missing." }, { status: 400 })
+  }
 
   const reminderFacts: InvoiceReminderFacts = {
     customerName,
-    totalDue: Number(dbInvoice?.totalAmount ?? body.invoiceFallback?.total ?? 0),
-    dueAt: dbInvoice?.dueAt?.toISOString?.() ?? body.invoiceFallback?.due_at ?? new Date().toISOString(),
+    totalDue,
+    dueAt,
     reminderCount: Number(dbInvoice?.reminderCount ?? body.invoiceFallback?.reminder_count ?? 0),
     invoiceNumber: dbInvoice?.invoiceNumber ?? id,
   }
 
   // ── Paid thank-you path ────────────────────────────────────────────────────
   if (body.followUpType === "paid") {
-    const { subject, message } = await generateThankYou(customerName, total, visitCount)
+    const { subject, message } = await generateThankYou(customerName, totalDue, visitCount)
     return NextResponse.json({
       subject,
       message,
       reminder_number: 0,
       customer_name:   customerName,
-      invoice_total:   total,
+      invoice_total:   totalDue,
     })
   }
 
@@ -106,18 +127,16 @@ export async function POST(
     return NextResponse.json({ error: "Invoice already paid." }, { status: 400 })
   }
 
-  if (dbInvoice) {
-    const nextCount = await recordInvoiceReminderSent(id, DEMO_ORG_ID)
-    reminderFacts.reminderCount = Math.max(0, nextCount - 1)
-  }
-
   const reminder = await generateReminder(reminderFacts)
+  const persistedReminderCount = dbInvoice
+    ? await recordInvoiceReminderSent(id, DEMO_ORG_ID)
+    : null
 
   return NextResponse.json({
     subject:          reminder.subject,
     message:          reminder.message,
-    reminder_number:  reminder.reminder_number,
+    reminder_number:  persistedReminderCount ?? reminder.reminder_number,
     customer_name:    customerName,
-    invoice_total:    total,
+    invoice_total:    totalDue,
   })
 }
