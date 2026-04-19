@@ -1,7 +1,9 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and, count, gte, lte, ne, desc, inArray } from "drizzle-orm"
 import type { FinanceSummaryResponse } from "@/lib/schemas/finance"
 
-// â”€â”€â”€ Create revenue transaction (idempotent) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Create revenue transaction (idempotent) ─────────────────────────────
 
 export interface CreateRevenueTransactionInput {
   organizationId: string
@@ -12,38 +14,42 @@ export interface CreateRevenueTransactionInput {
 }
 
 export async function createRevenueTransaction(
-  client: SupabaseClient,
   input: CreateRevenueTransactionInput
 ): Promise<void> {
-  const { count } = await client
-    .from("finance_transactions")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", input.organizationId)
-    .eq("invoice_id",      input.invoiceId)
-    .eq("type",            "revenue")
-    .eq("direction",       "in")
+  const [countResult] = await db
+    .select({ count: count() })
+    .from(schema.financeTransactions)
+    .where(
+      and(
+        eq(schema.financeTransactions.organizationId, input.organizationId),
+        eq(schema.financeTransactions.invoiceId, input.invoiceId),
+        eq(schema.financeTransactions.type, "revenue"),
+        eq(schema.financeTransactions.direction, "in"),
+      ),
+    )
 
-  if (count && count > 0) return
+  if (countResult && Number(countResult.count) > 0) return
 
-  const { error } = await client.from("finance_transactions").insert({
-    organization_id: input.organizationId,
-    invoice_id:      input.invoiceId,
-    type:            "revenue",
-    category:        "dining_revenue",
-    amount:          input.amount,
-    direction:       "in",
-    occurred_at:     new Date().toISOString(),
-    payment_method:  input.paymentMethod ?? "card",
-    tax_relevant:    true,
-    notes:           input.notes ?? null,
-  })
-
-  if (error && error.code !== "23505") {
-    throw new Error(`Failed to create revenue transaction: ${error.message}`)
+  try {
+    await db.insert(schema.financeTransactions).values({
+      organizationId: input.organizationId,
+      invoiceId:      input.invoiceId,
+      type:           "revenue",
+      category:       "dining_revenue",
+      amount:         String(input.amount),
+      direction:      "in",
+      occurredAt:     new Date(),
+      paymentMethod:  input.paymentMethod ?? "card",
+      taxRelevant:    true,
+      notes:          input.notes ?? null,
+    })
+  } catch (err) {
+    if ((err as { code?: string }).code === "23505") return
+    throw new Error(`Failed to create revenue transaction: ${(err as Error).message}`)
   }
 }
 
-// â”€â”€â”€ Create arbitrary transaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Create arbitrary transaction ────────────────────────────────────────
 
 export interface CreateTransactionInput {
   organizationId:  string
@@ -61,38 +67,35 @@ export interface CreateTransactionInput {
 }
 
 export async function createTransaction(
-  client: SupabaseClient,
   input: CreateTransactionInput
 ): Promise<string> {
-  const { data, error } = await client
-    .from("finance_transactions")
-    .insert({
-      organization_id:   input.organizationId,
-      invoice_id:        input.invoiceId ?? null,
-      type:              input.type,
-      category:          input.category,
-      amount:            input.amount,
-      direction:         input.direction,
-      occurred_at:       input.occurredAt ?? new Date().toISOString(),
-      payment_method:    input.paymentMethod ?? null,
-      tax_relevant:      input.taxRelevant ?? false,
-      writeoff_eligible: input.writeoffEligible ?? false,
-      notes:             input.notes ?? null,
-      external_ref:      input.externalRef ?? null,
+  const [row] = await db
+    .insert(schema.financeTransactions)
+    .values({
+      organizationId:   input.organizationId,
+      invoiceId:        input.invoiceId ?? null,
+      type:             input.type,
+      category:         input.category,
+      amount:           String(input.amount),
+      direction:        input.direction,
+      occurredAt:       input.occurredAt ? new Date(input.occurredAt) : new Date(),
+      paymentMethod:    input.paymentMethod ?? null,
+      taxRelevant:      input.taxRelevant ?? false,
+      writeoffEligible: input.writeoffEligible ?? false,
+      notes:            input.notes ?? null,
+      externalRef:      input.externalRef ?? null,
     })
-    .select("id")
-    .single()
+    .returning({ id: schema.financeTransactions.id })
 
-  if (error || !data) {
-    throw new Error(error?.message ?? "Failed to create transaction")
+  if (!row) {
+    throw new Error("Failed to create transaction")
   }
-  return data.id
+  return row.id
 }
 
-// â”€â”€â”€ List transactions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── List transactions ───────────────────────────────────────────────────
 
 export async function listTransactions(
-  client: SupabaseClient,
   organizationId: string,
   opts: {
     type?:        string
@@ -103,45 +106,57 @@ export async function listTransactions(
   } = {}
 ) {
   // Try the finance_transactions ledger first
-  let query = client
-    .from("finance_transactions")
-    .select("*")
-    .eq("organization_id", organizationId)
-    .order("occurred_at", { ascending: false })
+  const conditions = [eq(schema.financeTransactions.organizationId, organizationId)]
 
-  if (opts.type)        query = query.eq("type", opts.type)
-  if (opts.taxRelevant !== undefined) query = query.eq("tax_relevant", opts.taxRelevant)
-  if (opts.since)       query = query.gte("occurred_at", opts.since)
-  if (opts.limit)       query = query.limit(opts.limit)
-  if (opts.offset) {
-    query = query.range(opts.offset, opts.offset + (opts.limit ?? 50) - 1)
-  }
+  if (opts.type) conditions.push(eq(schema.financeTransactions.type, opts.type))
+  if (opts.taxRelevant !== undefined) conditions.push(eq(schema.financeTransactions.taxRelevant, opts.taxRelevant))
+  if (opts.since) conditions.push(gte(schema.financeTransactions.occurredAt, new Date(opts.since)))
 
-  const { data, error } = await query
-  if (!error && data && data.length > 0) return data
+  const data = await db
+    .select()
+    .from(schema.financeTransactions)
+    .where(and(...conditions))
+    .orderBy(desc(schema.financeTransactions.occurredAt))
+    .limit(opts.limit ?? 50)
+    .offset(opts.offset ?? 0)
 
-  // Ledger is empty â€” synthesize from shipments (expenses) + reservations (revenue)
-  return buildSyntheticTransactions(client, opts.limit ?? 20)
+  if (data.length > 0) return data
+
+  // Ledger is empty — synthesize from shipments (expenses) + reservations (revenue)
+  return buildSyntheticTransactions(opts.limit ?? 20)
 }
 
-async function buildSyntheticTransactions(client: SupabaseClient, limit: number) {
-  const [shipmentsRes, reservationsRes, menuItemsRes] = await Promise.all([
-    client
-      .from("shipments")
-      .select("id, vendor_name, total_cost, ordered_at, status")
-      .neq("status", "cancelled")
-      .order("ordered_at", { ascending: false })
+async function buildSyntheticTransactions(limit: number) {
+  const [shipmentsData, reservationsData, menuItemsData] = await Promise.all([
+    db
+      .select({
+        id:        schema.shipments.id,
+        vendorName: schema.shipments.vendorName,
+        totalCost: schema.shipments.totalCost,
+        orderedAt: schema.shipments.orderedAt,
+        status:    schema.shipments.status,
+      })
+      .from(schema.shipments)
+      .where(ne(schema.shipments.status, "cancelled"))
+      .orderBy(desc(schema.shipments.orderedAt))
       .limit(limit),
-    client
-      .from("reservations")
-      .select("id, date, covers, menu_item_ids")
-      .order("date", { ascending: false })
+    db
+      .select({
+        id:          schema.reservations.id,
+        date:        schema.reservations.date,
+        covers:      schema.reservations.covers,
+        menuItemIds: schema.reservations.menuItemIds,
+      })
+      .from(schema.reservations)
+      .orderBy(desc(schema.reservations.date))
       .limit(limit),
-    client.from("menu_items").select("id, price"),
+    db
+      .select({ id: schema.menuItems.id, price: schema.menuItems.price })
+      .from(schema.menuItems),
   ])
 
   const priceMap = new Map(
-    (menuItemsRes.data ?? []).map((m) => [m.id as string, Number(m.price)])
+    menuItemsData.map((m) => [m.id, Number(m.price)])
   )
 
   type SyntheticRow = {
@@ -163,31 +178,31 @@ async function buildSyntheticTransactions(client: SupabaseClient, limit: number)
 
   const rows: SyntheticRow[] = []
 
-  for (const s of shipmentsRes.data ?? []) {
+  for (const s of shipmentsData) {
     rows.push({
-      id: s.id as string,
+      id: s.id,
       organization_id: "",
       invoice_id: null,
       type: "inventory_purchase",
       category: "inventory_purchase",
-      amount: Number(s.total_cost),
+      amount: Number(s.totalCost),
       direction: "out",
-      occurred_at: s.ordered_at as string,
+      occurred_at: s.orderedAt.toISOString(),
       payment_method: null,
       tax_relevant: true,
       writeoff_eligible: false,
-      notes: `Shipment from ${s.vendor_name}`,
+      notes: `Shipment from ${s.vendorName}`,
       external_ref: null,
-      created_at: s.ordered_at as string,
+      created_at: s.orderedAt.toISOString(),
     })
   }
 
-  for (const r of reservationsRes.data ?? []) {
-    const ids = (r.menu_item_ids as string[]) ?? []
+  for (const r of reservationsData) {
+    const ids = (r.menuItemIds as string[]) ?? []
     const total = Number(r.covers) * ids.reduce((s, id) => s + (priceMap.get(id) ?? 0), 0)
     if (total <= 0) continue
     rows.push({
-      id: r.id as string,
+      id: r.id,
       organization_id: "",
       invoice_id: null,
       type: "revenue",
@@ -209,10 +224,9 @@ async function buildSyntheticTransactions(client: SupabaseClient, limit: number)
   return rows.slice(0, limit)
 }
 
-// â”€â”€â”€ Finance summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Finance summary ─────────────────────────────────────────────────────
 
 export async function getFinanceSummary(
-  client: SupabaseClient,
   organizationId?: string,
 ): Promise<FinanceSummaryResponse> {
   const now = new Date()
@@ -231,20 +245,29 @@ export async function getFinanceSummary(
   let usedLedgerForWeekly = false
 
   if (organizationId) {
-    const { data: ledgerRows, error: ledgerErr } = await client
-      .from("finance_transactions")
-      .select("amount, direction, type, occurred_at")
-      .eq("organization_id", organizationId)
-      .gte("occurred_at", sinceIso)
+    const ledgerRows = await db
+      .select({
+        amount:     schema.financeTransactions.amount,
+        direction:  schema.financeTransactions.direction,
+        type:       schema.financeTransactions.type,
+        occurredAt: schema.financeTransactions.occurredAt,
+      })
+      .from(schema.financeTransactions)
+      .where(
+        and(
+          eq(schema.financeTransactions.organizationId, organizationId),
+          gte(schema.financeTransactions.occurredAt, new Date(sinceIso)),
+        ),
+      )
 
-    if (!ledgerErr && ledgerRows && ledgerRows.length > 0) {
+    if (ledgerRows.length > 0) {
       usedLedgerForWeekly = true
       const todayPrefix = `${todayStr}T`
       for (const r of ledgerRows) {
         const amt = Number(r.amount) || 0
         if (r.direction === "in" && r.type === "revenue") {
           revenueThisWeek += amt
-          const oc = r.occurred_at as string
+          const oc = r.occurredAt.toISOString()
           if (oc.startsWith(todayPrefix) || oc.slice(0, 10) === todayStr) {
             revenueToday += amt
           }
@@ -257,41 +280,60 @@ export async function getFinanceSummary(
   }
 
   if (!usedLedgerForWeekly) {
-    // â”€â”€ Revenue from reservations Ã— menu prices (legacy / non-ledger demos) â”€
-    const [reservationsRes, menuItemsRes] = await Promise.all([
-      client
-        .from("reservations")
-        .select("id, date, covers, menu_item_ids")
-        .gte("date", sevenDaysAgoStr)
-        .lte("date", todayStr),
-      client.from("menu_items").select("id, price"),
+    // ── Revenue from reservations × menu prices (legacy / non-ledger demos) ─
+    const [reservationsData, menuItemsData] = await Promise.all([
+      db
+        .select({
+          id:          schema.reservations.id,
+          date:        schema.reservations.date,
+          covers:      schema.reservations.covers,
+          menuItemIds: schema.reservations.menuItemIds,
+        })
+        .from(schema.reservations)
+        .where(
+          and(
+            gte(schema.reservations.date, sevenDaysAgoStr),
+            lte(schema.reservations.date, todayStr),
+          ),
+        ),
+      db
+        .select({ id: schema.menuItems.id, price: schema.menuItems.price })
+        .from(schema.menuItems),
     ])
 
     const priceMap = new Map(
-      (menuItemsRes.data ?? []).map((m) => [m.id as string, Number(m.price)])
+      menuItemsData.map((m) => [m.id, Number(m.price)])
     )
 
-    for (const r of reservationsRes.data ?? []) {
-      const ids = (r.menu_item_ids as string[]) ?? []
+    for (const r of reservationsData) {
+      const ids = (r.menuItemIds as string[]) ?? []
       const total = Number(r.covers) * ids.reduce((s, id) => s + (priceMap.get(id) ?? 0), 0)
       revenueThisWeek += total
       if (r.date === todayStr) revenueToday += total
     }
 
-    // â”€â”€ Expenses from shipments (inventory purchases last 7 days) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const { data: shipments } = await client
-      .from("shipments")
-      .select("total_cost, ordered_at, status")
-      .neq("status", "cancelled")
-      .gte("ordered_at", sinceIso)
+    // ── Expenses from shipments (inventory purchases last 7 days) ───────────
+    const shipmentsData = await db
+      .select({
+        totalCost: schema.shipments.totalCost,
+        orderedAt: schema.shipments.orderedAt,
+        status:    schema.shipments.status,
+      })
+      .from(schema.shipments)
+      .where(
+        and(
+          ne(schema.shipments.status, "cancelled"),
+          gte(schema.shipments.orderedAt, new Date(sinceIso)),
+        ),
+      )
 
-    expensesThisWeek = (shipments ?? []).reduce(
-      (s, r) => s + Number(r.total_cost),
+    expensesThisWeek = shipmentsData.reduce(
+      (s, r) => s + Number(r.totalCost),
       0
     )
   }
 
-  // â”€â”€ Receivables from invoices (graceful fallback if table is empty/missing) â”€
+  // ── Receivables from invoices (graceful fallback if table is empty/missing) ─
   let pendingReceivables = 0
   let pendingInvoiceCount = 0
   let overdueReceivables = 0
@@ -304,35 +346,54 @@ export async function getFinanceSummary(
   }
 
   try {
-    const pendingQ = client
-      .from("invoices")
-      .select("total_amount, amount_paid")
-      .in("status", ["sent", "pending"])
-    const overdueQ = client.from("invoices").select("total_amount, amount_paid").eq("status", "overdue")
-    const openQ = client
-      .from("invoices")
-      .select("total_amount, amount_paid, due_at")
-      .not("status", "in", '("paid","void")')
+    const { notInArray } = await import("drizzle-orm")
+
+    const pendingConditions = [
+      inArray(schema.invoices.status, ["sent", "pending"]),
+    ]
+    if (organizationId) pendingConditions.push(eq(schema.invoices.organizationId, organizationId))
+
+    const overdueConditions = [
+      eq(schema.invoices.status, "overdue"),
+    ]
+    if (organizationId) overdueConditions.push(eq(schema.invoices.organizationId, organizationId))
+
+    const openConditions = [
+      notInArray(schema.invoices.status, ["paid", "void"]),
+    ]
+    if (organizationId) openConditions.push(eq(schema.invoices.organizationId, organizationId))
 
     const [pendingRes, overdueRes, openRes] = await Promise.all([
-      organizationId ? pendingQ.eq("organization_id", organizationId) : pendingQ,
-      organizationId ? overdueQ.eq("organization_id", organizationId) : overdueQ,
-      organizationId ? openQ.eq("organization_id", organizationId) : openQ,
+      db
+        .select({ totalAmount: schema.invoices.totalAmount, amountPaid: schema.invoices.amountPaid })
+        .from(schema.invoices)
+        .where(and(...pendingConditions)),
+      db
+        .select({ totalAmount: schema.invoices.totalAmount, amountPaid: schema.invoices.amountPaid })
+        .from(schema.invoices)
+        .where(and(...overdueConditions)),
+      db
+        .select({ totalAmount: schema.invoices.totalAmount, amountPaid: schema.invoices.amountPaid, dueAt: schema.invoices.dueAt })
+        .from(schema.invoices)
+        .where(and(...openConditions)),
     ])
 
-    if (!pendingRes.error) {
-      pendingReceivables  = sumRemaining(pendingRes.data)
-      pendingInvoiceCount = pendingRes.data?.length ?? 0
-    }
-    if (!overdueRes.error) {
-      overdueReceivables  = sumRemaining(overdueRes.data)
-      overdueInvoiceCount = overdueRes.data?.length ?? 0
-    }
-    if (!openRes.error) {
-      aging = computeAging(openRes.data ?? [], now)
-    }
+    pendingReceivables  = sumRemaining(pendingRes.map((r) => ({ total_amount: Number(r.totalAmount), amount_paid: Number(r.amountPaid) })))
+    pendingInvoiceCount = pendingRes.length
+
+    overdueReceivables  = sumRemaining(overdueRes.map((r) => ({ total_amount: Number(r.totalAmount), amount_paid: Number(r.amountPaid) })))
+    overdueInvoiceCount = overdueRes.length
+
+    aging = computeAging(
+      openRes.map((r) => ({
+        total_amount: Number(r.totalAmount),
+        amount_paid:  Number(r.amountPaid),
+        due_at:       r.dueAt.toISOString(),
+      })),
+      now,
+    )
   } catch {
-    // invoices table not seeded â€” receivables stay at 0
+    // invoices table not seeded — receivables stay at 0
   }
 
   return {
@@ -349,7 +410,7 @@ export async function getFinanceSummary(
   }
 }
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ─────────────────────────────────────────────────────────────
 
 function sumRemaining(
   rows: Array<{ total_amount: number; amount_paid: number }> | null

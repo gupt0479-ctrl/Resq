@@ -1,6 +1,23 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import {
+  feedback,
+  customers,
+  organizations,
+  appointments,
+  followUpActions,
+} from "@/lib/db/schema"
+import {
+  eq,
+  and,
+  or,
+  gte,
+  desc,
+  count,
+  inArray,
+  notInArray,
+} from "drizzle-orm"
 import type { FeedbackFollowUpStatus } from "@/lib/constants/enums"
-import { SUPABASE_URL } from "@/lib/env"
+import { DATABASE_URL } from "@/lib/env"
 
 export type FeedbackCardRow = {
   id:             string
@@ -41,14 +58,14 @@ export type FeedbackEmptyContext =
   | { kind: "no_feedback_rows" }
   | { kind: "wrong_organization" }
 
-/** Populated when the feedback list is empty â€” same counts the app sees (service role). */
+/** Populated when the feedback list is empty — same counts the app sees (service role). */
 export type FeedbackEmptyDiagnostics = {
-  supabaseHost:             string
+  dbHost:                   string
   organizationsCount:       number | null
   customersForOrgCount:     number | null
   appointmentsForOrgCount:  number | null
   feedbackGlobalCount:      number | null
-  /** PostgREST errors while counting (e.g. missing table). */
+  /** Errors while counting (e.g. missing table). */
   snapshotErrors:           string[]
 }
 
@@ -62,178 +79,224 @@ export type FeedbackPageData = {
   flagged:         FeedbackCardRow[]
   pendingActions:  PendingFollowUpRow[]
   allFeedback:     FeedbackTableRow[]
-  /** Set when `allFeedback` is empty â€” explains Supabase vs org configuration. */
+  /** Set when `allFeedback` is empty — explains DB vs org configuration. */
   emptyContext: FeedbackEmptyContext | null
   /** Row-count snapshot when list is empty (verify .env project vs SQL editor). */
   emptyDiagnostics: FeedbackEmptyDiagnostics | null
 }
 
-function formatShortDate(iso: string) {
+function formatShortDate(iso: string | Date) {
   try {
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    const d = typeof iso === "string" ? new Date(iso) : iso
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
   } catch {
-    return iso.slice(0, 10)
+    return String(iso).slice(0, 10)
   }
 }
 
-function isOpenFeedbackRow(r: { follow_up_status: string }) {
-  return r.follow_up_status !== "resolved" && r.follow_up_status !== "thankyou_sent"
+function isOpenFeedbackRow(r: { followUpStatus: string }) {
+  return r.followUpStatus !== "resolved" && r.followUpStatus !== "thankyou_sent"
 }
 
 /** Flagged queue: open items with safety OR urgency>=4 OR explicit flagged. */
 function isFlaggedQueueRow(r: {
   flagged: boolean
-  safety_flag: boolean
+  safetyFlag: boolean
   urgency: number
-  follow_up_status: string
+  followUpStatus: string
 }) {
-  return isOpenFeedbackRow(r) && (r.flagged || r.safety_flag || r.urgency >= 4)
+  return isOpenFeedbackRow(r) && (r.flagged || r.safetyFlag || r.urgency >= 4)
 }
 
 export async function listFeedbackQuery(
-  client: SupabaseClient,
   organizationId: string
 ): Promise<FeedbackPageData> {
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
   const weekIso = weekAgo.toISOString()
 
-  const { data: rows, error } = await client
-    .from("feedback")
-    .select(
-      "id, customer_id, guest_name_snapshot, score, source, comment, sentiment, urgency, safety_flag, flagged, reply_draft, follow_up_status, manager_summary, received_at, customers ( full_name )"
-    )
-    .eq("organization_id", organizationId)
-    .order("received_at", { ascending: false })
+  const rows = await db
+    .select({
+      id: feedback.id,
+      customerId: feedback.customerId,
+      guestNameSnapshot: feedback.guestNameSnapshot,
+      score: feedback.score,
+      source: feedback.source,
+      comment: feedback.comment,
+      sentiment: feedback.sentiment,
+      urgency: feedback.urgency,
+      safetyFlag: feedback.safetyFlag,
+      flagged: feedback.flagged,
+      replyDraft: feedback.replyDraft,
+      followUpStatus: feedback.followUpStatus,
+      managerSummary: feedback.managerSummary,
+      receivedAt: feedback.receivedAt,
+      customerFullName: customers.fullName,
+    })
+    .from(feedback)
+    .leftJoin(customers, eq(feedback.customerId, customers.id))
+    .where(eq(feedback.organizationId, organizationId))
+    .orderBy(desc(feedback.receivedAt))
     .limit(200)
 
-  if (error) throw new Error(error.message)
-
-  const list = (rows ?? []) as Array<{
-    id: string
-    customer_id: string | null
-    guest_name_snapshot: string | null
-    score: number
-    source: string
-    comment: string
-    sentiment: string | null
-    urgency: number
-    safety_flag: boolean
-    flagged: boolean
-    reply_draft: string | null
-    follow_up_status: string
-    manager_summary: string | null
-    received_at: string
-    customers: { full_name?: string } | null
-  }>
+  const list = rows.map((r) => ({
+    ...r,
+    receivedAtStr: r.receivedAt.toISOString(),
+  }))
 
   const guestName = (r: (typeof list)[0]) =>
-    r.guest_name_snapshot ?? r.customers?.full_name ?? "Guest"
+    r.guestNameSnapshot ?? r.customerFullName ?? "Guest"
 
   let emptyContext: FeedbackEmptyContext | null = null
   let emptyDiagnostics: FeedbackEmptyDiagnostics | null = null
 
   if (list.length === 0) {
-    const [fbAll, orgAll, custOrg, apptOrg] = await Promise.all([
-      client.from("feedback").select("*", { count: "exact", head: true }),
-      client.from("organizations").select("*", { count: "exact", head: true }),
-      client
-        .from("customers")
-        .select("*", { count: "exact", head: true })
-        .eq("organization_id", organizationId),
-      client
-        .from("appointments")
-        .select("*", { count: "exact", head: true })
-        .eq("organization_id", organizationId),
-    ])
+    const snapshotErrors: string[] = []
 
-    const globalCount = fbAll.count ?? 0
+    let feedbackGlobalCount: number | null = null
+    let organizationsCount: number | null = null
+    let customersForOrgCount: number | null = null
+    let appointmentsForOrgCount: number | null = null
+
+    try {
+      const [fbAll] = await db.select({ count: count() }).from(feedback)
+      feedbackGlobalCount = Number(fbAll?.count ?? 0)
+    } catch (e) {
+      snapshotErrors.push(`feedback: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
+    try {
+      const [orgAll] = await db.select({ count: count() }).from(organizations)
+      organizationsCount = Number(orgAll?.count ?? 0)
+    } catch (e) {
+      snapshotErrors.push(`organizations: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
+    try {
+      const [custOrg] = await db
+        .select({ count: count() })
+        .from(customers)
+        .where(eq(customers.organizationId, organizationId))
+      customersForOrgCount = Number(custOrg?.count ?? 0)
+    } catch (e) {
+      snapshotErrors.push(`customers: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
+    try {
+      const [apptOrg] = await db
+        .select({ count: count() })
+        .from(appointments)
+        .where(eq(appointments.organizationId, organizationId))
+      appointmentsForOrgCount = Number(apptOrg?.count ?? 0)
+    } catch (e) {
+      snapshotErrors.push(`appointments: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
+    const globalCount = feedbackGlobalCount ?? 0
     emptyContext = globalCount === 0 ? { kind: "no_feedback_rows" } : { kind: "wrong_organization" }
 
-    const snapshotErrors: string[] = []
-    if (fbAll.error) snapshotErrors.push(`feedback: ${fbAll.error.message}`)
-    if (orgAll.error) snapshotErrors.push(`organizations: ${orgAll.error.message}`)
-    if (custOrg.error) snapshotErrors.push(`customers: ${custOrg.error.message}`)
-    if (apptOrg.error) snapshotErrors.push(`appointments: ${apptOrg.error.message}`)
-
-    let supabaseHost = "(unset)"
+    let dbHost = "(unset)"
     try {
-      if (SUPABASE_URL) supabaseHost = new URL(SUPABASE_URL).hostname
+      if (DATABASE_URL) dbHost = new URL(DATABASE_URL).hostname
     } catch {
-      supabaseHost = "(invalid NEXT_PUBLIC_SUPABASE_URL)"
+      dbHost = "(invalid DATABASE_URL)"
     }
 
     emptyDiagnostics = {
-      supabaseHost,
-      organizationsCount:      orgAll.error ? null : (orgAll.count ?? 0),
-      customersForOrgCount:    custOrg.error ? null : (custOrg.count ?? 0),
-      appointmentsForOrgCount: apptOrg.error ? null : (apptOrg.count ?? 0),
-      feedbackGlobalCount:     fbAll.error ? null : globalCount,
+      dbHost,
+      organizationsCount,
+      customersForOrgCount,
+      appointmentsForOrgCount,
+      feedbackGlobalCount,
       snapshotErrors,
     }
   }
 
-  const inWeek = list.filter((r) => r.received_at >= weekIso)
+  const weekDate = new Date(weekIso)
+  const inWeek = list.filter((r) => r.receivedAt >= weekDate)
   const scores = inWeek.map((r) => r.score)
   const avgRatingWeek =
     scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null
 
-  const { count: pendingCount } = await client
-    .from("follow_up_actions")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .eq("status", "pending")
+  const [pendingCountResult] = await db
+    .select({ count: count() })
+    .from(followUpActions)
+    .where(
+      and(
+        eq(followUpActions.organizationId, organizationId),
+        eq(followUpActions.status, "pending")
+      )
+    )
 
-  const { data: pendingRows } = await client
-    .from("follow_up_actions")
-    .select("id, action_type, message_draft, feedback_id")
-    .eq("organization_id", organizationId)
-    .eq("status", "pending")
-    .order("created_at", { ascending: false })
+  const pendingCount = Number(pendingCountResult?.count ?? 0)
+
+  const pendingRows = await db
+    .select({
+      id: followUpActions.id,
+      actionType: followUpActions.actionType,
+      messageDraft: followUpActions.messageDraft,
+      feedbackId: followUpActions.feedbackId,
+    })
+    .from(followUpActions)
+    .where(
+      and(
+        eq(followUpActions.organizationId, organizationId),
+        eq(followUpActions.status, "pending")
+      )
+    )
+    .orderBy(desc(followUpActions.createdAt))
     .limit(20)
 
-  const pendingFbIds = [...new Set((pendingRows ?? []).map((p) => p.feedback_id as string))]
+  const pendingFbIds = [...new Set(pendingRows.map((p) => p.feedbackId))]
   const pendingActionByFeedback = new Map<string, string>()
-  for (const row of pendingRows ?? []) {
-    const feedbackId = row.feedback_id as string
-    if (!pendingActionByFeedback.has(feedbackId)) {
-      pendingActionByFeedback.set(feedbackId, row.id as string)
+  for (const row of pendingRows) {
+    if (!pendingActionByFeedback.has(row.feedbackId)) {
+      pendingActionByFeedback.set(row.feedbackId, row.id)
     }
   }
 
   const guestByFeedback = new Map<string, string>()
   if (pendingFbIds.length) {
-    const { data: fbRows } = await client
-      .from("feedback")
-      .select("id, guest_name_snapshot, customer_id, customers ( full_name )")
-      .in("id", pendingFbIds)
-    for (const fr of fbRows ?? []) {
-      const r = fr as {
-        id: string
-        guest_name_snapshot: string | null
-        customers: { full_name?: string } | null
-      }
-      guestByFeedback.set(r.id, r.guest_name_snapshot ?? r.customers?.full_name ?? "Guest")
+    const fbRows = await db
+      .select({
+        id: feedback.id,
+        guestNameSnapshot: feedback.guestNameSnapshot,
+        customerFullName: customers.fullName,
+      })
+      .from(feedback)
+      .leftJoin(customers, eq(feedback.customerId, customers.id))
+      .where(inArray(feedback.id, pendingFbIds))
+
+    for (const fr of fbRows) {
+      guestByFeedback.set(fr.id, fr.guestNameSnapshot ?? fr.customerFullName ?? "Guest")
     }
   }
 
-  const flaggedCount = list.filter(isFlaggedQueueRow).length
+  const flaggedItems = list.filter((r) =>
+    isFlaggedQueueRow({
+      flagged: r.flagged,
+      safetyFlag: r.safetyFlag,
+      urgency: r.urgency,
+      followUpStatus: r.followUpStatus,
+    })
+  )
+
+  const flaggedCount = flaggedItems.length
   const happyGuestsWeek = inWeek.filter((r) => r.score >= 4 && r.sentiment !== "negative").length
 
-  const pendingActions: PendingFollowUpRow[] = (pendingRows ?? []).map((p) => ({
-    id:      p.id as string,
-    guest:   guestByFeedback.get(p.feedback_id as string) ?? "Guest",
-    type:    p.action_type as string,
-    message: (p.message_draft as string | null) ?? null,
+  const pendingActions: PendingFollowUpRow[] = pendingRows.map((p) => ({
+    id:      p.id,
+    guest:   guestByFeedback.get(p.feedbackId) ?? "Guest",
+    type:    p.actionType,
+    message: p.messageDraft ?? null,
   }))
 
-  const flagged: FeedbackCardRow[] = list
-    .filter(isFlaggedQueueRow)
+  const flagged: FeedbackCardRow[] = flaggedItems
     .slice(0, 12)
     .map((r) => {
       const pendingActionId = pendingActionByFeedback.get(r.id) ?? null
       const isPublicSource = r.source === "google" || r.source === "yelp"
-      const canApproveReply = isPublicSource && Boolean(r.reply_draft?.trim()) && !pendingActionId
+      const canApproveReply = isPublicSource && Boolean(r.replyDraft?.trim()) && !pendingActionId
 
       return {
         id:              r.id,
@@ -243,10 +306,10 @@ export async function listFeedbackQuery(
         comment:         r.comment,
         sentiment:       r.sentiment ?? "neutral",
         urgency:         r.urgency,
-        safetyFlag:      r.safety_flag,
-        replyDraft:      r.reply_draft ?? r.manager_summary ?? "Draft will appear after AI analysis completes.",
-        followUpStatus:  r.follow_up_status as FeedbackFollowUpStatus,
-        dateLabel:       formatShortDate(r.received_at),
+        safetyFlag:      r.safetyFlag,
+        replyDraft:      r.replyDraft ?? r.managerSummary ?? "Draft will appear after AI analysis completes.",
+        followUpStatus:  r.followUpStatus as FeedbackFollowUpStatus,
+        dateLabel:       formatShortDate(r.receivedAt),
         approveLabel:    "Approve Reply",
         draftTitle:      isPublicSource ? "AI-drafted public reply" : "Manager summary",
         canApproveReply,
@@ -260,8 +323,8 @@ export async function listFeedbackQuery(
     score:          r.score,
     source:         r.source,
     sentiment:      r.sentiment ?? "neutral",
-    followUpStatus: r.follow_up_status as FeedbackFollowUpStatus,
-    dateLabel:      formatShortDate(r.received_at),
+    followUpStatus: r.followUpStatus as FeedbackFollowUpStatus,
+    dateLabel:      formatShortDate(r.receivedAt),
   }))
 
   return {
@@ -289,66 +352,78 @@ export type DashboardFeedbackSpotlightItem = {
 }
 
 export async function countUnhappyGuestsForDashboard(
-  client: SupabaseClient,
   organizationId: string
 ): Promise<number> {
-  const { count, error } = await client
-    .from("feedback")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .not("follow_up_status", "in", '("resolved","thankyou_sent")')
-    .or("flagged.eq.true,safety_flag.eq.true,urgency.gte.4")
+  const [result] = await db
+    .select({ count: count() })
+    .from(feedback)
+    .where(
+      and(
+        eq(feedback.organizationId, organizationId),
+        notInArray(feedback.followUpStatus, ["resolved", "thankyou_sent"]),
+        or(
+          eq(feedback.flagged, true),
+          eq(feedback.safetyFlag, true),
+          gte(feedback.urgency, 4)
+        )
+      )
+    )
 
-  if (error) throw new Error(error.message)
-  return count ?? 0
+  return Number(result?.count ?? 0)
 }
 
 export async function getFeedbackSpotlightForDashboard(
-  client: SupabaseClient,
   organizationId: string,
   limit = 4
 ): Promise<DashboardFeedbackSpotlightItem[]> {
-  const { data, error } = await client
-    .from("feedback")
-    .select(
-      "id, guest_name_snapshot, score, urgency, safety_flag, flagged, follow_up_status, manager_summary, comment, received_at, customers ( full_name )"
-    )
-    .eq("organization_id", organizationId)
-    .order("received_at", { ascending: false })
+  const rows = await db
+    .select({
+      id: feedback.id,
+      guestNameSnapshot: feedback.guestNameSnapshot,
+      score: feedback.score,
+      urgency: feedback.urgency,
+      safetyFlag: feedback.safetyFlag,
+      flagged: feedback.flagged,
+      followUpStatus: feedback.followUpStatus,
+      managerSummary: feedback.managerSummary,
+      comment: feedback.comment,
+      receivedAt: feedback.receivedAt,
+      customerFullName: customers.fullName,
+    })
+    .from(feedback)
+    .leftJoin(customers, eq(feedback.customerId, customers.id))
+    .where(eq(feedback.organizationId, organizationId))
+    .orderBy(desc(feedback.receivedAt))
     .limit(100)
 
-  if (error) throw new Error(error.message)
-
-  return (data ?? [])
-    .filter((r: Record<string, unknown>) =>
+  return rows
+    .filter((r) =>
       isFlaggedQueueRow({
-        flagged:         Boolean(r.flagged),
-        safety_flag:     Boolean(r.safety_flag),
-        urgency:         Number(r.urgency ?? 0),
-        follow_up_status: String(r.follow_up_status ?? "none"),
+        flagged:         r.flagged,
+        safetyFlag:      r.safetyFlag,
+        urgency:         r.urgency,
+        followUpStatus:  r.followUpStatus,
       })
     )
     .slice(0, limit)
-    .map((r: Record<string, unknown>) => {
-      const cust = r.customers as { full_name?: string } | null
-      const guest = (r.guest_name_snapshot as string) ?? cust?.full_name ?? "Guest"
+    .map((r) => {
+      const guest = r.guestNameSnapshot ?? r.customerFullName ?? "Guest"
       const summary =
-        (r.manager_summary as string) ||
-        (String(r.comment ?? "").slice(0, 120) || "Needs attention")
+        r.managerSummary ||
+        (r.comment.slice(0, 120) || "Needs attention")
       return {
-        id:         r.id as string,
+        id:         r.id,
         guestName:  guest,
-        score:      Number(r.score),
+        score:      r.score,
         summary,
-        urgency:    Number(r.urgency ?? 0),
-        safetyFlag: Boolean(r.safety_flag),
+        urgency:    r.urgency,
+        safetyFlag: r.safetyFlag,
       }
     })
 }
 
 export async function getFeedbackPageData(
-  client: SupabaseClient,
   organizationId: string
 ): Promise<FeedbackPageData> {
-  return listFeedbackQuery(client, organizationId)
+  return listFeedbackQuery(organizationId)
 }

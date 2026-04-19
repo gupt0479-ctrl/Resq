@@ -1,7 +1,7 @@
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { listConnectors } from "@/lib/services/integrations"
-import { isSupabaseConfigured } from "@/lib/env"
+import { isDatabaseConfigured } from "@/lib/env"
 import { LedgerSchemaBanner } from "@/components/ops/ledger-schema-banner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CONNECTOR_STATUS_LABEL } from "@/lib/constants/enums"
@@ -68,14 +68,13 @@ export default async function IntegrationsPage() {
   let connectors: Record<string, unknown>[] = []
   let connectorsLoadError: string | null = null
 
-  if (isSupabaseConfigured()) {
-    const client = createServerSupabaseClient()
-    const schema = await getLedgerSchemaHealth(client)
+  if (isDatabaseConfigured()) {
+    const schema = await getLedgerSchemaHealth()
     if (!schema.ok) {
       return <LedgerSchemaBanner message={schema.message} />
     }
     try {
-      connectors = (await listConnectors(client, DEMO_ORG_ID)) as Record<string, unknown>[]
+      connectors = (await listConnectors(DEMO_ORG_ID)) as unknown as Record<string, unknown>[]
     } catch (err: unknown) {
       connectorsLoadError = err instanceof Error ? err.message : String(err)
     }
@@ -130,7 +129,7 @@ export default async function IntegrationsPage() {
             </p>
           ) : connectors.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {isSupabaseConfigured()
+              {isDatabaseConfigured()
                 ? "No connectors found for this organization. Run supabase/seed.sql (demo org) or register connectors via webhooks."
                 : "Supabase not configured — connect a project to see connectors."}
             </p>

@@ -1,6 +1,5 @@
 import { z } from "zod"
-import { DEMO_ORG_ID, isDemoMode, isSupabaseConfigured } from "@/lib/env"
-import { createServerSupabaseClient } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID, isDemoMode, isDatabaseConfigured } from "@/lib/env"
 import { recordAiAction } from "@/lib/services/ai-actions"
 import { runAgent, TinyFishError } from "@/lib/tinyfish/client"
 import { TinyFishScenarioSchema } from "@/lib/tinyfish/schemas"
@@ -95,14 +94,13 @@ export async function POST(request: Request) {
   }
 
   let aiActionId: string | null = null
-  if (isSupabaseConfigured()) {
+  if (isDatabaseConfigured()) {
     try {
-      const client = createServerSupabaseClient()
       const entityId = isDemoMode()
         ? SCENARIO_DEMO_ENTITY_ID[scenario]
         : crypto.randomUUID()
 
-      aiActionId = await recordAiAction(client, {
+      aiActionId = await recordAiAction({
         organizationId,
         entityType:   "survival_agent",
         entityId,

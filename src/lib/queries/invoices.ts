@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
 import { listInvoices, getInvoiceDetail } from "@/lib/services/invoices"
 import type { InvoiceStatus } from "@/lib/constants/enums"
 import type { InvoiceItemResponse, InvoiceResponse } from "@/lib/schemas/invoice"
@@ -10,38 +9,37 @@ type InvoiceCustomer = {
 
 type InvoiceItemRow = {
   id: string
-  service_id: string | null
+  serviceId: string | null
   description: string
   quantity: number | string
-  unit_price: number | string
+  unitPrice: number | string
   amount: number | string
 }
 
 type InvoiceJoinRow = Record<string, unknown> & {
   id: string
-  organization_id: string
-  appointment_id: string | null
-  customer_id: string
+  organizationId: string
+  appointmentId: string | null
+  customerId: string
   customers?: InvoiceCustomer | null
-  invoice_number: string
+  invoiceNumber: string
   currency: string
   subtotal: number | string
-  tax_rate: number | string
-  tax_amount: number | string
-  discount_amount: number | string
-  total_amount: number | string
-  amount_paid: number | string
-  due_at: string
+  taxRate: number | string
+  taxAmount: number | string
+  discountAmount: number | string
+  totalAmount: number | string
+  amountPaid: number | string
+  dueAt: Date | string
   status: InvoiceStatus
-  sent_at: string | null
-  paid_at: string | null
+  sentAt: Date | string | null
+  paidAt: Date | string | null
   notes: string | null
-  created_at: string
+  createdAt: Date | string
   invoice_items?: InvoiceItemRow[]
 }
 
 export async function listInvoicesQuery(
-  client: SupabaseClient,
   organizationId: string,
   opts: {
     status?: InvoiceStatus
@@ -49,56 +47,61 @@ export async function listInvoicesQuery(
     offset?: number
   } = {}
 ): Promise<InvoiceResponse[]> {
-  const rows = await listInvoices(client, organizationId, opts)
-  return rows.map((row) => mapInvoiceRow(row as InvoiceJoinRow))
+  const rows = await listInvoices(organizationId, opts)
+  return rows.map((row) => mapInvoiceRow(row as unknown as InvoiceJoinRow))
 }
 
 export async function getInvoiceDetailQuery(
-  client: SupabaseClient,
   invoiceId: string,
   organizationId: string
 ) {
-  const row = await getInvoiceDetail(client, invoiceId, organizationId)
-  const mapped = mapInvoiceRow(row as InvoiceJoinRow)
+  const row = await getInvoiceDetail(invoiceId, organizationId)
+  const mapped = mapInvoiceRow(row as unknown as InvoiceJoinRow)
 
   return {
     ...mapped,
-    customerEmail: (row as InvoiceJoinRow).customers?.email ?? null,
+    customerEmail: (row as unknown as InvoiceJoinRow).customers?.email ?? null,
   }
+}
+
+function toISOString(val: Date | string | null): string | null {
+  if (val == null) return null
+  if (val instanceof Date) return val.toISOString()
+  return val
 }
 
 function mapInvoiceRow(row: InvoiceJoinRow): InvoiceResponse {
   return {
     id: row.id,
-    organizationId: row.organization_id,
-    appointmentId: row.appointment_id,
-    customerId: row.customer_id,
+    organizationId: row.organizationId,
+    appointmentId: row.appointmentId,
+    customerId: row.customerId,
     customerName: row.customers?.full_name ?? "Unknown",
-    invoiceNumber: row.invoice_number,
+    invoiceNumber: row.invoiceNumber,
     currency: row.currency,
     subtotal: Number(row.subtotal),
-    taxRate: Number(row.tax_rate),
-    taxAmount: Number(row.tax_amount),
-    discountAmount: Number(row.discount_amount),
-    totalAmount: Number(row.total_amount),
-    amountPaid: Number(row.amount_paid),
-    dueAt: row.due_at,
+    taxRate: Number(row.taxRate),
+    taxAmount: Number(row.taxAmount),
+    discountAmount: Number(row.discountAmount),
+    totalAmount: Number(row.totalAmount),
+    amountPaid: Number(row.amountPaid),
+    dueAt: toISOString(row.dueAt) ?? "",
     status: row.status,
-    sentAt: row.sent_at,
-    paidAt: row.paid_at,
+    sentAt: toISOString(row.sentAt),
+    paidAt: toISOString(row.paidAt),
     notes: row.notes,
     items: (row.invoice_items ?? []).map(mapInvoiceItemRow),
-    createdAt: row.created_at,
+    createdAt: toISOString(row.createdAt) ?? "",
   }
 }
 
 function mapInvoiceItemRow(row: InvoiceItemRow): InvoiceItemResponse {
   return {
     id: row.id,
-    serviceId: row.service_id,
+    serviceId: row.serviceId,
     description: row.description,
     quantity: Number(row.quantity),
-    unitPrice: Number(row.unit_price),
+    unitPrice: Number(row.unitPrice),
     amount: Number(row.amount),
   }
 }

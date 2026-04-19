@@ -1,6 +1,15 @@
 import "server-only"
-import { supabase } from "./client"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { db, DEMO_ORG_ID } from "@/lib/db"
+import {
+  inventoryItems,
+  services,
+  appointments,
+  shipments,
+  shipmentLineItems,
+  financeTransactions,
+  menuItemInventoryUsage,
+} from "@/lib/db/schema"
+import { eq, and, desc, asc } from "drizzle-orm"
 import type {
   InventoryItem,
   MenuItem,
@@ -14,108 +23,153 @@ import type {
 
 // ── helpers: map snake_case rows → camelCase types ───────────────────────────
 
-function mapInventoryItem(row: Record<string, unknown>): InventoryItem {
+function mapInventoryItem(row: {
+  id: string
+  itemName: string
+  category: string
+  quantityOnHand: string | null
+  reorderLevel: string | null
+  unitCost: string | null
+  previousUnitCost: string | null
+  expiresAt: string | null
+  vendorName: string
+  issueStatus: string
+  priceTrendStatus: string
+}): InventoryItem {
   return {
-    id: row.id as string,
-    itemName: row.item_name as string,
-    category: row.category as string,
-    quantityOnHand: Number(row.quantity_on_hand),
-    reorderLevel: Number(row.reorder_level),
-    unitCost: Number(row.unit_cost),
-    previousUnitCost: row.previous_unit_cost != null ? Number(row.previous_unit_cost) : undefined,
-    expiresAt: row.expires_at as string | null,
-    vendorName: row.vendor_name as string,
-    issueStatus: row.issue_status as InventoryItem["issueStatus"],
-    priceTrendStatus: row.price_trend_status as InventoryItem["priceTrendStatus"],
+    id: row.id,
+    itemName: row.itemName,
+    category: row.category,
+    quantityOnHand: Number(row.quantityOnHand),
+    reorderLevel: Number(row.reorderLevel),
+    unitCost: Number(row.unitCost),
+    previousUnitCost: row.previousUnitCost != null ? Number(row.previousUnitCost) : undefined,
+    expiresAt: row.expiresAt,
+    vendorName: row.vendorName,
+    issueStatus: row.issueStatus as InventoryItem["issueStatus"],
+    priceTrendStatus: row.priceTrendStatus as InventoryItem["priceTrendStatus"],
   }
 }
 
-function mapLineItem(row: Record<string, unknown>): ShipmentLineItem {
+function mapLineItemRow(row: {
+  id: string
+  itemId: string
+  itemName: string
+  quantityOrdered: string | null
+  unitCost: string | null
+  totalCost: string | null
+}): ShipmentLineItem {
   return {
-    id: row.id as string,
-    itemId: row.item_id as string,
-    itemName: row.item_name as string,
-    quantityOrdered: Number(row.quantity_ordered),
-    unitCost: Number(row.unit_cost),
-    totalCost: Number(row.total_cost),
+    id: row.id,
+    itemId: row.itemId,
+    itemName: row.itemName,
+    quantityOrdered: Number(row.quantityOrdered),
+    unitCost: Number(row.unitCost),
+    totalCost: Number(row.totalCost),
   }
 }
 
-function mapShipment(row: Record<string, unknown>, lineItems: ShipmentLineItem[]): Shipment {
+function mapShipmentRow(
+  row: {
+    id: string
+    vendorName: string
+    status: string
+    expectedDeliveryDate: string
+    actualDeliveryDate: string | null
+    orderedAt: Date
+    trackingNumber: string | null
+    trackingUrl: string | null
+    notes: string | null
+    totalCost: string | null
+  },
+  lineItems: ShipmentLineItem[]
+): Shipment {
   return {
-    id: row.id as string,
-    vendorName: row.vendor_name as string,
+    id: row.id,
+    vendorName: row.vendorName,
     status: row.status as ShipmentStatus,
-    expectedDeliveryDate: row.expected_delivery_date as string,
-    actualDeliveryDate: row.actual_delivery_date as string | null,
-    orderedAt: row.ordered_at as string,
-    trackingNumber: row.tracking_number as string | null,
-    trackingUrl: row.tracking_url as string | null,
-    notes: row.notes as string | null,
-    totalCost: Number(row.total_cost),
+    expectedDeliveryDate: row.expectedDeliveryDate,
+    actualDeliveryDate: row.actualDeliveryDate,
+    orderedAt: row.orderedAt.toISOString(),
+    trackingNumber: row.trackingNumber,
+    trackingUrl: row.trackingUrl,
+    notes: row.notes,
+    totalCost: Number(row.totalCost),
     lineItems,
   }
 }
 
-function toISODateOnly(isoOrTimestamp: string): string {
+function toISODateOnly(isoOrTimestamp: string | Date): string {
+  if (isoOrTimestamp instanceof Date) return isoOrTimestamp.toISOString().slice(0, 10)
   return isoOrTimestamp.slice(0, 10)
 }
 
 // ── Inventory items ───────────────────────────────────────────────────────────
 
 export async function getInventoryItems(): Promise<InventoryItem[]> {
-  const { data, error } = await supabase
-    .from("inventory_items")
-    .select(
-      "id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status"
-    )
-    .order("id")
-  if (error) return []
-  return (data ?? []).map((r) => mapInventoryItem(r as Record<string, unknown>))
+  try {
+    const rows = await db
+      .select()
+      .from(inventoryItems)
+      .orderBy(asc(inventoryItems.id))
+    return rows.map(mapInventoryItem)
+  } catch {
+    return []
+  }
 }
 
 export async function getInventoryItemById(id: string): Promise<InventoryItem | null> {
-  const { data, error } = await supabase
-    .from("inventory_items")
-    .select(
-      "id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status"
-    )
-    .eq("id", id)
-    .maybeSingle()
-  if (error) return null
-  if (!data) return null
-  return mapInventoryItem(data as Record<string, unknown>)
+  try {
+    const rows = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id))
+      .limit(1)
+    const row = rows[0] ?? null
+    if (!row) return null
+    return mapInventoryItem(row)
+  } catch {
+    return null
+  }
 }
 
 // ── Menu catalog ──────────────────────────────────────────────────────────────
 
 /** Menu catalog in ledger = `services`. */
 export async function getMenuItems(): Promise<MenuItem[]> {
-  const { data, error } = await supabase
-    .from("services")
-    .select("id, name, category, price_per_person")
-    .eq("organization_id", DEMO_ORG_ID)
-    .eq("is_active", true)
-    .order("name")
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((r) => ({
-    id: r.id as string,
-    name: r.name as string,
-    category: r.category as string,
-    price: Number(r.price_per_person),
+  const rows = await db
+    .select({
+      id: services.id,
+      name: services.name,
+      category: services.category,
+      pricePerPerson: services.pricePerPerson,
+    })
+    .from(services)
+    .where(
+      and(
+        eq(services.organizationId, DEMO_ORG_ID),
+        eq(services.isActive, true)
+      )
+    )
+    .orderBy(asc(services.name))
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    price: Number(r.pricePerPerson),
   }))
 }
 
 /** No usage bridge table in core ledger — empty until modeled. */
 export async function getMenuInventoryUsage(): Promise<MenuItemInventoryUsage[]> {
-  const { data, error } = await supabase
-    .from("menu_item_inventory_usage")
-    .select("menu_item_id, item_id, units_used_per_order")
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((r) => ({
-    menuItemId: r.menu_item_id as string,
-    itemId: r.item_id as string,
-    unitsUsedPerOrder: Number(r.units_used_per_order),
+  const rows = await db
+    .select()
+    .from(menuItemInventoryUsage)
+  return rows.map((r) => ({
+    menuItemId: r.menuItemId as string,
+    itemId: r.itemId as string,
+    unitsUsedPerOrder: Number(r.unitsUsedPerOrder),
   }))
 }
 
@@ -123,78 +177,96 @@ export async function getMenuInventoryUsage(): Promise<MenuItemInventoryUsage[]>
 
 /** Demand history from `appointments` (replaces legacy `reservations`). */
 export async function getReservations(): Promise<Reservation[]> {
-  const { data, error } = await supabase
-    .from("appointments")
-    .select("id, starts_at, covers, service_id")
-    .eq("organization_id", DEMO_ORG_ID)
-    .order("starts_at")
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((r) => ({
-    id: r.id as string,
-    date: toISODateOnly(r.starts_at as string),
-    covers: Number(r.covers),
-    menuItemIds: [r.service_id as string],
+  const rows = await db
+    .select({
+      id: appointments.id,
+      startsAt: appointments.startsAt,
+      covers: appointments.covers,
+      serviceId: appointments.serviceId,
+    })
+    .from(appointments)
+    .where(eq(appointments.organizationId, DEMO_ORG_ID))
+    .orderBy(asc(appointments.startsAt))
+
+  return rows.map((r) => ({
+    id: r.id,
+    date: toISODateOnly(r.startsAt),
+    covers: r.covers,
+    menuItemIds: [r.serviceId],
   }))
 }
 
 // ── Shipments ─────────────────────────────────────────────────────────────────
 
-/** Fetches all shipments with their line items in a single JOIN query */
+/** Fetches all shipments with their line items */
 export async function getShipments(): Promise<Shipment[]> {
-  const { data, error } = await supabase
-    .from("shipments")
-    .select(
-      "id, vendor_name, status, expected_delivery_date, actual_delivery_date, ordered_at, tracking_number, tracking_url, notes, total_cost, shipment_line_items ( id, item_id, item_name, quantity_ordered, unit_cost, total_cost )"
-    )
-    .order("ordered_at", { ascending: false })
-  if (error) return []
-  return (data ?? []).map((row) => {
-    const lineItems = ((row.shipment_line_items as unknown[]) ?? []).map((li) =>
-      mapLineItem(li as Record<string, unknown>)
-    )
-    return mapShipment(row as Record<string, unknown>, lineItems)
-  })
+  try {
+    const shipmentRows = await db
+      .select()
+      .from(shipments)
+      .orderBy(desc(shipments.orderedAt))
+
+    const result: Shipment[] = []
+    for (const row of shipmentRows) {
+      const lineItemRows = await db
+        .select()
+        .from(shipmentLineItems)
+        .where(eq(shipmentLineItems.shipmentId, row.id))
+      const lis = lineItemRows.map(mapLineItemRow)
+      result.push(mapShipmentRow(row, lis))
+    }
+    return result
+  } catch {
+    return []
+  }
 }
 
 export async function getShipmentById(id: string): Promise<Shipment | null> {
-  const { data: row, error } = await supabase
-    .from("shipments")
-    .select(
-      "id, vendor_name, status, expected_delivery_date, actual_delivery_date, ordered_at, tracking_number, tracking_url, notes, total_cost, shipment_line_items ( id, item_id, item_name, quantity_ordered, unit_cost, total_cost )"
-    )
-    .eq("id", id)
-    .maybeSingle()
-  if (error) return null
-  if (!row) return null
-  const lineItems = ((row.shipment_line_items as unknown[]) ?? []).map((li) =>
-    mapLineItem(li as Record<string, unknown>)
-  )
-  return mapShipment(row as Record<string, unknown>, lineItems)
+  try {
+    const rows = await db
+      .select()
+      .from(shipments)
+      .where(eq(shipments.id, id))
+      .limit(1)
+    const row = rows[0] ?? null
+    if (!row) return null
+
+    const lineItemRows = await db
+      .select()
+      .from(shipmentLineItems)
+      .where(eq(shipmentLineItems.shipmentId, id))
+    const lis = lineItemRows.map(mapLineItemRow)
+    return mapShipmentRow(row, lis)
+  } catch {
+    return null
+  }
 }
 
 // ── Finance transactions ──────────────────────────────────────────────────────
 
 export async function getFinanceTransactions(): Promise<FinanceTransaction[]> {
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase
-    .from("finance_transactions")
-    .select("id, organization_id, invoice_id, type, direction, category, amount, occurred_at, payment_method, tax_relevant, writeoff_eligible, notes")
-    .order("occurred_at", { ascending: false })
-  if (error) return []
-  return (data ?? []).map((r) => ({
-    id: r.id as string,
-    organizationId: r.organization_id as string,
-    invoiceId: r.invoice_id as string | null,
-    type: r.type as FinanceTransaction["type"],
-    direction: r.direction as FinanceTransaction["direction"],
-    category: r.category as string,
-    amount: Number(r.amount),
-    occurredAt: r.occurred_at as string,
-    paymentMethod: r.payment_method as string | null,
-    taxRelevant: Boolean(r.tax_relevant),
-    writeoffEligible: Boolean(r.writeoff_eligible),
-    notes: r.notes as string | null,
-  }))
+  try {
+    const rows = await db
+      .select()
+      .from(financeTransactions)
+      .orderBy(desc(financeTransactions.occurredAt))
+    return rows.map((r) => ({
+      id: r.id,
+      organizationId: r.organizationId,
+      invoiceId: r.invoiceId,
+      type: r.type as FinanceTransaction["type"],
+      direction: r.direction as FinanceTransaction["direction"],
+      category: r.category,
+      amount: Number(r.amount),
+      occurredAt: r.occurredAt.toISOString(),
+      paymentMethod: r.paymentMethod,
+      taxRelevant: r.taxRelevant,
+      writeoffEligible: r.writeoffEligible,
+      notes: r.notes,
+    }))
+  } catch {
+    return []
+  }
 }
 
 // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -216,45 +288,37 @@ export type CreateShipmentPayload = {
 }
 
 export async function createShipment(input: CreateShipmentPayload): Promise<Shipment> {
-  const { createServerSupabaseClient: createSvc } = await import("@/lib/db/supabase-server")
-  const svc = createSvc()
-
   const totalCost = Math.round(
     input.lineItems.reduce((sum, li) => sum + li.quantityOrdered * li.unitCost, 0) * 100
   ) / 100
 
   const shipmentId = crypto.randomUUID()
 
-  const { error: shipmentErr } = await svc
-    .from("shipments")
-    .insert({
-      id: shipmentId,
-      vendor_name: input.vendorName,
-      status: input.status,
-      expected_delivery_date: input.expectedDeliveryDate,
-      actual_delivery_date: input.actualDeliveryDate ?? null,
-      ordered_at: input.orderedAt ?? new Date().toISOString(),
-      tracking_number: input.trackingNumber ?? null,
-      tracking_url: input.trackingUrl ?? null,
-      notes: input.notes ?? null,
-      total_cost: totalCost,
-    })
-
-  if (shipmentErr) throw new Error(shipmentErr.message)
+  await db.insert(shipments).values({
+    id: shipmentId,
+    vendorName: input.vendorName,
+    status: input.status,
+    expectedDeliveryDate: input.expectedDeliveryDate,
+    actualDeliveryDate: input.actualDeliveryDate ?? null,
+    orderedAt: new Date(input.orderedAt ?? new Date().toISOString()),
+    trackingNumber: input.trackingNumber ?? null,
+    trackingUrl: input.trackingUrl ?? null,
+    notes: input.notes ?? null,
+    totalCost: String(totalCost),
+  })
 
   if (input.lineItems.length > 0) {
-    const { error: liErr } = await svc.from("shipment_line_items").insert(
+    await db.insert(shipmentLineItems).values(
       input.lineItems.map((li) => ({
         id: crypto.randomUUID(),
-        shipment_id: shipmentId,
-        item_id: crypto.randomUUID(),
-        item_name: li.itemName,
-        quantity_ordered: li.quantityOrdered,
-        unit_cost: li.unitCost,
-        total_cost: Math.round(li.quantityOrdered * li.unitCost * 100) / 100,
+        shipmentId,
+        itemId: crypto.randomUUID(),
+        itemName: li.itemName,
+        quantityOrdered: String(li.quantityOrdered),
+        unitCost: String(li.unitCost),
+        totalCost: String(Math.round(li.quantityOrdered * li.unitCost * 100) / 100),
       }))
     )
-    if (liErr) throw new Error(liErr.message)
   }
 
   const created = await getShipmentById(shipmentId)
@@ -289,103 +353,80 @@ export type UpdateInventoryItemPayload = {
 }
 
 export async function createInventoryItem(input: CreateInventoryItemPayload): Promise<InventoryItem> {
-  const { createServerSupabaseClient: createSvc } = await import("@/lib/db/supabase-server")
-  const svc = createSvc()
-
   const itemId = crypto.randomUUID()
 
-  const { data, error } = await svc
-    .from("inventory_items")
-    .insert({
+  const [data] = await db
+    .insert(inventoryItems)
+    .values({
       id: itemId,
-      item_name: input.itemName,
+      itemName: input.itemName,
       category: input.category,
-      unit_cost: input.unitCost,
-      previous_unit_cost: input.previousUnitCost ?? null,
-      vendor_name: input.vendorName ?? "Unknown Vendor",
-      quantity_on_hand: input.quantityOnHand ?? 0,
-      reorder_level: input.reorderLevel ?? 0,
-      expires_at: input.expiresAt ?? null,
-      issue_status: input.issueStatus ?? "none",
-      price_trend_status: input.priceTrendStatus ?? "stable",
+      unitCost: String(input.unitCost),
+      previousUnitCost: input.previousUnitCost != null ? String(input.previousUnitCost) : null,
+      vendorName: input.vendorName ?? "Unknown Vendor",
+      quantityOnHand: String(input.quantityOnHand ?? 0),
+      reorderLevel: String(input.reorderLevel ?? 0),
+      expiresAt: input.expiresAt ?? null,
+      issueStatus: input.issueStatus ?? "none",
+      priceTrendStatus: input.priceTrendStatus ?? "stable",
     })
-    .select("id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status")
-    .single()
+    .returning()
 
-  if (error) throw new Error(error.message)
-  return mapInventoryItem(data as Record<string, unknown>)
+  return mapInventoryItem(data)
 }
 
 export async function updateInventoryItem(
   id: string,
   input: UpdateInventoryItemPayload
 ): Promise<InventoryItem | null> {
-  const { createServerSupabaseClient: createSvc } = await import("@/lib/db/supabase-server")
-  const svc = createSvc()
+  const rows = await db
+    .update(inventoryItems)
+    .set({
+      itemName: input.itemName,
+      category: input.category,
+      unitCost: String(input.unitCost),
+      vendorName: input.vendorName ?? "Unknown Vendor",
+      quantityOnHand: String(input.quantityOnHand ?? 0),
+      reorderLevel: String(input.reorderLevel ?? 0),
+      previousUnitCost: input.previousUnitCost != null ? String(input.previousUnitCost) : null,
+      expiresAt: input.expiresAt ?? null,
+      issueStatus: input.issueStatus ?? "none",
+      priceTrendStatus: input.priceTrendStatus ?? "stable",
+    })
+    .where(eq(inventoryItems.id, id))
+    .returning()
 
-  const payload: Record<string, unknown> = {
-    item_name: input.itemName,
-    category: input.category,
-    unit_cost: input.unitCost,
-    vendor_name: input.vendorName ?? "Unknown Vendor",
-    quantity_on_hand: input.quantityOnHand ?? 0,
-    reorder_level: input.reorderLevel ?? 0,
-    previous_unit_cost: input.previousUnitCost ?? null,
-    expires_at: input.expiresAt ?? null,
-    issue_status: input.issueStatus ?? "none",
-    price_trend_status: input.priceTrendStatus ?? "stable",
-  }
-
-  const { data, error } = await svc
-    .from("inventory_items")
-    .update(payload)
-    .eq("id", id)
-    .select(
-      "id, item_name, category, quantity_on_hand, reorder_level, unit_cost, previous_unit_cost, expires_at, vendor_name, issue_status, price_trend_status"
-    )
-    .maybeSingle()
-
-  if (error) throw new Error(error.message)
-  if (!data) return null
-  return mapInventoryItem(data as Record<string, unknown>)
+  const row = rows[0] ?? null
+  if (!row) return null
+  return mapInventoryItem(row)
 }
 
 export async function deleteInventoryItem(id: string): Promise<boolean> {
-  const { createServerSupabaseClient: createSvc } = await import("@/lib/db/supabase-server")
-  const svc = createSvc()
+  const rows = await db
+    .delete(inventoryItems)
+    .where(eq(inventoryItems.id, id))
+    .returning({ id: inventoryItems.id })
 
-  const { data, error } = await svc
-    .from("inventory_items")
-    .delete()
-    .eq("id", id)
-    .select("id")
-
-  if (error) throw new Error(error.message)
-  return Array.isArray(data) && data.length > 0
+  return rows.length > 0
 }
 
 export async function cancelShipment(id: string): Promise<void> {
-  const { error } = await supabase
-    .from("shipments")
-    .update({ status: "cancelled" })
-    .eq("id", id)
-  if (error) throw new Error(error.message)
+  await db
+    .update(shipments)
+    .set({ status: "cancelled" })
+    .where(eq(shipments.id, id))
 }
 
 export async function updateAppointmentStatus(id: string, status: string): Promise<void> {
-  const supabase = createServerSupabaseClient()
-  const { error } = await supabase
-    .from("appointments")
-    .update({ status })
-    .eq("id", id)
-  if (error) throw new Error(error.message)
+  await db
+    .update(appointments)
+    .set({ status })
+    .where(eq(appointments.id, id))
 }
 
 export async function updateFollowUpStatus(id: string, followUpSent: boolean): Promise<void> {
-  const supabase = createServerSupabaseClient()
-  const { error } = await supabase
-    .from("appointments")
-    .update({ follow_up_sent: followUpSent })
-    .eq("id", id)
-  if (error) throw new Error(error.message)
+  await db
+    .update(appointments)
+    .set({ followUpSent })
+    .where(eq(appointments.id, id))
 }

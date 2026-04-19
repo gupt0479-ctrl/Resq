@@ -1,5 +1,7 @@
 import "server-only"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and, inArray, notInArray, gte, desc, asc } from "drizzle-orm"
 import {
   decideNextAction,
   assertTransition,
@@ -74,123 +76,141 @@ export interface RecoveryActionResult {
 // ─── Query helpers ─────────────────────────────────────────────────────────
 
 export async function getOverdueInvoices(
-  client: SupabaseClient,
   orgId: string
 ): Promise<OverdueInvoice[]> {
-  const { data, error } = await client
-    .from("invoices")
-    .select(
-      "id, invoice_number, status, recovery_status, total_amount, amount_paid, due_at, days_overdue, reminder_count, stripe_invoice_id, customer_id, customers ( full_name, email, risk_status, lifetime_value, stripe_customer_id )"
+  const rows = await db
+    .select()
+    .from(schema.invoices)
+    .leftJoin(schema.customers, eq(schema.invoices.customerId, schema.customers.id))
+    .where(
+      and(
+        eq(schema.invoices.organizationId, orgId),
+        inArray(schema.invoices.status, ["overdue", "sent", "pending"]),
+        notInArray(schema.invoices.recoveryStatus, ["resolved", "written_off"]),
+      ),
     )
-    .eq("organization_id", orgId)
-    .in("status", ["overdue", "sent", "pending"])
-    .not("recovery_status", "in", '("resolved","written_off")')
-    .order("due_at", { ascending: true })
+    .orderBy(asc(schema.invoices.dueAt))
     .limit(100)
 
-  if (error) throw new Error(error.message)
-
-  return (data ?? []).map((inv) => {
-    const cust = (inv.customers as unknown) as {
-      full_name:          string
-      email:              string | null
-      risk_status:        string | null
-      lifetime_value:     number | null
-      stripe_customer_id: string | null
-    } | null
+  return rows.map((row) => {
+    const inv = row.invoices
+    const cust = row.customers
 
     return {
-      id:                      inv.id as string,
-      invoice_number:          inv.invoice_number as string,
-      status:                  inv.status as string,
-      recovery_status:         (inv.recovery_status ?? "none") as RecoveryStatus,
-      total_amount:            Number(inv.total_amount),
-      amount_paid:             Number(inv.amount_paid),
-      balance:                 Number(inv.total_amount) - Number(inv.amount_paid),
-      due_at:                  inv.due_at as string,
-      days_overdue:            Number(inv.days_overdue ?? 0),
-      reminder_count:          Number(inv.reminder_count ?? 0),
-      stripe_invoice_id:       (inv.stripe_invoice_id as string | null) ?? null,
-      customer_id:             inv.customer_id as string,
-      customer_name:           cust?.full_name ?? "Unknown",
+      id:                      inv.id,
+      invoice_number:          inv.invoiceNumber,
+      status:                  inv.status,
+      recovery_status:         (inv.recoveryStatus ?? "none") as RecoveryStatus,
+      total_amount:            Number(inv.totalAmount),
+      amount_paid:             Number(inv.amountPaid),
+      balance:                 Number(inv.totalAmount) - Number(inv.amountPaid),
+      due_at:                  inv.dueAt.toISOString(),
+      days_overdue:            Number(inv.daysOverdue ?? 0),
+      reminder_count:          Number(inv.reminderCount ?? 0),
+      stripe_invoice_id:       inv.stripeInvoiceId ?? null,
+      customer_id:             inv.customerId,
+      customer_name:           cust?.fullName ?? "Unknown",
       customer_email:          cust?.email ?? null,
-      customer_risk_status:    cust?.risk_status ?? null,
-      customer_lifetime_value: Number(cust?.lifetime_value ?? 0),
-      stripe_customer_id:      cust?.stripe_customer_id ?? null,
+      customer_risk_status:    cust?.riskStatus ?? null,
+      customer_lifetime_value: Number(cust?.lifetimeValue ?? 0),
+      stripe_customer_id:      cust?.stripeCustomerId ?? null,
     }
   })
 }
 
 export async function hasRecentStripeFailure(
-  client: SupabaseClient,
   orgId: string,
   customerId: string
 ): Promise<boolean> {
   // Look up the customer's stripe_customer_id first
-  const { data: cust } = await client
-    .from("customers")
-    .select("stripe_customer_id")
-    .eq("id", customerId)
-    .eq("organization_id", orgId)
-    .maybeSingle()
-
-  if (!cust?.stripe_customer_id) return false
-
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-
-  const { data, error } = await client
-    .from("stripe_events")
-    .select("id")
-    .eq("organization_id", orgId)
-    .eq("stripe_customer_id", cust.stripe_customer_id)
-    .eq("event_type", "invoice.payment_failed")
-    .gte("created_at", thirtyDaysAgo)
+  const [cust] = await db
+    .select({ stripeCustomerId: schema.customers.stripeCustomerId })
+    .from(schema.customers)
+    .where(
+      and(
+        eq(schema.customers.id, customerId),
+        eq(schema.customers.organizationId, orgId),
+      ),
+    )
     .limit(1)
 
-  if (error) return false
-  return (data?.length ?? 0) > 0
+  if (!cust?.stripeCustomerId) return false
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+  try {
+    const rows = await db
+      .select({ id: schema.stripeEvents.id })
+      .from(schema.stripeEvents)
+      .where(
+        and(
+          eq(schema.stripeEvents.organizationId, orgId),
+          eq(schema.stripeEvents.stripeCustomerId, cust.stripeCustomerId),
+          eq(schema.stripeEvents.eventType, "invoice.payment_failed"),
+          gte(schema.stripeEvents.createdAt, thirtyDaysAgo),
+        ),
+      )
+      .limit(1)
+
+    return rows.length > 0
+  } catch {
+    return false
+  }
 }
 
 export async function getCustomerProfile(
-  client: SupabaseClient,
   orgId: string,
   customerId: string
 ): Promise<CustomerProfile> {
-  const { data, error } = await client
-    .from("customer_payment_profile")
-    .select(
-      "on_time_payment_pct, avg_days_late, prior_overdue_count, total_invoices, open_invoices, relationship_months, total_paid_amount, total_overdue_amount, total_outstanding_amount, written_off_count"
+  // Try the view first
+  try {
+    const { sql: sql_ } = await import("drizzle-orm")
+    const viewRows = await db.execute(
+      sql_`SELECT on_time_payment_pct, avg_days_late, prior_overdue_count, total_invoices, open_invoices, relationship_months, total_paid_amount, total_overdue_amount, total_outstanding_amount, written_off_count FROM customer_payment_profile WHERE customer_id = ${customerId} AND organization_id = ${orgId} LIMIT 1`
     )
-    .eq("customer_id", customerId)
-    .eq("organization_id", orgId)
-    .maybeSingle()
 
-  if (!error && data) {
-    return {
-      paymentRatePct:         data.on_time_payment_pct !== null ? Number(data.on_time_payment_pct) : null,
-      avgDaysLate:            data.avg_days_late !== null ? Number(data.avg_days_late) : null,
-      priorOverdueCount:      Number(data.prior_overdue_count ?? 0),
-      totalInvoices:          Number(data.total_invoices ?? 0),
-      openInvoices:           Number(data.open_invoices ?? 0),
-      relationshipMonths:     Number(data.relationship_months ?? 0),
-      totalPaidAmount:        Number(data.total_paid_amount ?? 0),
-      totalOverdueAmount:     Number(data.total_overdue_amount ?? 0),
-      totalOutstandingAmount: Number(data.total_outstanding_amount ?? 0),
-      writtenOffCount:        Number(data.written_off_count ?? 0),
+    const data = viewRows.rows?.[0] as Record<string, unknown> | undefined
+    if (data) {
+      return {
+        paymentRatePct:         data.on_time_payment_pct !== null ? Number(data.on_time_payment_pct) : null,
+        avgDaysLate:            data.avg_days_late !== null ? Number(data.avg_days_late) : null,
+        priorOverdueCount:      Number(data.prior_overdue_count ?? 0),
+        totalInvoices:          Number(data.total_invoices ?? 0),
+        openInvoices:           Number(data.open_invoices ?? 0),
+        relationshipMonths:     Number(data.relationship_months ?? 0),
+        totalPaidAmount:        Number(data.total_paid_amount ?? 0),
+        totalOverdueAmount:     Number(data.total_overdue_amount ?? 0),
+        totalOutstandingAmount: Number(data.total_outstanding_amount ?? 0),
+        writtenOffCount:        Number(data.written_off_count ?? 0),
+      }
     }
+  } catch {
+    // View may not exist — fall through to live computation
   }
 
   // Fallback: compute from live invoices
-  const { data: invoices } = await client
-    .from("invoices")
-    .select("status, due_at, paid_at, total_amount, amount_paid, recovery_status, created_at")
-    .eq("customer_id", customerId)
-    .eq("organization_id", orgId)
+  const invoices = await db
+    .select({
+      status:         schema.invoices.status,
+      dueAt:          schema.invoices.dueAt,
+      paidAt:         schema.invoices.paidAt,
+      totalAmount:    schema.invoices.totalAmount,
+      amountPaid:     schema.invoices.amountPaid,
+      recoveryStatus: schema.invoices.recoveryStatus,
+      createdAt:      schema.invoices.createdAt,
+    })
+    .from(schema.invoices)
+    .where(
+      and(
+        eq(schema.invoices.customerId, customerId),
+        eq(schema.invoices.organizationId, orgId),
+      ),
+    )
 
-  const all = invoices ?? []
-  const paid = all.filter((i) => i.status === "paid" && i.paid_at && i.due_at)
+  const all = invoices
+  const paid = all.filter((i) => i.status === "paid" && i.paidAt && i.dueAt)
   const lateCount = paid.filter(
-    (i) => new Date(i.paid_at as string) > new Date(i.due_at as string)
+    (i) => new Date(i.paidAt!.toISOString()) > new Date(i.dueAt.toISOString())
   ).length
   const paymentRatePct = paid.length > 0
     ? Math.round(((paid.length - lateCount) / paid.length) * 100)
@@ -200,7 +220,7 @@ export async function getCustomerProfile(
     ? paid.reduce((sum, i) => {
         const days = Math.max(
           0,
-          (new Date(i.paid_at as string).getTime() - new Date(i.due_at as string).getTime()) /
+          (new Date(i.paidAt!.toISOString()).getTime() - new Date(i.dueAt.toISOString()).getTime()) /
             86_400_000
         )
         return sum + days
@@ -208,11 +228,11 @@ export async function getCustomerProfile(
     : null
 
   const openInvs = all.filter((i) => ["sent", "pending", "overdue"].includes(i.status))
-  const overdueInvs = openInvs.filter((i) => i.due_at && new Date(i.due_at as string) < new Date())
+  const overdueInvs = openInvs.filter((i) => i.dueAt && new Date(i.dueAt.toISOString()) < new Date())
 
   const now = new Date()
   const oldest = all.reduce<Date | null>((min, i) => {
-    const d = new Date(i.created_at as string)
+    const d = new Date(i.createdAt.toISOString())
     return min === null || d < min ? d : min
   }, null)
   const relationshipMonths = oldest
@@ -226,36 +246,45 @@ export async function getCustomerProfile(
     totalInvoices:          all.length,
     openInvoices:           openInvs.length,
     relationshipMonths:     Math.max(0, relationshipMonths),
-    totalPaidAmount:        paid.reduce((s, i) => s + Number(i.amount_paid), 0),
-    totalOverdueAmount:     overdueInvs.reduce((s, i) => s + (Number(i.total_amount) - Number(i.amount_paid)), 0),
-    totalOutstandingAmount: openInvs.reduce((s, i) => s + (Number(i.total_amount) - Number(i.amount_paid)), 0),
-    writtenOffCount:        all.filter((i) => i.recovery_status === "written_off").length,
+    totalPaidAmount:        paid.reduce((s, i) => s + Number(i.amountPaid), 0),
+    totalOverdueAmount:     overdueInvs.reduce((s, i) => s + (Number(i.totalAmount) - Number(i.amountPaid)), 0),
+    totalOutstandingAmount: openInvs.reduce((s, i) => s + (Number(i.totalAmount) - Number(i.amountPaid)), 0),
+    writtenOffCount:        all.filter((i) => i.recoveryStatus === "written_off").length,
   }
 }
 
 // ─── Credit score persistence ──────────────────────────────────────────────
 
 export async function persistCreditScore(
-  client: SupabaseClient,
   orgId: string,
   customerId: string,
   creditScore: ClientCreditScore,
   _profile: CustomerProfile
 ): Promise<void> {
-  const now = new Date().toISOString()
-  await client.from("client_credit_scores").upsert(
-    {
-      organization_id: orgId,
-      customer_id:     customerId,
-      score:           creditScore.score,
-      tier:            creditScore.tier,
-      factors_json:    creditScore.factors,
-      rationale:       creditScore.rationale,
-      scored_at:       now,
-      updated_at:      now,
-    },
-    { onConflict: "organization_id,customer_id" }
-  )
+  const now = new Date()
+  await db
+    .insert(schema.clientCreditScores)
+    .values({
+      organizationId: orgId,
+      customerId,
+      score:       creditScore.score,
+      tier:        creditScore.tier,
+      factorsJson: creditScore.factors,
+      rationale:   creditScore.rationale,
+      scoredAt:    now,
+      updatedAt:   now,
+    })
+    .onConflictDoUpdate({
+      target: [schema.clientCreditScores.organizationId, schema.clientCreditScores.customerId],
+      set: {
+        score:       creditScore.score,
+        tier:        creditScore.tier,
+        factorsJson: creditScore.factors,
+        rationale:   creditScore.rationale,
+        scoredAt:    now,
+        updatedAt:   now,
+      },
+    })
 }
 
 // ─── Stripe reminder ───────────────────────────────────────────────────────
@@ -266,22 +295,10 @@ export async function sendStripeReminder(
   _draftedMessage: string
 ): Promise<string> {
   if (!STRIPE_SECRET_KEY || !invoice.stripe_invoice_id) {
-    // Mock path — no Stripe credentials or no linked Stripe invoice
     const mockId = `mock_stripe_reminder_${invoice.id.slice(0, 8)}_${Date.now()}`
     console.log(`[RecoveryAgent] Stripe mock: would send reminder for invoice ${invoice.invoice_number} (mock ID: ${mockId})`)
     return mockId
   }
-
-  /*
-   * Live Stripe implementation (Person 3 wires this up):
-   *
-   * // Stripe hook: Person 3 replaces this with live stripe.invoices.sendInvoice() call
-   *
-   * import Stripe from "stripe"
-   * const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" })
-   * const result = await stripe.invoices.sendInvoice(invoice.stripe_invoice_id)
-   * return result.id
-   */
 
   const mockId = `stripe_reminder_${invoice.id.slice(0, 8)}_${Date.now()}`
   return mockId
@@ -293,9 +310,7 @@ export function draftOutreachMessage(
   invoice: OverdueInvoice,
   decision: ReturnType<typeof decideNextAction>
 ): string {
-  // TinyFish hook: replace with TinyFish browser/email task.
-  // Write returned tinyfishTaskId into audit log payload.
-  const amount = `$${invoice.balance.toFixed(2)}`
+  const amount = `${invoice.balance.toFixed(2)}`
   const name = invoice.customer_name
   const days = invoice.days_overdue
 
@@ -318,7 +333,6 @@ export function draftOutreachMessage(
 // ─── Reminder log ──────────────────────────────────────────────────────────
 
 export async function logReminder(
-  client: SupabaseClient,
   orgId: string,
   invoice: OverdueInvoice,
   decision: ReturnType<typeof decideNextAction>,
@@ -329,23 +343,22 @@ export async function logReminder(
   const isMock = stripeReminderId?.startsWith("mock_") ?? false
   const finalStatus = isMock ? "mock" : status
 
-  await client.from("client_reminders").insert({
-    organization_id:    orgId,
-    invoice_id:         invoice.id,
-    customer_id:        invoice.customer_id,
-    channel:            decision.suggestedChannel,
-    subject:            `Payment reminder — Invoice ${invoice.invoice_number}`,
-    body:               draftedMessage,
-    stripe_reminder_id: stripeReminderId,
-    status:             finalStatus,
-    sent_at:            new Date().toISOString(),
+  await db.insert(schema.clientReminders).values({
+    organizationId:    orgId,
+    invoiceId:         invoice.id,
+    customerId:        invoice.customer_id,
+    channel:           decision.suggestedChannel,
+    subject:           `Payment reminder — Invoice ${invoice.invoice_number}`,
+    body:              draftedMessage,
+    stripeReminderId,
+    status:            finalStatus,
+    sentAt:            new Date(),
   })
 }
 
 // ─── Audit log ────────────────────────────────────────────────────────────
 
 export async function writeActionAuditLog(
-  client: SupabaseClient,
   orgId: string,
   invoice: OverdueInvoice,
   decision: ReturnType<typeof decideNextAction>,
@@ -353,54 +366,53 @@ export async function writeActionAuditLog(
   stripeReminderId: string | null,
   dryRun: boolean
 ): Promise<void> {
-  await client.from("invoice_recovery_actions").insert({
-    organization_id:       orgId,
-    invoice_id:            invoice.id,
-    customer_id:           invoice.customer_id,
-    action_type:           decision.action,
-    from_recovery_status:  invoice.recovery_status,
-    to_recovery_status:    decision.nextRecoveryStatus,
-    risk_score:            decision.riskScore,
-    client_credit_score:   decision.creditScore.score,
-    stripe_reminder_id:    stripeReminderId,
-    urgency:               decision.urgency,
-    outreach_draft:        outreachDraft,
-    escalate_to_financing: decision.escalateToFinancing,
-    reason:                decision.reason,
-    dry_run:               dryRun,
+  await db.insert(schema.invoiceRecoveryActions).values({
+    organizationId:       orgId,
+    invoiceId:            invoice.id,
+    customerId:           invoice.customer_id,
+    actionType:           decision.action,
+    fromRecoveryStatus:   invoice.recovery_status,
+    toRecoveryStatus:     decision.nextRecoveryStatus,
+    riskScore:            decision.riskScore,
+    clientCreditScore:    decision.creditScore.score,
+    stripeReminderId,
+    urgency:              decision.urgency,
+    outreachDraft,
+    escalateToFinancing:  decision.escalateToFinancing,
+    reason:               decision.reason,
+    dryRun,
   })
 }
 
 // ─── Recovery status update ───────────────────────────────────────────────
-// Only ever writes recovery_status and recovery_updated_at. Never touches invoices.status.
 
 export async function updateInvoiceRecoveryStatus(
-  client: SupabaseClient,
   orgId: string,
   invoiceId: string,
   nextStatus: RecoveryStatus
 ): Promise<void> {
-  const { error } = await client
-    .from("invoices")
-    .update({ recovery_status: nextStatus, recovery_updated_at: new Date().toISOString() })
-    .eq("id", invoiceId)
-    .eq("organization_id", orgId)
-
-  if (error) throw new Error(`Failed to update recovery status: ${error.message}`)
+  await db
+    .update(schema.invoices)
+    .set({ recoveryStatus: nextStatus, recoveryUpdatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.invoices.id, invoiceId),
+        eq(schema.invoices.organizationId, orgId),
+      ),
+    )
 }
 
 // ─── Build prioritized recovery queue (read-only) ─────────────────────────
 
 export async function buildRecoveryQueue(
-  client: SupabaseClient,
   orgId: string
 ): Promise<RecoveryQueueItem[]> {
-  const invoices = await getOverdueInvoices(client, orgId)
+  const invoices = await getOverdueInvoices(orgId)
 
   const scored: RecoveryQueueItem[] = await Promise.all(
     invoices.map(async (inv) => {
-      const profile = await getCustomerProfile(client, orgId, inv.customer_id)
-      const stripePaymentFailed = await hasRecentStripeFailure(client, orgId, inv.customer_id)
+      const profile = await getCustomerProfile(orgId, inv.customer_id)
+      const stripePaymentFailed = await hasRecentStripeFailure(orgId, inv.customer_id)
 
       const recoveryCtx: RecoveryContext = {
         daysOverdue:            inv.days_overdue,
@@ -444,11 +456,10 @@ export async function buildRecoveryQueue(
 export async function runRecoveryActionOnInvoice(
   invoice: OverdueInvoice,
   orgId: string,
-  client: SupabaseClient,
   dryRun = false
 ): Promise<RecoveryActionResult> {
-  const profile = await getCustomerProfile(client, orgId, invoice.customer_id)
-  const stripePaymentFailed = await hasRecentStripeFailure(client, orgId, invoice.customer_id)
+  const profile = await getCustomerProfile(orgId, invoice.customer_id)
+  const stripePaymentFailed = await hasRecentStripeFailure(orgId, invoice.customer_id)
 
   const recoveryCtx: RecoveryContext = {
     daysOverdue:            invoice.days_overdue,
@@ -491,20 +502,20 @@ export async function runRecoveryActionOnInvoice(
 
     // 5. Log reminder
     if (outreachDraft) {
-      await logReminder(client, orgId, invoice, decision, outreachDraft, stripeReminderId, "sent")
+      await logReminder(orgId, invoice, decision, outreachDraft, stripeReminderId, "sent")
     }
 
     // 6. Persist credit score
-    await persistCreditScore(client, orgId, invoice.customer_id, decision.creditScore, profile)
+    await persistCreditScore(orgId, invoice.customer_id, decision.creditScore, profile)
 
     // 7. Update recovery status
-    await updateInvoiceRecoveryStatus(client, orgId, invoice.id, decision.nextRecoveryStatus)
+    await updateInvoiceRecoveryStatus(orgId, invoice.id, decision.nextRecoveryStatus)
 
     // 8. Write audit log
-    await writeActionAuditLog(client, orgId, invoice, decision, outreachDraft, stripeReminderId, false)
+    await writeActionAuditLog(orgId, invoice, decision, outreachDraft, stripeReminderId, false)
   } else {
     // dryRun=true: score and decide but make zero mutations — log to audit only
-    await writeActionAuditLog(client, orgId, invoice, decision, outreachDraft, null, true)
+    await writeActionAuditLog(orgId, invoice, decision, outreachDraft, null, true)
   }
 
   return {
@@ -544,12 +555,11 @@ export interface RunRecoveryAgentResult {
 }
 
 export async function runRecoveryAgent(
-  client: SupabaseClient,
   orgId: string,
   opts: RunRecoveryAgentOptions = {}
 ): Promise<RunRecoveryAgentResult> {
   const { maxInvoices = 20, dryRun = false } = opts
-  const queue = await buildRecoveryQueue(client, orgId)
+  const queue = await buildRecoveryQueue(orgId)
   const batch = queue.slice(0, maxInvoices)
 
   const actions: RecoveryActionResult[] = []
@@ -558,7 +568,7 @@ export async function runRecoveryAgent(
 
   for (const invoice of batch) {
     try {
-      const result = await runRecoveryActionOnInvoice(invoice, orgId, client, dryRun)
+      const result = await runRecoveryActionOnInvoice(invoice, orgId, dryRun)
       if (result.action === "skip") {
         skipped++
       } else {
@@ -601,101 +611,125 @@ export async function runRecoveryAgent(
 // ─── Audit trail ──────────────────────────────────────────────────────────
 
 export async function getRecoveryAuditTrail(
-  client: SupabaseClient,
   orgId: string,
   limit = 50
 ) {
-  const { data, error } = await client
-    .from("invoice_recovery_actions")
-    .select(
-      "id, invoice_id, customer_id, action_type, from_recovery_status, to_recovery_status, risk_score, client_credit_score, stripe_reminder_id, urgency, reason, outreach_draft, escalate_to_financing, dry_run, created_at, invoices ( invoice_number ), customers ( full_name )"
-    )
-    .eq("organization_id", orgId)
-    .order("created_at", { ascending: false })
+  const rows = await db
+    .select()
+    .from(schema.invoiceRecoveryActions)
+    .leftJoin(schema.invoices, eq(schema.invoiceRecoveryActions.invoiceId, schema.invoices.id))
+    .leftJoin(schema.customers, eq(schema.invoiceRecoveryActions.customerId, schema.customers.id))
+    .where(eq(schema.invoiceRecoveryActions.organizationId, orgId))
+    .orderBy(desc(schema.invoiceRecoveryActions.createdAt))
     .limit(limit)
 
-  if (error) throw new Error(error.message)
-
-  return (data ?? []).map((row) => ({
-    id:                   row.id,
-    invoiceId:            row.invoice_id,
-    invoiceNumber:        (row.invoices as unknown as { invoice_number: string } | null)?.invoice_number ?? "",
-    customerId:           row.customer_id,
-    customerName:         (row.customers as unknown as { full_name: string } | null)?.full_name ?? "Unknown",
-    actionType:           row.action_type,
-    fromStatus:           row.from_recovery_status,
-    toStatus:             row.to_recovery_status,
-    riskScore:            row.risk_score,
-    clientCreditScore:    row.client_credit_score,
-    stripeReminderId:     row.stripe_reminder_id,
-    urgency:              row.urgency,
-    reason:               row.reason,
-    outreachDraft:        row.outreach_draft,
-    escalateToFinancing:  row.escalate_to_financing,
-    dryRun:               row.dry_run,
-    createdAt:            row.created_at,
+  return rows.map((row) => ({
+    id:                   row.invoice_recovery_actions.id,
+    invoiceId:            row.invoice_recovery_actions.invoiceId,
+    invoiceNumber:        row.invoices?.invoiceNumber ?? "",
+    customerId:           row.invoice_recovery_actions.customerId,
+    customerName:         row.customers?.fullName ?? "Unknown",
+    actionType:           row.invoice_recovery_actions.actionType,
+    fromStatus:           row.invoice_recovery_actions.fromRecoveryStatus,
+    toStatus:             row.invoice_recovery_actions.toRecoveryStatus,
+    riskScore:            row.invoice_recovery_actions.riskScore,
+    clientCreditScore:    row.invoice_recovery_actions.clientCreditScore,
+    stripeReminderId:     row.invoice_recovery_actions.stripeReminderId,
+    urgency:              row.invoice_recovery_actions.urgency,
+    reason:               row.invoice_recovery_actions.reason,
+    outreachDraft:        row.invoice_recovery_actions.outreachDraft,
+    escalateToFinancing:  row.invoice_recovery_actions.escalateToFinancing,
+    dryRun:               row.invoice_recovery_actions.dryRun,
+    createdAt:            row.invoice_recovery_actions.createdAt,
   }))
 }
 
 // ─── Credit score lookups ──────────────────────────────────────────────────
 
 export async function getClientCreditScore(
-  client: SupabaseClient,
   orgId: string,
   customerId: string
 ) {
-  const { data, error } = await client
-    .from("client_credit_scores")
-    .select("score, tier, factors_json, rationale, scored_at, customer_id, customers ( full_name, email )")
-    .eq("organization_id", orgId)
-    .eq("customer_id", customerId)
-    .maybeSingle()
+  const rows = await db
+    .select()
+    .from(schema.clientCreditScores)
+    .leftJoin(schema.customers, eq(schema.clientCreditScores.customerId, schema.customers.id))
+    .where(
+      and(
+        eq(schema.clientCreditScores.organizationId, orgId),
+        eq(schema.clientCreditScores.customerId, customerId),
+      ),
+    )
+    .limit(1)
 
-  if (error) throw new Error(error.message)
-  return data ?? null
+  const row = rows[0]
+  if (!row) return null
+
+  return {
+    score:       row.client_credit_scores.score,
+    tier:        row.client_credit_scores.tier,
+    factorsJson: row.client_credit_scores.factorsJson,
+    rationale:   row.client_credit_scores.rationale,
+    scoredAt:    row.client_credit_scores.scoredAt,
+    customerId:  row.client_credit_scores.customerId,
+    customers:   row.customers
+      ? { full_name: row.customers.fullName, email: row.customers.email }
+      : null,
+  }
 }
 
 export async function getAllClientCreditScores(
-  client: SupabaseClient,
   orgId: string
 ) {
-  const { data, error } = await client
-    .from("client_credit_scores")
-    .select("score, tier, factors_json, rationale, scored_at, customer_id, customers ( full_name, email )")
-    .eq("organization_id", orgId)
-    .order("score", { ascending: false })
+  const rows = await db
+    .select()
+    .from(schema.clientCreditScores)
+    .leftJoin(schema.customers, eq(schema.clientCreditScores.customerId, schema.customers.id))
+    .where(eq(schema.clientCreditScores.organizationId, orgId))
+    .orderBy(desc(schema.clientCreditScores.score))
 
-  if (error) throw new Error(error.message)
-  return data ?? []
+  return rows.map((row) => ({
+    score:       row.client_credit_scores.score,
+    tier:        row.client_credit_scores.tier,
+    factorsJson: row.client_credit_scores.factorsJson,
+    rationale:   row.client_credit_scores.rationale,
+    scoredAt:    row.client_credit_scores.scoredAt,
+    customerId:  row.client_credit_scores.customerId,
+    customers:   row.customers
+      ? { full_name: row.customers.fullName, email: row.customers.email }
+      : null,
+  }))
 }
 
 // ─── Reminder history ──────────────────────────────────────────────────────
 
 export async function getClientReminderHistory(
-  client: SupabaseClient,
   orgId: string,
   customerId: string,
   limit = 25
 ) {
-  const { data, error } = await client
-    .from("client_reminders")
-    .select("id, invoice_id, channel, subject, body, stripe_reminder_id, status, sent_at, invoices ( invoice_number )")
-    .eq("organization_id", orgId)
-    .eq("customer_id", customerId)
-    .order("sent_at", { ascending: false })
+  const rows = await db
+    .select()
+    .from(schema.clientReminders)
+    .leftJoin(schema.invoices, eq(schema.clientReminders.invoiceId, schema.invoices.id))
+    .where(
+      and(
+        eq(schema.clientReminders.organizationId, orgId),
+        eq(schema.clientReminders.customerId, customerId),
+      ),
+    )
+    .orderBy(desc(schema.clientReminders.sentAt))
     .limit(limit)
 
-  if (error) throw new Error(error.message)
-
-  return (data ?? []).map((row) => ({
-    id:                row.id,
-    invoiceId:         row.invoice_id,
-    invoiceNumber:     (row.invoices as unknown as { invoice_number: string } | null)?.invoice_number ?? "",
-    channel:           row.channel,
-    subject:           row.subject,
-    body:              row.body,
-    stripeReminderId:  row.stripe_reminder_id,
-    status:            row.status,
-    sentAt:            row.sent_at,
+  return rows.map((row) => ({
+    id:                row.client_reminders.id,
+    invoiceId:         row.client_reminders.invoiceId,
+    invoiceNumber:     row.invoices?.invoiceNumber ?? "",
+    channel:           row.client_reminders.channel,
+    subject:           row.client_reminders.subject,
+    body:              row.client_reminders.body,
+    stripeReminderId:  row.client_reminders.stripeReminderId,
+    status:            row.client_reminders.status,
+    sentAt:            row.client_reminders.sentAt,
   }))
 }

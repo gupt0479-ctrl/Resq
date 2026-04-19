@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and, notInArray, asc, desc } from "drizzle-orm"
 import { canCompleteAppointment } from "@/lib/domain/status-guards"
 import { generateInvoiceFromAppointment } from "@/lib/services/invoices"
 import { DOMAIN_EVENT } from "@/lib/constants/enums"
@@ -29,25 +31,28 @@ export interface CompleteAppointmentResult {
 /**
  * Marks a reservation as completed, emits an audit event, and
  * deterministically generates an invoice from the service catalog.
- * All mutations run within a single Supabase round-trip sequence.
+ * All mutations run within a single round-trip sequence.
  */
 export async function completeAppointment(
-  client: SupabaseClient,
   appointmentId: string,
   organizationId: string,
   notes?: string,
   customLineItems?: Array<{ description: string; qty: number; unitPrice: number }>
 ): Promise<CompleteAppointmentResult> {
   // 1. Fetch the appointment
-  const { data: appt, error: fetchErr } = await client
-    .from("appointments")
-    .select("*")
-    .eq("id", appointmentId)
-    .eq("organization_id", organizationId)
-    .single()
+  const [appt] = await db
+    .select()
+    .from(schema.appointments)
+    .where(
+      and(
+        eq(schema.appointments.id, appointmentId),
+        eq(schema.appointments.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (fetchErr || !appt) {
-    throw new Error(fetchErr?.message ?? "Appointment not found")
+  if (!appt) {
+    throw new Error("Appointment not found")
   }
 
   if (!canCompleteAppointment(appt.status as AppointmentStatus)) {
@@ -61,41 +66,58 @@ export async function completeAppointment(
 
   // 2. Mark appointment as completed
   const now = new Date().toISOString()
-  const { error: updateErr } = await client
-    .from("appointments")
-    .update({ status: "completed", updated_at: now })
-    .eq("id", appointmentId)
-    .eq("organization_id", organizationId)
-
-  if (updateErr) {
-    throw new Error(`Failed to complete appointment: ${updateErr.message}`)
-  }
+  await db
+    .update(schema.appointments)
+    .set({ status: "completed", updatedAt: new Date(now) })
+    .where(
+      and(
+        eq(schema.appointments.id, appointmentId),
+        eq(schema.appointments.organizationId, organizationId),
+      ),
+    )
 
   // 3. Insert audit event
-  await client.from("appointment_events").insert({
-    appointment_id:  appointmentId,
-    organization_id: organizationId,
-    event_type:      DOMAIN_EVENT.RESERVATION_COMPLETED,
-    from_status:     fromStatus,
-    to_status:       "completed",
-    notes:           notes ?? null,
-    metadata:        { source: "api" },
+  await db.insert(schema.appointmentEvents).values({
+    appointmentId,
+    organizationId,
+    eventType:  DOMAIN_EVENT.RESERVATION_COMPLETED,
+    fromStatus,
+    toStatus:   "completed",
+    notes:      notes ?? null,
+    metadata:   { source: "api" },
   })
 
   // 4. Generate invoice from custom line items (if provided) or service catalog
-  const invoiceId = await generateInvoiceFromAppointment(client, {
-    ...appt,
-    status: "completed",
+  const invoiceId = await generateInvoiceFromAppointment({
+    id:              appt.id,
+    organization_id: appt.organizationId,
+    customer_id:     appt.customerId,
+    service_id:      appt.serviceId,
+    covers:          appt.covers,
+    notes:           appt.notes,
+    status:          "completed",
     customLineItems: customLineItems && customLineItems.length > 0 ? customLineItems : undefined,
   })
 
-  return { appointment: { ...appt, status: "completed" }, invoiceId }
+  const result: AppointmentRow = {
+    id:              appt.id,
+    organization_id: appt.organizationId,
+    customer_id:     appt.customerId,
+    staff_id:        appt.staffId,
+    service_id:      appt.serviceId,
+    covers:          appt.covers,
+    starts_at:       appt.startsAt.toISOString(),
+    ends_at:         appt.endsAt.toISOString(),
+    status:          "completed" as AppointmentStatus,
+    notes:           appt.notes,
+  }
+
+  return { appointment: result, invoiceId }
 }
 
 // ─── List appointments ────────────────────────────────────────────────────
 
 export async function listAppointments(
-  client: SupabaseClient,
   organizationId: string,
   opts: {
     status?: AppointmentStatus
@@ -105,73 +127,84 @@ export async function listAppointments(
     orderDir?: "asc" | "desc"
   } = {}
 ) {
-  let query = client
-    .from("appointments")
-    .select(`
-      *,
-      customers ( id, full_name, email ),
-      staff     ( id, full_name, role ),
-      services  ( id, name, price_per_person )
-    `)
-    .eq("organization_id", organizationId)
+  const orderCol = opts.orderBy === "created_at" ? schema.appointments.createdAt : schema.appointments.startsAt
+  const orderFn = opts.orderDir === "desc" ? desc : asc
 
+  const conditions = [eq(schema.appointments.organizationId, organizationId)]
   if (opts.status) {
-    query = query.eq("status", opts.status)
+    conditions.push(eq(schema.appointments.status, opts.status))
   }
 
-  query = query.order(opts.orderBy ?? "starts_at", {
-    ascending: opts.orderDir !== "desc",
-  })
+  const rows = await db
+    .select()
+    .from(schema.appointments)
+    .leftJoin(schema.customers, eq(schema.appointments.customerId, schema.customers.id))
+    .leftJoin(schema.staff, eq(schema.appointments.staffId, schema.staff.id))
+    .leftJoin(schema.services, eq(schema.appointments.serviceId, schema.services.id))
+    .where(and(...conditions))
+    .orderBy(orderFn(orderCol))
+    .limit(opts.limit ?? 50)
+    .offset(opts.offset ?? 0)
 
-  if (opts.limit) {
-    query = query.limit(opts.limit)
-  }
-  if (opts.offset) {
-    query = query.range(opts.offset, opts.offset + (opts.limit ?? 50) - 1)
-  }
-
-  const { data, error } = await query
-  if (error) throw new Error(error.message)
-  return data ?? []
+  return rows.map((r) => ({
+    ...r.appointments,
+    customers: r.customers
+      ? { id: r.customers.id, full_name: r.customers.fullName, email: r.customers.email }
+      : null,
+    staff: r.staff
+      ? { id: r.staff.id, full_name: r.staff.fullName, role: r.staff.role }
+      : null,
+    services: r.services
+      ? { id: r.services.id, name: r.services.name, price_per_person: r.services.pricePerPerson }
+      : null,
+  }))
 }
 
 // ─── Cancel appointment ───────────────────────────────────────────────────
 
 export async function cancelAppointment(
-  client: SupabaseClient,
   appointmentId: string,
   organizationId: string
 ): Promise<void> {
-  const { error } = await client
-    .from("appointments")
-    .update({ status: "cancelled", updated_at: new Date().toISOString() })
-    .eq("id", appointmentId)
-    .eq("organization_id", organizationId)
-    .not("status", "in", '("completed","cancelled")')
-  if (error) throw new Error(error.message)
+  await db
+    .update(schema.appointments)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.appointments.id, appointmentId),
+        eq(schema.appointments.organizationId, organizationId),
+        notInArray(schema.appointments.status, ["completed", "cancelled"]),
+      ),
+    )
 }
 
 // ─── Reschedule appointment ───────────────────────────────────────────────
 
 export async function rescheduleAppointment(
-  client: SupabaseClient,
   appointmentId: string,
   organizationId: string,
   startsAt: string,
   endsAt: string
 ): Promise<void> {
-  const { error } = await client
-    .from("appointments")
-    .update({ status: "rescheduled", starts_at: startsAt, ends_at: endsAt, updated_at: new Date().toISOString() })
-    .eq("id", appointmentId)
-    .eq("organization_id", organizationId)
-  if (error) throw new Error(error.message)
+  await db
+    .update(schema.appointments)
+    .set({
+      status:    "rescheduled",
+      startsAt:  new Date(startsAt),
+      endsAt:    new Date(endsAt),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.appointments.id, appointmentId),
+        eq(schema.appointments.organizationId, organizationId),
+      ),
+    )
 }
 
 // ─── Create appointment ───────────────────────────────────────────────────
 
 export async function createAppointment(
-  client: SupabaseClient,
   organizationId: string,
   opts: {
     customerName:  string
@@ -185,83 +218,108 @@ export async function createAppointment(
   }
 ): Promise<string> {
   // 1. Upsert customer by email
-  const { data: existing } = await client
-    .from("customers")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .eq("email", opts.customerEmail)
-    .maybeSingle()
+  const [existing] = await db
+    .select({ id: schema.customers.id })
+    .from(schema.customers)
+    .where(
+      and(
+        eq(schema.customers.organizationId, organizationId),
+        eq(schema.customers.email, opts.customerEmail),
+      ),
+    )
+    .limit(1)
 
   let customerId: string
   if (existing) {
-    customerId = existing.id as string
+    customerId = existing.id
   } else {
-    const { data: created, error: custErr } = await client
-      .from("customers")
-      .insert({
-        organization_id: organizationId,
-        full_name: opts.customerName,
-        email: opts.customerEmail,
-        phone: opts.customerPhone ?? null,
+    const [created] = await db
+      .insert(schema.customers)
+      .values({
+        organizationId,
+        fullName: opts.customerName,
+        email:    opts.customerEmail,
+        phone:    opts.customerPhone ?? null,
       })
-      .select("id")
-      .single()
-    if (custErr || !created) throw new Error(custErr?.message ?? "Failed to create customer")
-    customerId = created.id as string
+      .returning({ id: schema.customers.id })
+    if (!created) throw new Error("Failed to create customer")
+    customerId = created.id
   }
 
   // 2. Get first active service
-  const { data: service } = await client
-    .from("services")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .eq("is_active", true)
-    .order("name")
+  const [service] = await db
+    .select({ id: schema.services.id })
+    .from(schema.services)
+    .where(
+      and(
+        eq(schema.services.organizationId, organizationId),
+        eq(schema.services.isActive, true),
+      ),
+    )
+    .orderBy(asc(schema.services.name))
     .limit(1)
-    .maybeSingle()
 
   if (!service) throw new Error("No active services found for this organisation")
 
   // 3. Create appointment
-  const { data: appt, error: apptErr } = await client
-    .from("appointments")
-    .insert({
-      organization_id: organizationId,
-      customer_id:     customerId,
-      service_id:      service.id,
-      covers:          opts.covers,
-      starts_at:       opts.startsAt,
-      ends_at:         opts.endsAt,
-      status:          "confirmed",
-      booking_source:  "manual",
-      notes:           opts.notes ?? null,
+  const [appt] = await db
+    .insert(schema.appointments)
+    .values({
+      organizationId,
+      customerId,
+      serviceId:     service.id,
+      covers:        opts.covers,
+      startsAt:      new Date(opts.startsAt),
+      endsAt:        new Date(opts.endsAt),
+      status:        "confirmed",
+      bookingSource: "manual",
+      notes:         opts.notes ?? null,
     })
-    .select("id")
-    .single()
+    .returning({ id: schema.appointments.id })
 
-  if (apptErr || !appt) throw new Error(apptErr?.message ?? "Failed to create appointment")
-  return appt.id as string
+  if (!appt) throw new Error("Failed to create appointment")
+  return appt.id
 }
 
 // ─── Get single appointment ───────────────────────────────────────────────
 
 export async function getAppointment(
-  client: SupabaseClient,
   appointmentId: string,
   organizationId: string
 ) {
-  const { data, error } = await client
-    .from("appointments")
-    .select(`
-      *,
-      customers ( id, full_name, email, phone ),
-      staff     ( id, full_name, role ),
-      services  ( id, name, description, price_per_person, category )
-    `)
-    .eq("id", appointmentId)
-    .eq("organization_id", organizationId)
-    .single()
+  const rows = await db
+    .select()
+    .from(schema.appointments)
+    .leftJoin(schema.customers, eq(schema.appointments.customerId, schema.customers.id))
+    .leftJoin(schema.staff, eq(schema.appointments.staffId, schema.staff.id))
+    .leftJoin(schema.services, eq(schema.appointments.serviceId, schema.services.id))
+    .where(
+      and(
+        eq(schema.appointments.id, appointmentId),
+        eq(schema.appointments.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
 
-  if (error) throw new Error(error.message)
-  return data
+  const r = rows[0]
+  if (!r) throw new Error("Appointment not found")
+
+  return {
+    ...r.appointments,
+    customers: r.customers
+      ? { id: r.customers.id, full_name: r.customers.fullName, email: r.customers.email, phone: r.customers.phone }
+      : null,
+    staff: r.staff
+      ? { id: r.staff.id, full_name: r.staff.fullName, role: r.staff.role }
+      : null,
+    services: r.services
+      ? {
+          id:               r.services.id,
+          name:             r.services.name,
+          description:      r.services.description,
+          price_per_person: r.services.pricePerPerson,
+          category:         r.services.category,
+        }
+      : null,
+  }
 }

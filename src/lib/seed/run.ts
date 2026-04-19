@@ -1,28 +1,26 @@
 /**
  * Ember Table seed script.
  * Run after applying the migration:
- *   npx supabase db push   (or apply 0001_core_ledger.sql manually)
  *   npx tsx src/lib/seed/run.ts
  *
- * Requires NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local.
+ * Requires DATABASE_URL in .env.local.
  */
 
-import { createClient } from "@supabase/supabase-js"
+import { Pool } from "pg"
 import { readFileSync } from "fs"
 import { join } from "path"
 
 async function main() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const databaseUrl = process.env.DATABASE_URL
 
-  if (!url || !key) {
+  if (!databaseUrl) {
     console.error(
-      "❌  Missing env vars. Copy .env.local.example to .env.local and fill in your Supabase credentials."
+      "❌  Missing DATABASE_URL env var. Copy .env.local.example to .env.local and fill in your database credentials."
     )
     process.exit(1)
   }
 
-  const client = createClient(url, key, { auth: { persistSession: false } })
+  const pool = new Pool({ connectionString: databaseUrl })
 
   // Read the SQL seed file
   const seedPath = join(process.cwd(), "supabase", "seed.sql")
@@ -36,21 +34,24 @@ async function main() {
 
   console.log(`🌱  Running ${statements.length} seed statements for Ember Table…`)
 
-  const failed = 0
+  let failed = 0
   for (const sql of statements) {
-    const { error } = await client.rpc("exec_sql", { sql: sql + ";" }).maybeSingle()
-    if (error) {
-      // Fallback: try using postgrest raw
-      console.warn(`  ⚠️  RPC exec_sql not available — use Supabase SQL editor or psql.`)
-      break
+    try {
+      await pool.query(sql + ";")
+    } catch (err) {
+      failed += 1
+      console.warn(`  ⚠️  Statement failed: ${(err as Error).message?.slice(0, 120)}`)
     }
   }
 
   if (failed === 0) {
     console.log("✅  Seed complete.")
   } else {
-    console.log(`\n💡  Tip: paste supabase/seed.sql into the Supabase SQL Editor and run it there.`)
+    console.log(`\n⚠️  ${failed} statement(s) failed. Check output above.`)
+    console.log(`💡  Tip: paste supabase/seed.sql into your SQL editor and run it there.`)
   }
+
+  await pool.end()
 }
 
 main().catch((e) => {

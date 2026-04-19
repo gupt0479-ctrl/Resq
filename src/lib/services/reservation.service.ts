@@ -1,4 +1,6 @@
-import { supabaseAdmin } from "@/lib/supabase"
+import { db } from "@/lib/db"
+import { reservations, customers, followUps } from "@/lib/db/schema"
+import { eq, ne, and, lt, gt, gte, lte, inArray } from "drizzle-orm"
 import type {
   BookReservationRequest,
   Customer,
@@ -21,43 +23,59 @@ export async function checkConflict(
     return { error: "End time must be after start time." }
   }
 
-  let query = supabaseAdmin
-    .from("reservations")
-    .select("*, customer:customers(*)")
-    .in("status", ["confirmed", "completed"])
-    .lt("starts_at", ends_at)
-    .gt("ends_at", starts_at)
+  try {
+    const conditions = [
+      inArray(reservations.status, ["confirmed", "completed"]),
+      lt(reservations.startsAt, new Date(ends_at)),
+      gt(reservations.endsAt, new Date(starts_at)),
+    ]
 
-  if (exclude_id) query = query.neq("id", exclude_id)
+    if (exclude_id) {
+      conditions.push(ne(reservations.id, exclude_id))
+    }
 
-  const { data, error } = await query
-  if (error) return { error: error.message }
-  return { data: (data ?? []) as Reservation[] }
+    const rows = await db
+      .select()
+      .from(reservations)
+      .leftJoin(customers, eq(reservations.customerId, customers.id))
+      .where(and(...conditions))
+
+    const data = rows.map((r) => ({
+      ...r.reservations,
+      customer: r.customers,
+    }))
+    return { data: data as unknown as Reservation[] }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 async function findOrCreateCustomer(
   req: BookReservationRequest
 ): Promise<ServiceResult<Customer>> {
-  const { data: existing } = await supabaseAdmin
-    .from("customers")
-    .select("*")
-    .eq("email", req.customer_email)
-    .maybeSingle()
+  try {
+    const existing = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.email, req.customer_email))
+      .limit(1)
 
-  if (existing) return { data: existing as Customer }
+    if (existing[0]) return { data: existing[0] as unknown as Customer }
 
-  const { data, error } = await supabaseAdmin
-    .from("customers")
-    .insert({
-      name: req.customer_name,
-      email: req.customer_email,
-      phone: req.customer_phone ?? null,
-    })
-    .select("*")
-    .single()
+    const [created] = await db
+      .insert(customers)
+      .values({
+        fullName: req.customer_name,
+        email: req.customer_email,
+        phone: req.customer_phone ?? null,
+        organizationId: "00000000-0000-0000-0000-000000000001",
+      })
+      .returning()
 
-  if (error) return { error: error.message }
-  return { data: data as Customer }
+    return { data: created as unknown as Customer }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function bookReservation(
@@ -78,46 +96,70 @@ export async function bookReservation(
     return { error: customerResult.error ?? "Could not create customer." }
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("reservations")
-    .insert({
-      customer_id: customerResult.data.id,
-      party_size: req.party_size ?? 2,
-      starts_at: req.starts_at,
-      ends_at: req.ends_at,
-      notes: req.notes ?? null,
-      occasion: req.occasion ?? null,
-      status: "confirmed",
-      reminder_sent: false,
-      follow_up_sent: false,
-    })
-    .select("*, customer:customers(*)")
-    .single()
+  try {
+    const [data] = await db
+      .insert(reservations)
+      .values({
+        customerId: customerResult.data.id,
+        partySize: req.party_size ?? 2,
+        startsAt: new Date(req.starts_at),
+        endsAt: new Date(req.ends_at),
+        notes: req.notes ?? null,
+        occasion: req.occasion ?? null,
+        status: "confirmed",
+        reminderSent: false,
+        followUpSent: false,
+      })
+      .returning()
 
-  if (error) return { error: error.message }
-  return { data: data as Reservation }
+    // Re-fetch with customer join
+    const rows = await db
+      .select()
+      .from(reservations)
+      .leftJoin(customers, eq(reservations.customerId, customers.id))
+      .where(eq(reservations.id, data.id))
+      .limit(1)
+
+    const row = rows[0]
+    return { data: { ...row?.reservations, customer: row?.customers } as unknown as Reservation }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function getReservations(): Promise<ServiceResult<Reservation[]>> {
-  const { data, error } = await supabaseAdmin
-    .from("reservations")
-    .select("*, customer:customers(*)")
-    .order("starts_at", { ascending: true })
+  try {
+    const rows = await db
+      .select()
+      .from(reservations)
+      .leftJoin(customers, eq(reservations.customerId, customers.id))
+      .orderBy(reservations.startsAt)
 
-  if (error) return { error: error.message }
-  return { data: (data ?? []) as Reservation[] }
+    const data = rows.map((r) => ({
+      ...r.reservations,
+      customer: r.customers,
+    }))
+    return { data: data as unknown as Reservation[] }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function getReservation(id: string): Promise<ServiceResult<Reservation>> {
-  const { data, error } = await supabaseAdmin
-    .from("reservations")
-    .select("*, customer:customers(*)")
-    .eq("id", id)
-    .maybeSingle()
+  try {
+    const rows = await db
+      .select()
+      .from(reservations)
+      .leftJoin(customers, eq(reservations.customerId, customers.id))
+      .where(eq(reservations.id, id))
+      .limit(1)
 
-  if (error) return { error: error.message }
-  if (!data) return { error: "Reservation not found." }
-  return { data: data as Reservation }
+    const row = rows[0]
+    if (!row) return { error: "Reservation not found." }
+    return { data: { ...row.reservations, customer: row.customers } as unknown as Reservation }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function rescheduleReservation(
@@ -136,33 +178,51 @@ export async function rescheduleReservation(
     return { error: "This time slot overlaps with an existing reservation." }
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("reservations")
-    .update({
-      starts_at: req.starts_at,
-      ends_at: req.ends_at,
-      notes: req.notes ?? existing.data.notes,
-      occasion: req.occasion ?? existing.data.occasion,
-      party_size: req.party_size ?? existing.data.party_size,
-    })
-    .eq("id", id)
-    .select("*, customer:customers(*)")
-    .single()
+  try {
+    await db
+      .update(reservations)
+      .set({
+        startsAt: new Date(req.starts_at),
+        endsAt: new Date(req.ends_at),
+        notes: req.notes ?? existing.data.notes,
+        occasion: req.occasion ?? existing.data.occasion,
+        partySize: req.party_size ?? existing.data.party_size,
+      })
+      .where(eq(reservations.id, id))
 
-  if (error) return { error: error.message }
-  return { data: data as Reservation }
+    const rows = await db
+      .select()
+      .from(reservations)
+      .leftJoin(customers, eq(reservations.customerId, customers.id))
+      .where(eq(reservations.id, id))
+      .limit(1)
+
+    const row = rows[0]
+    return { data: { ...row?.reservations, customer: row?.customers } as unknown as Reservation }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function cancelReservation(id: string): Promise<ServiceResult<Reservation>> {
-  const { data, error } = await supabaseAdmin
-    .from("reservations")
-    .update({ status: "cancelled" })
-    .eq("id", id)
-    .select("*, customer:customers(*)")
-    .single()
+  try {
+    await db
+      .update(reservations)
+      .set({ status: "cancelled" })
+      .where(eq(reservations.id, id))
 
-  if (error) return { error: error.message }
-  return { data: data as Reservation }
+    const rows = await db
+      .select()
+      .from(reservations)
+      .leftJoin(customers, eq(reservations.customerId, customers.id))
+      .where(eq(reservations.id, id))
+      .limit(1)
+
+    const row = rows[0]
+    return { data: { ...row?.reservations, customer: row?.customers } as unknown as Reservation }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function completeReservation(id: string): Promise<ServiceResult<Reservation>> {
@@ -173,36 +233,48 @@ export async function completeReservation(id: string): Promise<ServiceResult<Res
     return { error: "Cancelled reservations cannot be completed." }
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("reservations")
-    .update({ status: "completed" })
-    .eq("id", id)
-    .select("*, customer:customers(*)")
-    .single()
+  try {
+    await db
+      .update(reservations)
+      .set({ status: "completed" })
+      .where(eq(reservations.id, id))
 
-  if (error) return { error: error.message }
+    const rows = await db
+      .select()
+      .from(reservations)
+      .leftJoin(customers, eq(reservations.customerId, customers.id))
+      .where(eq(reservations.id, id))
+      .limit(1)
 
-  const visits = existing.data.customer?.visit_count ?? 0
-  await supabaseAdmin
-    .from("customers")
-    .update({ visit_count: visits + 1 })
-    .eq("id", existing.data.customer_id)
+    const row = rows[0]
 
-  return { data: data as Reservation }
+    // Update visit count
+    const visits = (existing.data as unknown as Record<string, unknown>)?.visit_count as number ?? 0
+    if (existing.data.customer_id) {
+      await db
+        .update(customers)
+        .set({ lifetimeValue: String(visits + 1) })
+        .where(eq(customers.id, existing.data.customer_id))
+    }
+
+    return { data: { ...row?.reservations, customer: row?.customers } as unknown as Reservation }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function markReminderSent(id: string): Promise<void> {
-  await supabaseAdmin
-    .from("reservations")
-    .update({ reminder_sent: true })
-    .eq("id", id)
+  await db
+    .update(reservations)
+    .set({ reminderSent: true })
+    .where(eq(reservations.id, id))
 }
 
 export async function markFollowUpSent(id: string): Promise<void> {
-  await supabaseAdmin
-    .from("reservations")
-    .update({ follow_up_sent: true })
-    .eq("id", id)
+  await db
+    .update(reservations)
+    .set({ followUpSent: true })
+    .where(eq(reservations.id, id))
 }
 
 export async function createFollowUpRecord(
@@ -210,42 +282,60 @@ export async function createFollowUpRecord(
   customerId: string,
   message: string
 ): Promise<ServiceResult<FollowUp>> {
-  const { data, error } = await supabaseAdmin
-    .from("follow_ups")
-    .insert({
-      reservation_id: reservationId,
-      customer_id: customerId,
-      message,
-      sent_at: new Date().toISOString(),
-    })
-    .select("*")
-    .single()
+  try {
+    const [data] = await db
+      .insert(followUps)
+      .values({
+        reservationId,
+        customerId,
+        message,
+        sentAt: new Date(),
+      })
+      .returning()
 
-  if (error) return { error: error.message }
-  return { data: data as FollowUp }
+    return { data: data as unknown as FollowUp }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function getReservationsNeedingReminder(): Promise<Reservation[]> {
-  const from = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
-  const to = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  const from = new Date(Date.now() + 23 * 60 * 60 * 1000)
+  const to = new Date(Date.now() + 24 * 60 * 60 * 1000)
 
-  const { data } = await supabaseAdmin
-    .from("reservations")
-    .select("*, customer:customers(*)")
-    .eq("status", "confirmed")
-    .eq("reminder_sent", false)
-    .gte("starts_at", from)
-    .lte("starts_at", to)
+  const rows = await db
+    .select()
+    .from(reservations)
+    .leftJoin(customers, eq(reservations.customerId, customers.id))
+    .where(
+      and(
+        eq(reservations.status, "confirmed"),
+        eq(reservations.reminderSent, false),
+        gte(reservations.startsAt, from),
+        lte(reservations.startsAt, to)
+      )
+    )
 
-  return (data ?? []) as Reservation[]
+  return rows.map((r) => ({
+    ...r.reservations,
+    customer: r.customers,
+  })) as unknown as Reservation[]
 }
 
 export async function getReservationsNeedingFollowUp(): Promise<Reservation[]> {
-  const { data } = await supabaseAdmin
-    .from("reservations")
-    .select("*, customer:customers(*)")
-    .eq("status", "completed")
-    .eq("follow_up_sent", false)
+  const rows = await db
+    .select()
+    .from(reservations)
+    .leftJoin(customers, eq(reservations.customerId, customers.id))
+    .where(
+      and(
+        eq(reservations.status, "completed"),
+        eq(reservations.followUpSent, false)
+      )
+    )
 
-  return (data ?? []) as Reservation[]
+  return rows.map((r) => ({
+    ...r.reservations,
+    customer: r.customers,
+  })) as unknown as Reservation[]
 }

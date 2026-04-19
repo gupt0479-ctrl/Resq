@@ -1,5 +1,7 @@
 import "server-only"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { db } from "@/lib/db"
+import * as schema from "@/lib/db/schema"
+import { eq, and, desc, count } from "drizzle-orm"
 import Anthropic from "@anthropic-ai/sdk"
 import {
   FinanceSummaryFactsSchema,
@@ -10,43 +12,48 @@ import { getFinanceSummary } from "@/lib/services/finance"
 import { countUnhappyGuestsForDashboard } from "@/lib/queries/feedback"
 
 export async function buildFinanceSummaryFacts(
-  client: SupabaseClient,
   organizationId: string
 ): Promise<FinanceSummaryFacts> {
-  const summary = await getFinanceSummary(client, organizationId)
+  const summary = await getFinanceSummary(organizationId)
 
-  const { data: overdueRows, error } = await client
-    .from("invoices")
-    .select("invoice_number, total_amount, amount_paid, customers ( full_name )")
-    .eq("organization_id", organizationId)
-    .eq("status", "overdue")
-    .order("due_at", { ascending: true })
+  const overdueRows = await db
+    .select()
+    .from(schema.invoices)
+    .leftJoin(schema.customers, eq(schema.invoices.customerId, schema.customers.id))
+    .where(
+      and(
+        eq(schema.invoices.organizationId, organizationId),
+        eq(schema.invoices.status, "overdue"),
+      ),
+    )
+    .orderBy(schema.invoices.dueAt)
     .limit(5)
 
-  if (error) throw new Error(error.message)
-
-  const largestOverdueInvoices = (overdueRows ?? []).map((row: Record<string, unknown>) => {
-    const cust = row.customers as { full_name?: string } | null
+  const largestOverdueInvoices = overdueRows.map((row) => {
     return {
-      invoiceNumber: String(row.invoice_number ?? ""),
+      invoiceNumber: String(row.invoices.invoiceNumber ?? ""),
       amount: Math.max(
         0,
-        (Number(row.total_amount) || 0) - (Number(row.amount_paid) || 0)
+        (Number(row.invoices.totalAmount) || 0) - (Number(row.invoices.amountPaid) || 0)
       ),
-      customerName: cust?.full_name ?? "Unknown",
+      customerName: row.customers?.fullName ?? "Unknown",
     }
   })
 
   let urgentFeedbackCount = 0
   let flaggedFeedbackCount = 0
   try {
-    urgentFeedbackCount = await countUnhappyGuestsForDashboard(client, organizationId)
-    const { count } = await client
-      .from("feedback")
-      .select("*", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .eq("flagged", true)
-    flaggedFeedbackCount = count ?? 0
+    urgentFeedbackCount = await countUnhappyGuestsForDashboard(organizationId)
+    const [flaggedResult] = await db
+      .select({ count: count() })
+      .from(schema.feedback)
+      .where(
+        and(
+          eq(schema.feedback.organizationId, organizationId),
+          eq(schema.feedback.flagged, true),
+        ),
+      )
+    flaggedFeedbackCount = Number(flaggedResult?.count ?? 0)
   } catch {
     /* feedback table may be absent until migration 004 */
   }
@@ -73,15 +80,15 @@ export function buildFallbackManagerSummary(facts: FinanceSummaryFacts): Manager
         : "Cash and receivables look healthy this week"
 
   const bullets: string[] = [
-    `Revenue this week: $${facts.revenueThisWeek.toFixed(2)} (from ledger).`,
-    `Pending receivables: $${facts.pendingReceivables.toFixed(2)}.`,
-    `Overdue receivables: $${facts.overdueReceivables.toFixed(2)}.`,
-    `Net cash flow (week): $${facts.netCashFlowEstimate.toFixed(2)}.`,
+    `Revenue this week: ${facts.revenueThisWeek.toFixed(2)} (from ledger).`,
+    `Pending receivables: ${facts.pendingReceivables.toFixed(2)}.`,
+    `Overdue receivables: ${facts.overdueReceivables.toFixed(2)}.`,
+    `Net cash flow (week): ${facts.netCashFlowEstimate.toFixed(2)}.`,
     `Open guest issues (urgent / flagged feedback): ${facts.urgentFeedbackCount} attention queue, ${facts.flaggedFeedbackCount} flagged.`,
   ]
   if (facts.largestOverdueInvoices.length > 0) {
     const top = facts.largestOverdueInvoices[0]
-    bullets.push(`Largest overdue: ${top.invoiceNumber} (${top.customerName}) — $${top.amount.toFixed(2)}.`)
+    bullets.push(`Largest overdue: ${top.invoiceNumber} (${top.customerName}) — ${top.amount.toFixed(2)}.`)
   }
 
   return {
@@ -101,10 +108,9 @@ export function buildFallbackManagerSummary(facts: FinanceSummaryFacts): Manager
  * and persists to `ai_summaries` (non-authoritative).
  */
 export async function generateAndPersistManagerSummary(
-  client: SupabaseClient,
   organizationId: string
 ): Promise<{ summary: ManagerSummary; facts: FinanceSummaryFacts; source: "model" | "fallback" }> {
-  const facts = await buildFinanceSummaryFacts(client, organizationId)
+  const facts = await buildFinanceSummaryFacts(organizationId)
 
   let parsed: ManagerSummary
   let source: "model" | "fallback" = "fallback"
@@ -146,33 +152,36 @@ Facts JSON:\n${JSON.stringify(facts)}`,
     generatedAt: new Date().toISOString(),
   }
 
-  const { error } = await client.from("ai_summaries").insert({
-    organization_id: organizationId,
-    scope:           "daily_manager",
-    payload_json:    payload,
+  await db.insert(schema.aiSummaries).values({
+    organizationId,
+    scope:       "daily_manager",
+    payloadJson: payload,
   })
-
-  if (error) throw new Error(error.message)
 
   return { summary: parsed, facts, source }
 }
 
 export async function getLatestManagerSummary(
-  client: SupabaseClient,
   organizationId: string
 ): Promise<{ summary: ManagerSummary; source: string; generatedAt: string } | null> {
-  const { data, error } = await client
-    .from("ai_summaries")
-    .select("payload_json, generated_at")
-    .eq("organization_id", organizationId)
-    .eq("scope", "daily_manager")
-    .order("generated_at", { ascending: false })
+  const [row] = await db
+    .select({
+      payloadJson: schema.aiSummaries.payloadJson,
+      generatedAt: schema.aiSummaries.generatedAt,
+    })
+    .from(schema.aiSummaries)
+    .where(
+      and(
+        eq(schema.aiSummaries.organizationId, organizationId),
+        eq(schema.aiSummaries.scope, "daily_manager"),
+      ),
+    )
+    .orderBy(desc(schema.aiSummaries.generatedAt))
     .limit(1)
-    .maybeSingle()
 
-  if (error || !data?.payload_json) return null
+  if (!row?.payloadJson) return null
 
-  const payload = data.payload_json as {
+  const payload = row.payloadJson as {
     summary?: unknown
     source?: string
   }
@@ -182,13 +191,12 @@ export async function getLatestManagerSummary(
   return {
     summary:     summary.data,
     source:      typeof payload.source === "string" ? payload.source : "unknown",
-    generatedAt: data.generated_at as string,
+    generatedAt: row.generatedAt.toISOString(),
   }
 }
 
 /** Dashboard read-model: latest persisted AI summary, or deterministic fallback from facts. */
 export async function getManagerSummaryForDashboard(
-  client: SupabaseClient,
   organizationId: string
 ): Promise<{
   source:      "ai" | "fallback"
@@ -197,7 +205,7 @@ export async function getManagerSummaryForDashboard(
   riskNote?:   string
   generatedAt?: string
 }> {
-  const latest = await getLatestManagerSummary(client, organizationId)
+  const latest = await getLatestManagerSummary(organizationId)
   if (latest) {
     return {
       source:      "ai",
@@ -208,7 +216,7 @@ export async function getManagerSummaryForDashboard(
     }
   }
 
-  const facts = await buildFinanceSummaryFacts(client, organizationId)
+  const facts = await buildFinanceSummaryFacts(organizationId)
   const s = buildFallbackManagerSummary(facts)
   return {
     source:    "fallback",

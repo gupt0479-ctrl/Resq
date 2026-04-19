@@ -1,4 +1,6 @@
-import { supabaseAdmin } from "@/lib/supabase"
+import { db } from "@/lib/db"
+import { reservations } from "@/lib/db/schema"
+import { eq, sql } from "drizzle-orm"
 import type { CreateInvoiceRequest, Invoice, InvoiceLineItem, ServiceResult } from "@/lib/types"
 
 function roundCurrency(value: number): number {
@@ -31,103 +33,138 @@ export async function generateInvoice(
     discount_amount
   )
 
-  const { data: reservation, error: resErr } = await supabaseAdmin
-    .from("reservations")
-    .select("customer_id")
-    .eq("id", req.reservation_id)
-    .single()
+  // Look up reservation to get customer_id
+  const resRows = await db
+    .select({ customerId: reservations.customerId })
+    .from(reservations)
+    .where(eq(reservations.id, req.reservation_id))
+    .limit(1)
 
-  if (resErr || !reservation) return { error: "Reservation not found." }
+  const reservation = resRows[0] ?? null
+  if (!reservation) return { error: "Reservation not found." }
 
   const due_at = new Date(Date.now() + due_days * 24 * 60 * 60 * 1000).toISOString()
 
-  const { data, error } = await supabaseAdmin
-    .from("invoices")
-    .insert({
-      reservation_id: req.reservation_id,
-      customer_id: reservation.customer_id,
-      line_items: req.line_items,
-      subtotal,
-      tax_rate,
-      tax_amount,
-      discount_amount,
-      total,
-      status: "pending",
-      due_at,
-      reminder_count: 0,
-    })
-    .select("*, customer:customers(*), reservation:reservations(*)")
-    .single()
+  try {
+    // The legacy invoices table has line_items jsonb, total, reservation_id columns.
+    // We use raw SQL for the insert since the Drizzle schema is the ledger shape.
+    const result = await db.execute(sql`
+      INSERT INTO invoices (
+        reservation_id, customer_id, line_items, subtotal, tax_rate,
+        tax_amount, discount_amount, total, status, due_at, reminder_count
+      ) VALUES (
+        ${req.reservation_id}, ${reservation.customerId},
+        ${JSON.stringify(req.line_items)}::jsonb,
+        ${subtotal}, ${tax_rate}, ${tax_amount}, ${discount_amount},
+        ${total}, 'pending', ${due_at}::timestamptz, 0
+      )
+      RETURNING *, (
+        SELECT row_to_json(c) FROM customers c WHERE c.id = ${reservation.customerId}
+      ) as customer, (
+        SELECT row_to_json(r) FROM reservations r WHERE r.id = ${req.reservation_id}
+      ) as reservation
+    `)
 
-  if (error) return { error: error.message }
-  return { data: data as Invoice }
+    const data = (result as { rows: unknown[] }).rows?.[0] ?? null
+    if (!data) return { error: "Failed to create invoice" }
+    return { data: data as Invoice }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function getInvoices(): Promise<ServiceResult<Invoice[]>> {
-  const { data, error } = await supabaseAdmin
-    .from("invoices")
-    .select("*, customer:customers(*)")
-    .order("created_at", { ascending: false })
-
-  if (error) return { error: error.message }
-  return { data: (data ?? []) as Invoice[] }
+  try {
+    const result = await db.execute(sql`
+      SELECT i.*, row_to_json(c) as customer
+      FROM invoices i
+      LEFT JOIN customers c ON c.id = i.customer_id
+      ORDER BY i.created_at DESC
+    `)
+    const data = (result as { rows: unknown[] }).rows ?? []
+    return { data: data as Invoice[] }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function getInvoice(id: string): Promise<ServiceResult<Invoice>> {
-  const { data, error } = await supabaseAdmin
-    .from("invoices")
-    .select("*, customer:customers(*), reservation:reservations(*)")
-    .eq("id", id)
-    .maybeSingle()
-
-  if (error) return { error: error.message }
-  if (!data) return { error: "Invoice not found." }
-  return { data: data as Invoice }
+  try {
+    const result = await db.execute(sql`
+      SELECT i.*,
+        row_to_json(c) as customer,
+        row_to_json(r) as reservation
+      FROM invoices i
+      LEFT JOIN customers c ON c.id = i.customer_id
+      LEFT JOIN reservations r ON r.id = i.reservation_id
+      WHERE i.id = ${id}
+      LIMIT 1
+    `)
+    const data = ((result as { rows: unknown[] }).rows ?? [])[0] ?? null
+    if (!data) return { error: "Invoice not found." }
+    return { data: data as Invoice }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function markInvoicePaid(id: string): Promise<ServiceResult<Invoice>> {
-  const { data, error } = await supabaseAdmin
-    .from("invoices")
-    .update({ status: "paid", paid_at: new Date().toISOString() })
-    .eq("id", id)
-    .select("*, customer:customers(*)")
-    .single()
+  try {
+    const result = await db.execute(sql`
+      UPDATE invoices
+      SET status = 'paid', paid_at = ${new Date().toISOString()}::timestamptz
+      WHERE id = ${id}
+      RETURNING *
+    `)
+    const row = ((result as { rows: unknown[] }).rows ?? [])[0] ?? null
+    if (!row) return { error: "Invoice not found." }
 
-  if (error) return { error: error.message }
-  return { data: data as Invoice }
+    // Re-fetch with customer join
+    const fullResult = await db.execute(sql`
+      SELECT i.*, row_to_json(c) as customer
+      FROM invoices i
+      LEFT JOIN customers c ON c.id = i.customer_id
+      WHERE i.id = ${id}
+    `)
+    const data = ((fullResult as { rows: unknown[] }).rows ?? [])[0] ?? null
+    return { data: (data ?? row) as Invoice }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function syncOverdueInvoices(): Promise<void> {
-  await supabaseAdmin
-    .from("invoices")
-    .update({ status: "overdue" })
-    .eq("status", "pending")
-    .lt("due_at", new Date().toISOString())
+  await db.execute(sql`
+    UPDATE invoices
+    SET status = 'overdue'
+    WHERE status = 'pending'
+    AND due_at < ${new Date().toISOString()}::timestamptz
+  `)
 }
 
 export async function getOverdueInvoices(): Promise<Invoice[]> {
   await syncOverdueInvoices()
-  const { data } = await supabaseAdmin
-    .from("invoices")
-    .select("*, customer:customers(*)")
-    .eq("status", "overdue")
-    .order("due_at", { ascending: true })
-
-  return (data ?? []) as Invoice[]
+  const result = await db.execute(sql`
+    SELECT i.*, row_to_json(c) as customer
+    FROM invoices i
+    LEFT JOIN customers c ON c.id = i.customer_id
+    WHERE i.status = 'overdue'
+    ORDER BY i.due_at ASC
+  `)
+  return ((result as { rows: unknown[] }).rows ?? []) as Invoice[]
 }
 
 export async function recordReminderSent(id: string): Promise<void> {
-  const { data } = await supabaseAdmin
-    .from("invoices")
-    .select("reminder_count")
-    .eq("id", id)
-    .single()
+  const result = await db.execute(sql`
+    SELECT reminder_count FROM invoices WHERE id = ${id}
+  `)
+  const rows = (result as unknown as { rows: Array<{ reminder_count: number }> }).rows ?? []
+  const row = rows[0]
 
-  await supabaseAdmin
-    .from("invoices")
-    .update({
-      reminder_count: (data?.reminder_count ?? 0) + 1,
-      last_reminded_at: new Date().toISOString(),
-    })
-    .eq("id", id)
+  await db.execute(sql`
+    UPDATE invoices
+    SET reminder_count = ${(row?.reminder_count ?? 0) + 1},
+        last_reminded_at = ${new Date().toISOString()}::timestamptz
+    WHERE id = ${id}
+  `)
 }
