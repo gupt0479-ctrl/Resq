@@ -25,14 +25,17 @@ Build and demo:
 - Prefer additive changes over broad refactors.
 - Keep deterministic finance logic intact.
 - Use TinyFish mock mode by default unless live mode is explicitly verified.
+- Treat `.claude` as canonical and `.kiro/steering` as a thin mirror.
+- Keep the hero story focused on: stressed business -> rescue queue -> one-button survival scan -> financing options -> audit timeline.
 
 ## Read order before work
 
-1. `.claude/PRD.md`
-2. `.claude/context/current-state.md`
-3. `.claude/context/6hour-status.md`
-4. `docs/rescue-demo-runbook.md`
-5. The relevant playbook or checklist
+1. `.claude/README.md`
+2. `.claude/PRD.md`
+3. `.claude/context/current-state.md`
+4. `.claude/context/12hour-execution.md`
+5. `docs/rescue-demo-runbook.md`
+6. The relevant playbook or checklist
 
 ## Do not break
 

@@ -525,7 +525,6 @@ async function logPortalReconAction(
 
   const { recordAiAction } = await import("@/lib/services/ai-actions")
 
-
   await recordAiAction({
     organizationId: DEMO_ORG_ID,
     entityType:     "invoice",
@@ -570,7 +569,6 @@ async function logPortalReconError(
   if (!isDatabaseConfigured()) return
 
   const { recordAiAction } = await import("@/lib/services/ai-actions")
-
 
   await recordAiAction({
     organizationId: DEMO_ORG_ID,

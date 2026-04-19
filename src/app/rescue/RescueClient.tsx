@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 import { RiskBadge, type RiskLevel } from "@/components/RiskBadge"
 import { InvestigationPanel } from "@/components/receivables/investigation-panel"
 import type { RescueInvoice } from "@/lib/queries/rescue"
+import { SurvivalScanPanel } from "@/components/rescue/SurvivalScanPanel"
 
 import type { CollectionsDecision, CustomerClassification } from "@/lib/schemas/collections-decision"
 
@@ -525,7 +526,7 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
   const [running, setRunning]       = useState<string | null>(null)
   const [results, setResults]       = useState<Record<string, RunResult>>({})
   const [reminderLoading, setReminderLoading] = useState<string | null>(null)
-  const [reminderDone, setReminderDone]       = useState<Record<string, { hostedUrl?: string; emailSent?: boolean }>>({})
+  const [reminderDone, setReminderDone]       = useState<Record<string, { hostedUrl?: string; emailSent?: boolean; mode?: string }>>({})
   const [reminderError, setReminderError]     = useState<Record<string, string>>({})
   const [executeLoading, setExecuteLoading]   = useState<string | null>(null)
   const [executeDone, setExecuteDone]         = useState<Record<string, { channel: string; tone: string; mode: string }>>({})
@@ -553,9 +554,9 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
         headers: { "Content-Type": "application/json" },
         body:   JSON.stringify({ invoiceId }),
       })
-      const json = await res.json() as { ok: boolean; hostedUrl?: string; emailSent?: boolean; error?: string }
+      const json = await res.json() as { ok: boolean; hostedUrl?: string; emailSent?: boolean; mode?: string; error?: string }
       if (!json.ok) throw new Error(json.error ?? "Failed")
-      setReminderDone(prev => ({ ...prev, [invoiceId]: { hostedUrl: json.hostedUrl, emailSent: json.emailSent } }))
+      setReminderDone(prev => ({ ...prev, [invoiceId]: { hostedUrl: json.hostedUrl, emailSent: json.emailSent, mode: json.mode } }))
     } catch (e) {
       setReminderError(prev => ({ ...prev, [invoiceId]: e instanceof Error ? e.message : "Error" }))
     } finally {
@@ -646,6 +647,11 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
           <div className="font-display text-2xl mt-1">{activeCount}</div>
           <div className="text-[11.5px] text-steel mt-1">In recovery workflow</div>
         </div>
+      </div>
+
+      {/* Survival scan — async progress UX */}
+      <div className="mb-8">
+        <SurvivalScanPanel />
       </div>
 
       {queue.length === 0 ? (
@@ -794,6 +800,9 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
                       <div className="flex flex-col gap-0.5">
                         <span className="text-[12px] text-teal font-medium">
                           {reminderDone[selected.id].emailSent ? "✓ Reminder emailed" : "✓ Invoice created"}
+                          {reminderDone[selected.id].mode && reminderDone[selected.id].mode !== "live" && (
+                            <span className="ml-1.5 text-[10px] text-steel uppercase">{reminderDone[selected.id].mode}</span>
+                          )}
                         </span>
                         {reminderDone[selected.id].hostedUrl && (
                           <a href={reminderDone[selected.id].hostedUrl} target="_blank" rel="noreferrer" className="text-[11.5px] text-steel underline hover:text-foreground">

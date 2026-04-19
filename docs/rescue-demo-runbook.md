@@ -138,6 +138,29 @@ Current live scope:
 - financing is the only required live external lane
 - vendor and insurance may remain fixture-backed during hybrid live mode
 
+### Cookbook progress endpoints
+
+These additive TinyFish routes exist for frontend progress UX and testing:
+
+```bash
+curl -N -X POST http://localhost:3000/api/tinyfish/run-sse \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","goal":"Return JSON only"}'
+
+curl -s -X POST http://localhost:3000/api/tinyfish/run-async \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","goal":"Return JSON only"}' | jq
+
+curl -s http://localhost:3000/api/tinyfish/poll/<runId> | jq
+```
+
+Notes:
+
+- `run-sse` emits an initial `MODE` event before forwarding live upstream events.
+- `run-async` and `poll/[runId]` are stateless at the app layer; TinyFish `run_id` is reused directly.
+- These endpoints do not replace `/api/tinyfish/demo-run`.
+- If the UI still uses spinner-based flows, that is a frontend integration gap rather than a backend route issue.
+
 ## 6. Canonical private-demo script
 
 ### Opening

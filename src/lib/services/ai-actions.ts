@@ -15,7 +15,28 @@ export interface RecordAiActionInput {
   status?:          AiActionStatus
 }
 
-async function insertAction(input: RecordAiActionInput): Promise<string> {
+export async function recordAiAction(
+  input: RecordAiActionInput
+): Promise<string> {
+  // Prevent duplicate audit rows when a webhook is replayed after a partial failure.
+  const existingRows = await db
+    .select({ id: schema.aiActions.id })
+    .from(schema.aiActions)
+    .where(
+      and(
+        eq(schema.aiActions.organizationId, input.organizationId),
+        eq(schema.aiActions.entityType, input.entityType),
+        eq(schema.aiActions.entityId, input.entityId),
+        eq(schema.aiActions.triggerType, input.triggerType),
+        eq(schema.aiActions.actionType, input.actionType),
+      ),
+    )
+    .orderBy(desc(schema.aiActions.createdAt))
+    .limit(1)
+
+  const existingId = existingRows[0]?.id
+  if (existingId) return existingId
+
   const [row] = await db
     .insert(schema.aiActions)
     .values({
@@ -35,27 +56,10 @@ async function insertAction(input: RecordAiActionInput): Promise<string> {
   return row.id
 }
 
-// Overload: (client, input) — legacy call sites that pass a Supabase client (ignored now)
-export async function recordAiAction(client: unknown, input: RecordAiActionInput): Promise<string>
-// Overload: (input) — direct call
-export async function recordAiAction(input: RecordAiActionInput): Promise<string>
-export async function recordAiAction(
-  clientOrInput: unknown,
-  input?: RecordAiActionInput
-): Promise<string> {
-  const actualInput = input ?? (clientOrInput as RecordAiActionInput)
-  return insertAction(actualInput)
-}
-
 export async function listRecentAiActions(
-  _clientOrOrgId: unknown,
-  organizationIdOrLimit?: string | number,
+  organizationId: string,
   limit = 12
 ) {
-  // Support both (orgId, limit) and (client, orgId, limit) call patterns
-  const orgId  = typeof organizationIdOrLimit === "string" ? organizationIdOrLimit : (_clientOrOrgId as string)
-  const lim    = typeof organizationIdOrLimit === "number" ? organizationIdOrLimit : limit
-
   const data = await db
     .select({
       id:           schema.aiActions.id,
@@ -68,9 +72,9 @@ export async function listRecentAiActions(
       createdAt:    schema.aiActions.createdAt,
     })
     .from(schema.aiActions)
-    .where(eq(schema.aiActions.organizationId, orgId))
+    .where(eq(schema.aiActions.organizationId, organizationId))
     .orderBy(desc(schema.aiActions.createdAt))
-    .limit(lim)
+    .limit(limit)
 
   return data
 }

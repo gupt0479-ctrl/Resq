@@ -6,6 +6,7 @@ import {
   services,
   financeTransactions,
   invoices,
+  aiActions,
 } from "@/lib/db/schema"
 import { eq, and, gte, lte, gt, inArray, count, desc } from "drizzle-orm"
 import type { DashboardSummary } from "@/lib/schemas/dashboard"
@@ -108,16 +109,17 @@ export async function getDashboardSummary(
   // Active rescue actions (investigating or action_taken state)
   let activeRescueActionsCount = 0
   try {
-    const rows = await db.query.aiActions.findMany({
-      columns: { entityId: true },
-      where: (a, { eq: eq_, inArray: inArray_, and: and_, ne }) =>
-        and_(
-          eq_(a.organizationId, organizationId),
-          inArray_(a.actionType, ["receivable_risk_detected", "customer_followup_sent", "financing_options_scouted", "payment_plan_suggested"]),
-          ne(a.actionType, "escalation_triggered"),
-        ),
-    })
-    const seen = new Set(rows.map((r) => r.entityId))
+    const rescueRows = await db
+      .select({ entityId: aiActions.entityId })
+      .from(aiActions)
+      .where(
+        and(
+          eq(aiActions.organizationId, organizationId),
+          inArray(aiActions.actionType, ["receivable_risk_detected", "customer_followup_sent", "financing_options_scouted", "payment_plan_suggested"]),
+        )
+      )
+    // Count distinct invoices with an active rescue action
+    const seen = new Set(rescueRows.map((r) => r.entityId))
     activeRescueActionsCount = seen.size
   } catch { /* ignore */ }
 

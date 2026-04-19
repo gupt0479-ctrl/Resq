@@ -20,6 +20,7 @@ export const recoveryStatusEnum = pgEnum("recovery_status", [
   "queued",
   "reminder_sent",
   "payment_plan_offered",
+  "settlement_offered",
   "escalated",
   "disputed",
   "resolved",

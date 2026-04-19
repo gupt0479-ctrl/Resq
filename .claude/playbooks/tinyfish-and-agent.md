@@ -99,6 +99,28 @@ At the route or run level, preserve:
   know whether a future live run will degrade. Degraded truth belongs to
   executed runs.
 
+### Additive progress endpoints
+
+The repo also includes additive TinyFish cookbook endpoints for progress UX:
+
+- `POST /api/tinyfish/run-sse`
+- `POST /api/tinyfish/run-async`
+- `GET /api/tinyfish/poll/[runId]`
+
+Rules:
+
+- they do not replace `demo-run`
+- they must preserve the same `mock` / `misconfigured` / `live` posture
+- `run-sse` should emit a local `MODE` event before forwarding live upstream
+  SSE bytes unchanged
+- `run-async` and `poll/[runId]` remain stateless at the app layer
+
+Current status:
+
+- backend support exists
+- frontend rescue flow still needs explicit wiring if judges are meant to see
+  live streaming or async progress instead of a spinner
+
 ## What not to build first
 
 - full browser-session automation

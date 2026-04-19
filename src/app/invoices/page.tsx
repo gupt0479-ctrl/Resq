@@ -7,20 +7,6 @@ import { db, DEMO_ORG_ID } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq, desc } from "drizzle-orm"
 
-// Exported for InvoicesClient
-export interface InvoiceRow {
-  id: string
-  number: string
-  customerName: string
-  amount: number
-  balance: number
-  status: "paid" | "overdue" | "pending" | "draft" | "sent"
-  dueAt: string | null
-  daysOverdue: number
-  reminderCount: number
-  lineItems: { description: string; qty: number; amount: number }[]
-}
-
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—"
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
