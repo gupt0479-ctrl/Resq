@@ -319,12 +319,18 @@ export function draftOutreachMessage(
       return `Hi ${name}, this is a friendly reminder that your invoice of ${amount} is ${days} day(s) overdue. Please arrange payment at your earliest convenience — thank you for your business.`
     case "offer_payment_plan":
       return `Hi ${name}, we understand things come up. Your outstanding balance of ${amount} is ${days} days past due. We'd like to offer a flexible payment arrangement — please reply so we can find a solution that works for you.`
+    case "offer_settlement":
+      const discount = decision.settlementDiscount ?? 10
+      const settlementAmount = invoice.balance * (1 - discount / 100)
+      return `Dear ${name}, we'd like to resolve your outstanding balance of ${amount} (${days} days overdue). We're prepared to offer a ${discount}% settlement discount — pay ${settlementAmount.toFixed(2)} to close this account in full. This offer expires in 7 days. Please reply to accept.`
     case "escalate":
       return `Dear ${name}, your account has an overdue balance of ${amount} (${days} days past due) that requires immediate attention. Please contact us within 48 hours to avoid further escalation.`
     case "dispute_clarification":
       return `Dear ${name}, we have a record of an outstanding balance of ${amount}. If you believe this is in error, please reply with any supporting details so we can resolve this promptly.`
     case "write_off":
       return `Dear ${name}, after multiple attempts to resolve the outstanding balance of ${amount}, this matter is being referred to our collections process.`
+    case "drop_back":
+      return `Hi ${name}, thank you for your recent payment. We appreciate your engagement. Your remaining balance is ${amount}. Please let us know if you need any assistance completing payment.`
     default:
       return ""
   }
@@ -404,6 +410,77 @@ export async function updateInvoiceRecoveryStatus(
 
 // ─── Build prioritized recovery queue (read-only) ─────────────────────────
 
+interface CashPositionSignal {
+  daysUntilCashCrunch: number  // Days until cash reserves run out
+  currentRunway: number         // Current cash runway in days
+}
+
+async function getCashPositionSignal(
+  client: SupabaseClient,
+  orgId: string
+): Promise<CashPositionSignal> {
+  // For demo: mock a cash position signal
+  // Production: query finance_transactions to compute actual runway
+  
+  // Simple heuristic: look at recent revenue vs expenses
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  
+  const { data: recentTxns } = await client
+    .from("finance_transactions")
+    .select("amount, direction")
+    .eq("organization_id", orgId)
+    .gte("created_at", thirtyDaysAgo)
+  
+  const revenue = (recentTxns ?? [])
+    .filter(t => t.direction === "in")
+    .reduce((sum, t) => sum + Number(t.amount), 0)
+  
+  const expenses = (recentTxns ?? [])
+    .filter(t => t.direction === "out")
+    .reduce((sum, t) => sum + Number(t.amount), 0)
+  
+  const monthlyBurnRate = expenses - revenue
+  
+  // Mock: assume $50k cash on hand for demo
+  const cashOnHand = 50000
+  const daysUntilCashCrunch = monthlyBurnRate > 0 
+    ? Math.floor((cashOnHand / monthlyBurnRate) * 30)
+    : 999  // No cash crunch if profitable
+  
+  return {
+    daysUntilCashCrunch: Math.max(7, Math.min(daysUntilCashCrunch, 999)),
+    currentRunway: Math.max(7, Math.min(daysUntilCashCrunch, 999)),
+  }
+}
+
+function computeRecoveryProbability(
+  daysOverdue: number,
+  paymentRatePct: number | null,
+  priorOverdueCount: number,
+  reminderCount: number
+): number {
+  // Base probability starts at 80%
+  let prob = 80
+  
+  // Decay by days overdue (2% per day, capped at -40%)
+  prob -= Math.min(40, daysOverdue * 2)
+  
+  // Adjust by payment history
+  if (paymentRatePct !== null) {
+    if (paymentRatePct >= 90) prob += 15
+    else if (paymentRatePct >= 70) prob += 5
+    else if (paymentRatePct < 50) prob -= 20
+  }
+  
+  // Penalty for prior overdue invoices
+  prob -= priorOverdueCount * 5
+  
+  // Reminder fatigue (each reminder reduces probability)
+  prob -= reminderCount * 8
+  
+  return Math.max(5, Math.min(95, prob))
+}
+
 export async function buildRecoveryQueue(
   orgId: string
 ): Promise<RecoveryQueueItem[]> {
@@ -434,21 +511,38 @@ export async function buildRecoveryQueue(
       }
 
       const decision = decideNextAction(recoveryCtx)
+      
+      // Compute recovery probability
+      const recoveryProbability = computeRecoveryProbability(
+        inv.days_overdue,
+        profile.paymentRatePct,
+        profile.priorOverdueCount,
+        inv.reminder_count
+      )
+      
+      // Compute priority using the formula from the document
+      // priority = (amount × recovery_probability) / days_until_cash_crunch
+      const priority = (inv.balance * recoveryProbability) / cashSignal.daysUntilCashCrunch
 
       return {
         ...inv,
         risk_score:   decision.riskScore,
         credit_tier:  decision.creditScore.tier,
         credit_score: decision.creditScore.score,
+        // Store priority for sorting (not in original type, but useful)
+        priority: priority as unknown as number,
       }
     })
   )
 
-  return scored.sort((a, b) =>
-    b.risk_score !== a.risk_score
-      ? b.risk_score - a.risk_score
-      : b.days_overdue - a.days_overdue
-  )
+  // Sort by priority (highest first), then by risk score as tiebreaker
+  return scored.sort((a, b) => {
+    const aPriority = (a as unknown as { priority: number }).priority
+    const bPriority = (b as unknown as { priority: number }).priority
+    return bPriority !== aPriority
+      ? bPriority - aPriority
+      : b.risk_score - a.risk_score
+  })
 }
 
 // ─── Core action runner ────────────────────────────────────────────────────

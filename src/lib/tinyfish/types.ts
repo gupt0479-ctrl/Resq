@@ -4,10 +4,25 @@ export type {
   TinyFishSearchHit,
   TinyFishSearchResult,
   TinyFishFetchResult,
+  TinyFishFinancingOffer,
+  TinyFishFinancingOutputs,
   TinyFishAgentStep,
   TinyFishAgentRunResult,
   TinyFishScenario,
 } from "./schemas"
+
+export type {
+  PortalReconnaissanceMode,
+  PortalReconnaissanceResult,
+  PortalReconnaissanceResponse,
+  Screenshot,
+  ParsedPortalData,
+  ParsedInvoice,
+  ParsedActivity,
+  PortalLoginResult,
+  PortalReconScenario,
+  PortalReconOptions,
+} from "./portal-types"
 
 export interface SearchOptions {
   limit?: number

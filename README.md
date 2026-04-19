@@ -139,6 +139,28 @@ TINYFISH_USE_MOCKS=true
 DEMO_MODE=true
 ```
 
+### Stripe Setup (Optional for Collections)
+
+To enable live Stripe integration for the collections agent:
+
+```bash
+# 1. Install Stripe
+npm install stripe
+
+# 2. Add to .env.local
+STRIPE_SECRET_KEY=sk_test_...
+
+# 3. Create test data
+node scripts/setup-stripe-test-data.mjs
+```
+
+**Quick Start Guide**: See [`STRIPE_SETUP.md`](./STRIPE_SETUP.md) for the complete checklist.
+
+**Detailed Documentation**:
+- [`docs/stripe-setup-quickstart.md`](./docs/stripe-setup-quickstart.md) - Step-by-step setup
+- [`docs/stripe-integration-guide.md`](./docs/stripe-integration-guide.md) - Technical reference
+- [`docs/stripe-quick-commands.md`](./docs/stripe-quick-commands.md) - Copy-paste commands
+
 3. Apply SQL in order:
 
 - `supabase/migrations/0001_core_ledger.sql`

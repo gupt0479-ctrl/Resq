@@ -13,7 +13,7 @@ function fmtDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
-async function fetchInvoices(): Promise<Invoice[]> {
+async function fetchInvoices(): Promise<InvoiceRow[]> {
   try {
     const rows = await db
       .select()
@@ -70,61 +70,14 @@ async function fetchInvoices(): Promise<Invoice[]> {
           qty:         Number(li.quantity ?? 1),
           amount:      Number(li.amount ?? 0),
         })),
-      } satisfies Invoice
+      }
     })
   } catch {
     return []
   }
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
 export default async function InvoicesPage() {
   const invoices = await fetchInvoices()
-
-  const paid     = invoices.filter((i) => i.status === "paid")
-  const overdue  = invoices.filter((i) => i.status === "overdue")
-  // "outstanding" = sent or pending — money owed but not yet overdue
-  const outstanding = invoices.filter((i) => i.status === "sent" || i.status === "pending")
-
-  const paidTotal    = paid.reduce((s, i) => s + i.amount, 0)
-  const overdueTotal = overdue.reduce((s, i) => s + i.amount, 0)
-
-  return (
-    <div className="space-y-5 p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Invoices</h1>
-        <p className="text-xs text-muted-foreground">
-          Click any row to see line items
-        </p>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[
-          { label: "Total invoices",  value: invoices.length,                                                  color: "text-foreground",  bg: "bg-muted/50 border-border" },
-          { label: "Collected",       value: `$${paidTotal.toFixed(0)} · ${paid.length} paid`,                 color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100" },
-          { label: "Outstanding",     value: outstanding.length > 0 ? `${outstanding.length} sent` : "0",      color: "text-amber-700",   bg: "bg-amber-50 border-amber-100" },
-          { label: "Overdue",         value: `$${overdueTotal.toFixed(0)} · ${overdue.length} invoices`,       color: "text-red-600",     bg: "bg-red-50 border-red-100" },
-        ].map(({ label, value, color, bg }) => (
-          <div key={label} className={`rounded-xl border p-4 ${bg}`}>
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Table */}
-      <Card>
-        <CardHeader className="border-b border-border pb-3 pt-4">
-          <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            All Invoices
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <InvoiceTable invoices={invoices} />
-        </CardContent>
-      </Card>
-    </div>
-  )
+  return <InvoicesClient invoices={invoices} />
 }

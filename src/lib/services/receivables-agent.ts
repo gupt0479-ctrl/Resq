@@ -11,7 +11,17 @@ import {
   type RiskFactor,
   type CreditReport,
   type CreditRedFlag,
+  type ExternalSignals,
+  type CompanyInfo,
+  type WatchlistHit,
+  type WatchlistScreening,
+  type WatchlistId,
+  WATCHLIST_LABELS,
 } from "@/lib/schemas/receivables-agent"
+import { search as tinyFishSearch } from "@/lib/tinyfish/client"
+import { mockCollectionsSearch, mockWatchlistSearch } from "@/lib/tinyfish/mock-data"
+
+const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_AI_API_KEY })
 
 // ── Tool implementations (query db, never modify) ─────────────────────────
 
@@ -529,16 +539,16 @@ function buildActionDraft(
   }
 }
 
-// ── Gemini function declarations ─────────────────────────────────────────────
+// ── Claude tool definitions ───────────────────────────────────────────────────
 
-const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
+const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_invoice_status",
     description: "Get the current status of a specific invoice including days overdue, balance, and reminder history.",
-    parameters: {
-      type: SchemaType.OBJECT,
+    input_schema: {
+      type: "object",
       properties: {
-        invoice_id: { type: SchemaType.STRING, description: "The invoice UUID to look up" },
+        invoice_id: { type: "string", description: "The invoice UUID to look up" },
       },
       required: ["invoice_id"],
     },
@@ -546,38 +556,65 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "get_payment_history",
     description: "Get the customer's full payment history: on-time %, late count, payment methods, and recent invoice statuses.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "get_customer_profile",
     description: "Get the customer's profile: lifetime value, CRM risk status, feedback score, contact details, and last visit.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "get_appointment_behavior",
     description: "Get the customer's booking behavior: completion rate, no-show rate, and cancellation history.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "get_all_open_invoices",
     description: "Get all currently open (unpaid) invoices for this customer to understand total outstanding exposure.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "run_verification_checks",
     description: "Run KYC-style verification checks on the customer. Returns a checklist: business name, TIN match, watchlists, bank account, credit history, and online presence.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "evaluate_credit_report",
     description: "Evaluate the customer's credit report for red flags: late payments (30/60/90 days), charged-off accounts, unfamiliar accounts, maxed-out credit, and frequent address/contact changes.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "search_external_signals",
+    description: "Search the web for external signals about this customer: news about their business, bankruptcy or insolvency filings, market conditions in their industry, and payment/financial health indicators from public sources.",
+    input_schema: {
+      type: "object",
+      properties: {
+        customer_name: { type: "string", description: "Customer name to search for" },
+        industry_hint: { type: "string", description: "Industry or sector hint for market context (e.g. 'restaurant', 'retail', 'construction')" },
+      },
+      required: ["customer_name"],
+    },
+  },
+  {
+    name: "screen_watchlists",
+    description: "Screen key people and the company name against 8 major international sanctions and watchlists: OFAC, Interpol Most Wanted, FATF, EU Consolidated Sanctions, SDN, UN Security Council, World Bank Debarred, and U.S. BIS Entity List.",
+    input_schema: {
+      type: "object",
+      properties: {
+        names: {
+          type: "array",
+          items: { type: "string" },
+          description: "Names of people or the company entity to screen",
+        },
+      },
+      required: ["names"],
+    },
   },
 ]
 
 const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for OpsPilot, an SMB cashflow recovery system.
 
-REQUIRED: Call ALL SEVEN tools before writing any conclusions.
+REQUIRED: Call ALL NINE tools before writing any conclusions.
 
 Call tools in this order:
 1. get_invoice_status — understand what is owed
@@ -587,6 +624,8 @@ Call tools in this order:
 5. get_all_open_invoices — understand total exposure
 6. run_verification_checks — generate the KYC checklist
 7. evaluate_credit_report — check for credit red flags (late payments, charge-offs, fraud signals)
+8. search_external_signals — search for news, bankruptcy filings, and market conditions affecting this customer
+9. screen_watchlists — screen the customer and key people against OFAC, Interpol, SDN, EU, UN, World Bank, BIS watchlists
 
 After gathering all data, write a concise investigation summary that references exact figures ("$450 overdue for 23 days, 60% on-time rate"), identifies the key risk factors, and states your recommended action and why.`
 
@@ -601,10 +640,6 @@ export interface RunInvestigationInput {
 export async function runReceivablesInvestigation(
   input: RunInvestigationInput,
 ): Promise<ReceivablesInvestigationResult> {
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error("GOOGLE_AI_API_KEY is not set")
-
-  const genAI = new GoogleGenerativeAI(apiKey)
   const agentSteps: AgentStep[] = []
 
   // Cached tool results for deterministic post-processing
@@ -666,22 +701,81 @@ export async function runReceivablesInvestigation(
         toolResult = { error: `Unknown tool: ${call.name}` }
       }
 
-      agentSteps.push({ tool: call.name, summary: `Called ${call.name}`, result: toolResult })
-      responses.push({ functionResponse: { name: call.name, response: toolResult as object } })
+      const flaggedCount = allHits.filter((h) => h.status === "flagged").length
+      watchlistData = {
+        screenedNames: namesToScreen,
+        hits:          allHits,
+        overallStatus: flaggedCount > 0 ? "flagged" : "clear",
+        dataSource:    wlDataSource,
+      }
+      return watchlistData
     }
 
-    result = await chat.sendMessage(responses)
+    return { error: `Unknown tool: ${name}` }
   }
 
-  // Extract final reasoning text from the model's last response
-  const reasoning = result.response.text().trim() || "Investigation complete."
+  // ── Agentic loop with Claude tool use ────────────────────────────────────
+  const messages: Anthropic.MessageParam[] = [
+    {
+      role: "user",
+      content: `Investigate overdue receivables for customer ID: ${input.customerId}, invoice IDs: ${input.invoiceIds.join(", ")}. Call all 9 tools now.`,
+    },
+  ]
 
-  // Deterministic post-processing — AI must not own these values
-  const profile = profileData ?? {}
-  const payment = paymentData ?? {}
-  const behavior = behaviorData ?? {}
-  const invoice = invoiceData ?? {}
-  const openInv = openInvData ?? {}
+  let response = await anthropic.messages.create({
+    model:      "claude-haiku-4-5-20251001",
+    max_tokens: 4096,
+    system:     SYSTEM_INSTRUCTION,
+    tools:      TOOLS,
+    messages,
+  })
+
+  for (let turn = 0; turn < 15 && response.stop_reason === "tool_use"; turn++) {
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+    )
+
+    // Append assistant turn
+    messages.push({ role: "assistant", content: response.content })
+
+    // Execute all tool calls in this turn
+    const toolResults: Anthropic.ToolResultBlockParam[] = []
+    for (const toolUse of toolUseBlocks) {
+      const result = await handleToolCall(toolUse.name, toolUse.input)
+      agentSteps.push({ tool: toolUse.name, summary: `Called ${toolUse.name}`, result })
+      toolResults.push({
+        type:        "tool_result",
+        tool_use_id: toolUse.id,
+        content:     JSON.stringify(result),
+      })
+    }
+
+    messages.push({ role: "user", content: toolResults })
+
+    response = await anthropic.messages.create({
+      model:      "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      system:     SYSTEM_INSTRUCTION,
+      tools:      TOOLS,
+      messages,
+    })
+  }
+
+  // Extract final reasoning text
+  const reasoning =
+    response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text.trim()
+    ?? "Investigation complete."
+
+  // ── Deterministic post-processing — AI must not own these values ──────────
+  const profile  = (profileData  ?? {}) as Record<string, unknown>
+  const payment  = (paymentData  ?? {}) as Record<string, unknown>
+  const behavior = (behaviorData ?? {}) as Record<string, unknown>
+  const invoice  = (invoiceData  ?? {}) as Record<string, unknown>
+  const openInv  = (openInvData  ?? {}) as Record<string, unknown>
+  // Cast closure-assigned vars explicitly — TypeScript narrows them to never
+  // when they are only assigned inside an inner async function.
+  const extData = externalData  as ExternalSignals | null
+  const wlData  = watchlistData as WatchlistScreening | null
 
   if (!verData) {
     verData = buildVerificationChecks(
@@ -690,9 +784,18 @@ export async function runReceivablesInvestigation(
     )
   }
 
+  // Fix: compute overdueDays as the max across all open invoices so it is
+  // always correct regardless of which specific invoice the AI queried first.
+  const openInvoiceList = (openInv.invoices as Array<{ daysOverdue: number }> | undefined) ?? []
+  const maxOverdueDays = openInvoiceList.reduce((max, i) => Math.max(max, i.daysOverdue), 0)
+  const daysOverdue = Math.max(
+    (invoice.daysOverdue as number | undefined) ?? 0,
+    maxOverdueDays,
+  )
+
   const { score, riskLevel, riskFactors } = computeRiskScore({
     onTimePct:     (payment.onTimePct as number | null | undefined) ?? null,
-    daysOverdue:   (invoice.daysOverdue as number | undefined) ?? 0,
+    daysOverdue,
     lifetimeValue: (profile.lifetimeValue as number | null | undefined) ?? null,
     noShowRate:    (behavior.noShowRate as number | null | undefined) ?? null,
     riskStatus:    (profile.riskStatus as string | null | undefined) ?? null,
@@ -707,7 +810,47 @@ export async function runReceivablesInvestigation(
 
   const customerName = (profile.name as string | undefined) ?? "Customer"
   const totalOverdue = (openInv.totalOpenAmount as number | undefined) ?? 0
-  const daysOverdue  = (invoice.daysOverdue as number | undefined) ?? 0
+
+  // Build companyInfo from profile data
+  const companyInfo: CompanyInfo = {
+    companyName: customerName,
+    email:       (profile.email as string | undefined) || undefined,
+    phone:       (profile.phone as string | undefined) || undefined,
+    address:     undefined,
+    keyPeople:   undefined,
+  }
+
+  const snippetText = (extData?.articles ?? []).map((a) => a.snippet).join(" ")
+  if (snippetText) {
+    const addrMatch = snippetText.match(/headquartered in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
+      ?? snippetText.match(/based in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
+      ?? snippetText.match(/located in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
+    if (addrMatch) companyInfo.address = addrMatch[1]
+
+    const peopleFromSnippets = [...snippetText.matchAll(
+      /(?:CEO|founder|owner|president|director|CFO|COO)\s+([A-Z][a-z]+ [A-Z][a-z]+)/gi,
+    )].map((m) => m[1])
+
+    companyInfo.keyPeople = [...new Set(peopleFromSnippets)].slice(0, 3)
+  }
+
+  const notes = (profile.notes as string | undefined) ?? ""
+  if (notes) {
+    const notePeopleMatches = notes.matchAll(
+      /(?:CEO|founder|owner|president|director|CFO|COO)[:\s]+([A-Z][A-Z\s]+)/gi,
+    )
+    const notePeople = [...notePeopleMatches]
+      .map((m) => m[1].trim().replace(/\s+/g, " "))
+      .filter((n) => n.length > 3)
+      .slice(0, 3)
+    if (notePeople.length) {
+      companyInfo.keyPeople = [...new Set([...(companyInfo.keyPeople ?? []), ...notePeople])].slice(0, 3)
+    }
+  }
+
+  if (wlData && verData) {
+    verData = { ...verData, watchlistsClear: wlData.overallStatus === "clear" }
+  }
 
   return ReceivablesInvestigationResultSchema.parse({
     customerId:         input.customerId,
@@ -717,8 +860,11 @@ export async function runReceivablesInvestigation(
     overdueDays:        daysOverdue,
     riskScore:          score,
     riskLevel,
+    companyInfo,
     verificationChecks: verData,
     creditReport:       creditData ?? { redFlags: [], flagCount: 0, overallStatus: "clean" },
+    watchlistScreening: wlData  ?? undefined,
+    externalSignals:    extData ?? undefined,
     riskFactors,
     recommendedAction,
     actionDraft:        buildActionDraft(recommendedAction, customerName, totalOverdue, daysOverdue),

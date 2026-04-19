@@ -1,61 +1,52 @@
 # Current State
 
-Updated: 2026-04-17
+Updated: 2026-04-18
 
 ## Submission posture
 
-The repo is in active pivot mode from the earlier restaurant-oriented OpsPilot
-demo into **OpsPilot Rescue**, an autonomous SMB survival agent.
+The repo is already in the right product shell for **OpsPilot Rescue**, an
+autonomous SMB survival agent. The main work is no longer inventing the
+product; it is tightening the hero flow, stabilizing TinyFish financing output,
+and removing agent-doc noise.
 
 ## What is already real and reusable
 
 - Supabase-backed invoices and finance transactions
 - deterministic invoice generation and mark-paid flows
-- integration connector and webhook infrastructure
+- rescue queue route and rescue run route
+- receivables investigation with TinyFish-backed external signals
+- workflow timeline and integrations page
 - AI action logging via `ai_actions`
-- dashboard shell, finance page, invoice page, workflow timeline
+- Kiro workspace MCP config, steering mirror, and shared workspace skill
 - test, lint, and build pipeline
 
-## What is currently being changed
+## What the winning demo must show
 
-- product narrative and documentation
-- navigation and page emphasis
-- TinyFish scaffolding and mock/live configuration
-- rescue-focused demo seed data
-- AWS/Kiro sponsor-readiness artifacts
+`cash stress -> rescue queue -> survival scan -> financing options -> vendor/insurance proof -> auditable timeline`
 
-## Working demo target
+## Current priorities
 
-The must-win story is:
+1. freeze the financing scout contract
+2. keep the rescue queue as the main working surface
+3. keep collections as supporting proof
+4. keep vendor/insurance as believable supporting output
+5. clean `.claude` so agents read one coherent story
+6. keep `.kiro/steering` as a thin mirror only
+7. keep Kiro hooks/specs and AWS docs minimal, real, and team-usable
 
-`cash stress -> survival scan -> financing options -> vendor/insurance savings -> auditable agent output`
+## Current blockers
 
-## Verified baseline
-
-The historical baseline was already passing:
-
-- `npm run lint`
-- `npx tsc --noEmit`
-- `npm run test`
-- `npm run build`
-
-Re-run these after each major batch of changes.
-
-## What still matters before submission
-
-1. finish documentation and handoff cleanup
-2. finish TinyFish scaffolding with reliable mock mode
-3. finalize survival-demo seed and runbook
-4. wire the rescue-specific UI around the new agent outputs
-5. rehearse private and public demo scripts
-6. prepare a backup recording
+- do not let multiple TinyFish client variants coexist
+- do not let archived `.claude` files remain in the active read path
+- do not let Kiro workspace guidance drift away from `.claude` canon
+- do not present AWS as a core feature before the survival scan is solid
 
 ## Accepted demo gaps
 
 - no real money movement
 - no real lending origination
-- no production-grade vendor procurement workflow
-- no full insurance binding flow
+- no production-grade vendor procurement flow
+- no authenticated browser-heavy financing workflow unless it becomes trivial
 - some legacy restaurant model names may remain behind the scenes
 
 ## Do not rebuild
@@ -69,6 +60,6 @@ Re-run these after each major batch of changes.
 ## Canonical references
 
 - Product truth: `PRD.md`
-- Fast handoff: `context/6hour-status.md`
 - Architecture: `context/architecture.md`
+- Execution plan: `context/12hour-execution.md`
 - Demo operations: `../docs/rescue-demo-runbook.md`

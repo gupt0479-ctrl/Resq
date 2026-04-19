@@ -1,6 +1,6 @@
 # Backend and API Playbook
 
-## Style rules
+## Core rules
 
 - Route handlers validate and delegate.
 - Services own mutations.
@@ -18,20 +18,30 @@ For TinyFish routes:
 
 - export `runtime = "nodejs"`
 - export `dynamic = "force-dynamic"`
+- never let live TinyFish failure crash the route
+- preserve `mode`, `degradedFromLive`, and `warning` honestly
 
-## TinyFish route rules
+## What route handlers may do
 
-- never assume unverified live endpoint paths
-- keep mock mode as the default safe path
-- return typed failure or misconfiguration states
-- logging failure must not break the route
+- validate input
+- delegate to services or TinyFish client helpers
+- return typed success or failure
+- best-effort audit logging
 
-## Logging
+## What route handlers must not do
 
-Use `recordAiAction` for auditability when appropriate, but:
+- own business logic
+- mutate deterministic finance state directly
+- assume live external config exists
+- hide degraded behavior from the caller
+
+## Audit logging
+
+Use `recordAiAction` when the route performs meaningful agent work, but:
 
 - provide a valid UUID for `entity_id`
 - treat logging as best-effort in demo routes
+- do not 500 the route because audit logging failed
 
 ## What not to touch casually
 
