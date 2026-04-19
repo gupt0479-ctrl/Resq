@@ -42,7 +42,6 @@ export async function POST(req: NextRequest) {
     const customerName  = cust?.full_name ?? "Customer"
     const customerEmail = cust?.email ?? `noreply+${body.invoiceId}@opspilot.app`
     const balance       = Number(inv.total_amount) - Number(inv.amount_paid)
-    const customerId    = inv.customer_id as string
 
     // Legal guardrails check (unless bypassed)
     if (!body.bypassGuardrails) {

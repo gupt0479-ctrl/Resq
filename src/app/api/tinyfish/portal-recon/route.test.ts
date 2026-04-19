@@ -38,7 +38,8 @@ function makeRawRequest(text: string): Request {
   })
 }
 
-function makeMockResponse(invoiceId: string) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function makeMockResponse(_invoiceId: string) {
   return {
     mode: "mock" as const,
     degradedFromLive: false,

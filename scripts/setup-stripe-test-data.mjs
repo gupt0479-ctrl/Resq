@@ -49,7 +49,7 @@ try {
   Stripe = stripeModule.default
   const supabaseModule = await import('@supabase/supabase-js')
   createClient = supabaseModule.createClient
-} catch (error) {
+} catch {
   console.error('❌ Missing dependencies. Please install:')
   console.error('   npm install stripe @supabase/supabase-js')
   process.exit(1)

@@ -328,7 +328,7 @@ export function ReservationsClient({
     } finally {
       setActionLoading(false)
     }
-  }, [bookForm])
+  }, [bookForm, router])
 
   // ── Line item helpers ────────────────────────────────────────────────────
 

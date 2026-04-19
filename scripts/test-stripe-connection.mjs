@@ -44,7 +44,7 @@ let Stripe
 try {
   const stripeModule = await import('stripe')
   Stripe = stripeModule.default
-} catch (error) {
+} catch {
   console.error('\n❌ Stripe package not installed')
   console.error('   Run: npm install stripe')
   process.exit(1)

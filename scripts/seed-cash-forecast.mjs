@@ -15,7 +15,7 @@ function d(daysAgo) { return new Date(Date.now() - daysAgo * 86400000).toISOStri
 function f(daysAhead) { return new Date(Date.now() + daysAhead * 86400000).toISOString().slice(0, 10) }
 
 async function upsertMany(table, rows) {
-  const { error, count } = await sb.from(table).upsert(rows, { onConflict: "id", ignoreDuplicates: true })
+  const { error } = await sb.from(table).upsert(rows, { onConflict: "id", ignoreDuplicates: true })
   if (error) console.error(`  ✗ ${table}: ${error.message}`)
   else console.log(`  ✓ ${table}: ${rows.length} rows`)
 }
