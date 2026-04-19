@@ -59,7 +59,7 @@ at the same time.
 
 ### 2.1 Core Pain Points
 
-| Pain Point | Owner Experience Today | How OpsPilot Addresses It |
+| Pain Point | Owner Experience Today | How Resq Addresses It |
 |---|---|---|
 | **Unpaid and delayed invoices** | Customers pay weeks, months, or never — owners chase manually and lose track | Automated reminders, overdue flags, and cash-flow risk alerts surface risk before it becomes a write-off |
 | **Cross-border communication gaps** | Language barriers, timezone confusion, and missed messages with international customers or suppliers | AI-drafted follow-ups adapt tone and clarity; flag communication threads gone cold |

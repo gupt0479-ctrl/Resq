@@ -1,4 +1,4 @@
--- OpsPilot · Cash truth layer
+-- Resq · Cash truth layer
 -- Migration: 006_cash_truth
 -- Adds obligations table for known future outflows (rent, payroll, insurance, etc.)
 
