@@ -1,8 +1,8 @@
-# OpsPilot Rescue PRD
+# Resq PRD
 
 **Version:** 2.0  
 **Status:** Active hackathon source of truth  
-**Product:** OpsPilot Rescue  
+**Product:** Resq  
 **Track:** Fintech  
 **Event:** O1 Summit 2026  
 **Build window:** 24 hours  
@@ -15,7 +15,7 @@ building and pitching is now an autonomous SMB survival agent.
 
 ## 1. Product Definition
 
-OpsPilot Rescue is an autonomous fintech copilot for small businesses under
+Resq is an autonomous fintech copilot for small businesses under
 cash pressure. It detects near-term survival risk, investigates financial
 context, and helps the operator act before the business falls behind.
 
@@ -47,12 +47,12 @@ fragmented work:
 - dealing with insurance renewals
 - deciding what to do first under time pressure
 
-Existing software usually stops at dashboards or raw alerts. OpsPilot Rescue is
+Existing software usually stops at dashboards or raw alerts. Resq is
 designed to go one step further: it investigates and proposes or executes
 survival actions.
 
 **Positioning:** Large companies retain consultants, analysts, and finance staff.
-Small business owners cannot afford that. OpsPilot Rescue is the always-on AI
+Small business owners cannot afford that. Resq is the always-on AI
 operator that fills those roles — the equivalent of the advisor Google keeps on
 retainer, built for the owner running the front desk, the kitchen, and the books
 at the same time.

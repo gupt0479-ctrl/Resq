@@ -93,7 +93,7 @@ category running over budget.
 
 ## Positioning statement
 
-> "Every big company has a consultant. OpsPilot Rescue is that consultant for
+> "Every big company has a consultant. Resq is that consultant for
 > the small business that can't afford one — an AI operator that tracks your
 > money, communicates with your customers, and tells you what needs attention
 > before it becomes a crisis."
