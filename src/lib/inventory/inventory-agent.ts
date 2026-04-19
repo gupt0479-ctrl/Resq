@@ -1,12 +1,9 @@
-import {
-  GoogleGenerativeAI,
-  SchemaType,
-  type FunctionDeclaration,
-  type Part,
-} from "@google/generative-ai"
+import Anthropic from "@anthropic-ai/sdk"
 import type { Shipment, InventoryItem, AgentReport } from "@/lib/types"
 import { z } from "zod"
 import { computeVendorPerformance } from "./vendor-performance"
+
+const anthropic = new Anthropic()
 
 // ── Tool implementations ──────────────────────────────────────────────────────
 
@@ -210,52 +207,12 @@ function tryParseAgentReport(text: string): Omit<AgentReport, "generatedAt"> | n
   return null
 }
 
-// ── Function declarations for Gemini ─────────────────────────────────────────
-
-const functionDeclarations: FunctionDeclaration[] = [
-  {
-    name: "get_shipment_order_history",
-    description:
-      "Get aggregated order history from delivered shipments in the last N days. Returns per-ingredient totals sorted by most ordered — use this to identify high-volume ingredients and ordering patterns.",
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {
-        days: {
-          type: SchemaType.NUMBER,
-          description:
-            "Number of days to look back from today (default: 30). Use 30 for monthly patterns.",
-        },
-      },
-    },
-  },
-  {
-    name: "assess_spoilage_risk",
-    description:
-      "Cross-reference perishable inventory items (those with expiry dates) against their 30-day order history. Identifies items that may be over-ordered relative to their remaining shelf life.",
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {},
-    },
-  },
-  {
-    name: "get_vendor_performance",
-    description:
-      "Get detailed vendor delivery performance stats: on-time %, late counts, average days late, 30-day total spend, and item-level price changes. Use this to assess negotiation opportunities.",
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {},
-    },
-  },
-]
-
 // ── System instruction ────────────────────────────────────────────────────────
 
-const systemInstruction = `You are the head chef and operations manager at Ember Table, a busy restaurant.
+const SYSTEM_INSTRUCTION = `You are the head chef and operations manager at Ember Table, a busy restaurant.
 Your task is to analyse our recent purchasing and delivery data to produce three actionable insights.
 
-REQUIRED: Call ALL THREE tools before writing any conclusions.
-
-After gathering the data, produce a JSON report with:
+Produce a JSON report with:
 
 1. ORDER PATTERNS — top ingredients by 30-day order volume, with recommended quantities for the next order cycle
 2. SPOILAGE ALERTS — perishables where our ordering rate likely exceeds what we can use before expiry
@@ -321,86 +278,33 @@ export async function runInventoryAgent(
   inventoryItems: InventoryItem[],
   asOfDate: string
 ): Promise<AgentReport> {
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error("GOOGLE_AI_API_KEY is not set in environment")
-
-  const genAI = new GoogleGenerativeAI(apiKey)
-
-  // ── Phase 1: gather data via tool calls ───────────────────────────────────
-  // responseMimeType is incompatible with function calling, so we use a plain
-  // tool-enabled model here and collect all results ourselves.
-  const toolModel = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash-lite",
-    tools: [{ functionDeclarations }],
-    systemInstruction,
-  })
-
-  const chat = toolModel.startChat()
-  let result = await chat.sendMessage(
-    `Today is ${asOfDate}. Call all three tools to gather the data. Do NOT write the report yet — just call the tools.`
-  )
-
-  const gathered: Record<string, unknown> = {}
-
-  for (let turn = 0; turn < 10; turn++) {
-    const calls = result.response.functionCalls()
-    if (!calls || calls.length === 0) break
-
-    const responses: Part[] = calls.map((call) => {
-      let toolResult: unknown
-
-      if (call.name === "get_shipment_order_history") {
-        const args = call.args as { days?: number }
-        toolResult = getShipmentOrderHistory(shipments, asOfDate, args.days ?? 30)
-        gathered.orderHistory = toolResult
-      } else if (call.name === "assess_spoilage_risk") {
-        toolResult = assessSpoilageRisk(shipments, inventoryItems, asOfDate)
-        gathered.spoilageRisk = toolResult
-      } else if (call.name === "get_vendor_performance") {
-        toolResult = getVendorPerformanceDetails(shipments, inventoryItems)
-        gathered.vendorPerformance = toolResult
-      } else {
-        toolResult = { error: `Unknown tool: ${call.name}` }
-      }
-
-      return {
-        functionResponse: {
-          name: call.name,
-          response: toolResult as object,
-        },
-      }
-    })
-
-    result = await chat.sendMessage(responses)
-  }
-
-  // ── Phase 2: synthesise JSON with a tool-free model ───────────────────────
-  // Without function declarations, responseMimeType: "application/json" is
-  // allowed and forces the model to emit a complete, well-formed JSON object.
-  const jsonModel = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash-lite",
-    systemInstruction,
-    generationConfig: {
-      maxOutputTokens: 8192,
-      responseMimeType: "application/json",
-    },
-  })
+  // Gather all data directly — the tool functions are pure JS, no AI needed for collection
+  const orderHistory      = getShipmentOrderHistory(shipments, asOfDate, 30)
+  const spoilageRisk      = assessSpoilageRisk(shipments, inventoryItems, asOfDate)
+  const vendorPerformance = getVendorPerformanceDetails(shipments, inventoryItems)
 
   const dataPrompt = `Today is ${asOfDate}. Here is the data gathered from Ember Table's systems:
 
-ORDER HISTORY:
-${JSON.stringify(gathered.orderHistory ?? {})}
+ORDER HISTORY (last 30 days):
+${JSON.stringify(orderHistory)}
 
-SPOILAGE RISK:
-${JSON.stringify(gathered.spoilageRisk ?? {})}
+SPOILAGE RISK (perishables cross-referenced with order history):
+${JSON.stringify(spoilageRisk)}
 
 VENDOR PERFORMANCE:
-${JSON.stringify(gathered.vendorPerformance ?? {})}
+${JSON.stringify(vendorPerformance)}
 
 Using this data, produce the JSON report. Return only the JSON object — no markdown, no commentary.`
 
-  const jsonResult = await jsonModel.generateContent(dataPrompt)
-  const parsed = tryParseAgentReport(jsonResult.response.text())
+  const response = await anthropic.messages.create({
+    model:      "claude-haiku-4-5-20251001",
+    max_tokens: 8192,
+    system:     SYSTEM_INSTRUCTION,
+    messages:   [{ role: "user", content: dataPrompt }],
+  })
+
+  const text = response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? ""
+  const parsed = tryParseAgentReport(text)
 
   if (!parsed) {
     throw new Error("AI returned incomplete JSON. Please retry analysis.")

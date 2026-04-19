@@ -1,5 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import Anthropic from "@anthropic-ai/sdk"
 import type { ParsedReservationAction } from "@/lib/types"
+
+const anthropic = new Anthropic()
 
 // ─── Rule-based fallback parser ───────────────────────────────────────────────
 
@@ -115,15 +117,6 @@ export async function parseReservationRequest(
   natural_language: string,
   existing_reservation_id?: string
 ): Promise<ParsedReservationAction> {
-  const apiKey = process.env.GEMINI_API_KEY
-
-  if (!apiKey) {
-    console.warn("GEMINI_API_KEY not set — using rule-based parser")
-    return parseRules(natural_language)
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
   const now = new Date().toISOString()
 
   const prompt = `You are a reservation assistant for Ember Table restaurant.
@@ -148,9 +141,13 @@ starts_at and ends_at must be ISO strings or null if unclear
 clarification_needed is a string if confidence is low, otherwise null`
 
   try {
-    const result = await model.generateContent(prompt)
-    const text = result.response.text().trim()
-    console.log("Gemini response:", text)
+    const response = await anthropic.messages.create({
+      model:      "claude-haiku-4-5-20251001",
+      max_tokens: 512,
+      messages:   [{ role: "user", content: prompt }],
+    })
+
+    const text = (response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "").trim()
 
     const cleaned = text
       .replace(/^```json\s*/i, "")
@@ -168,7 +165,7 @@ clarification_needed is a string if confidence is low, otherwise null`
 
     return parsed
   } catch (error: unknown) {
-    console.warn("Gemini API error, falling back to rule-based parser:", (error instanceof Error ? error.message : String(error)).slice(0, 120))
+    console.warn("Claude API error, falling back to rule-based parser:", (error instanceof Error ? error.message : String(error)).slice(0, 120))
     return parseRules(natural_language)
   }
 }

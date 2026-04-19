@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getInvoice, recordReminderSent } from "@/lib/services/invoice.service"
 import { generateReminder } from "@/lib/ai/generate-reminder"
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import Anthropic from "@anthropic-ai/sdk"
 import type { Invoice } from "@/lib/types"
 
-// ─── Thank-you generator (Gemini with hardcoded fallback) ─────────────────────
+const anthropic = new Anthropic()
+
+// ─── Thank-you generator (Claude with hardcoded fallback) ─────────────────────
 
 async function generateThankYou(
   customerName: string,
@@ -16,23 +18,23 @@ async function generateThankYou(
     message: `Dear ${customerName}, thank you so much for dining at Ember Table and for settling your invoice. It was a genuine pleasure having you with us${visitCount >= 3 ? " — as always" : ""}. We look forward to welcoming you back soon!`,
   }
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return fallback
-
   try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
-    const result = await model.generateContent(
-      `You are the manager of Ember Table, an upscale neighbourhood restaurant in Minneapolis.
+    const response = await anthropic.messages.create({
+      model:      "claude-haiku-4-5-20251001",
+      max_tokens: 256,
+      messages: [{
+        role: "user",
+        content: `You are the manager of Ember Table, an upscale neighbourhood restaurant in Minneapolis.
 Write a warm, personal thank-you email to a guest after they paid their invoice.
 Guest: ${customerName}
 Total paid: $${total.toFixed(2)}
 ${visitCount >= 3 ? `Loyal regular — ${visitCount} visits total. Thank them warmly.` : visitCount === 1 ? "First visit — express genuine hope to see them again." : `Returning guest — ${visitCount} visits total.`}
 
 Return ONLY valid JSON, no markdown:
-{"subject": "<email subject line>", "message": "<3-4 warm, personal sentences>"}`
-    )
-    const text = result.response.text().trim()
+{"subject": "<email subject line>", "message": "<3-4 warm, personal sentences>"}`,
+      }],
+    })
+    const text = (response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "").trim()
     const cleaned = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim()
     const parsed = JSON.parse(cleaned)
     return { subject: parsed.subject, message: parsed.message }

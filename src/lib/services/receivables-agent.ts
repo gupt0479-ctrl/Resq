@@ -1,5 +1,5 @@
 import "server-only"
-import { GoogleGenerativeAI, SchemaType, type FunctionDeclaration, type Part } from "@google/generative-ai"
+import Anthropic from "@anthropic-ai/sdk"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   ReceivablesInvestigationResultSchema,
@@ -18,6 +18,8 @@ import {
 } from "@/lib/schemas/receivables-agent"
 import { search as tinyFishSearch } from "@/lib/tinyfish/client"
 import { mockCollectionsSearch, mockWatchlistSearch } from "@/lib/tinyfish/mock-data"
+
+const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_AI_API_KEY })
 
 // ── Tool implementations (query Supabase, never modify) ───────────────────────
 
@@ -189,13 +191,9 @@ async function getAllOpenInvoices(
       status:        i.status,
       balance:       Number(i.total_amount) - Number(i.amount_paid),
       dueAt:         i.due_at,
+      // Always compute overdue days dynamically from current time
       daysOverdue: i.due_at
-        ? Math.max(
-            0,
-            Math.floor(
-              (Date.now() - new Date(i.due_at).getTime()) / (1000 * 60 * 60 * 24),
-            ),
-          )
+        ? Math.max(0, Math.floor((Date.now() - new Date(i.due_at).getTime()) / (1000 * 60 * 60 * 24)))
         : 0,
       reminderCount: i.reminder_count,
     })),
@@ -361,7 +359,6 @@ async function evaluateCreditReport(
   })
 
   // ── 2. Charged-off accounts ───────────────────────────────────────────────
-  const invoiceIds = (allInvoices ?? []).map((_, i) => i) // placeholder — use actual IDs
   const { data: invoiceRows } = await client
     .from("invoices")
     .select("id")
@@ -378,7 +375,6 @@ async function evaluateCreditReport(
       .eq("type", "writeoff")
     writeoffCount = count ?? 0
   }
-  void invoiceIds // suppress lint
 
   flags.push({
     flag:     "charged_off",
@@ -480,16 +476,16 @@ function buildActionDraft(
   }
 }
 
-// ── Gemini function declarations ─────────────────────────────────────────────
+// ── Claude tool definitions ───────────────────────────────────────────────────
 
-const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
+const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_invoice_status",
     description: "Get the current status of a specific invoice including days overdue, balance, and reminder history.",
-    parameters: {
-      type: SchemaType.OBJECT,
+    input_schema: {
+      type: "object",
       properties: {
-        invoice_id: { type: SchemaType.STRING, description: "The invoice UUID to look up" },
+        invoice_id: { type: "string", description: "The invoice UUID to look up" },
       },
       required: ["invoice_id"],
     },
@@ -497,41 +493,41 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "get_payment_history",
     description: "Get the customer's full payment history: on-time %, late count, payment methods, and recent invoice statuses.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "get_customer_profile",
     description: "Get the customer's profile: lifetime value, CRM risk status, feedback score, contact details, and last visit.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "get_appointment_behavior",
     description: "Get the customer's booking behavior: completion rate, no-show rate, and cancellation history.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "get_all_open_invoices",
     description: "Get all currently open (unpaid) invoices for this customer to understand total outstanding exposure.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "run_verification_checks",
     description: "Run KYC-style verification checks on the customer. Returns a checklist: business name, TIN match, watchlists, bank account, credit history, and online presence.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "evaluate_credit_report",
     description: "Evaluate the customer's credit report for red flags: late payments (30/60/90 days), charged-off accounts, unfamiliar accounts, maxed-out credit, and frequent address/contact changes.",
-    parameters: { type: SchemaType.OBJECT, properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "search_external_signals",
     description: "Search the web for external signals about this customer: news about their business, bankruptcy or insolvency filings, market conditions in their industry, and payment/financial health indicators from public sources.",
-    parameters: {
-      type: SchemaType.OBJECT,
+    input_schema: {
+      type: "object",
       properties: {
-        customer_name: { type: SchemaType.STRING, description: "Customer name to search for" },
-        industry_hint: { type: SchemaType.STRING, description: "Industry or sector hint for market context (e.g. 'restaurant', 'retail', 'construction')" },
+        customer_name: { type: "string", description: "Customer name to search for" },
+        industry_hint: { type: "string", description: "Industry or sector hint for market context (e.g. 'restaurant', 'retail', 'construction')" },
       },
       required: ["customer_name"],
     },
@@ -539,12 +535,12 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "screen_watchlists",
     description: "Screen key people and the company name against 8 major international sanctions and watchlists: OFAC, Interpol Most Wanted, FATF, EU Consolidated Sanctions, SDN, UN Security Council, World Bank Debarred, and U.S. BIS Entity List.",
-    parameters: {
-      type: SchemaType.OBJECT,
+    input_schema: {
+      type: "object",
       properties: {
         names: {
-          type: SchemaType.ARRAY,
-          items: { type: SchemaType.STRING },
+          type: "array",
+          items: { type: "string" },
           description: "Names of people or the company entity to screen",
         },
       },
@@ -582,10 +578,6 @@ export async function runReceivablesInvestigation(
   supabase: SupabaseClient,
   input: RunInvestigationInput,
 ): Promise<ReceivablesInvestigationResult> {
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error("GOOGLE_AI_API_KEY is not set")
-
-  const genAI = new GoogleGenerativeAI(apiKey)
   const agentSteps: AgentStep[] = []
 
   // Cached tool results for deterministic post-processing
@@ -599,168 +591,210 @@ export async function runReceivablesInvestigation(
   let externalData:  ExternalSignals | null = null
   let watchlistData: WatchlistScreening | null = null
 
-  // ── Phase 1: gather data via tool calls ──────────────────────────────────
-  const toolModel = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash-lite",
-    tools: [{ functionDeclarations: FUNCTION_DECLARATIONS }],
-    systemInstruction: SYSTEM_INSTRUCTION,
-  })
+  // ── Tool execution handler ────────────────────────────────────────────────
+  async function handleToolCall(name: string, toolInput: unknown): Promise<unknown> {
+    const args = toolInput as Record<string, unknown>
 
-  const chat = toolModel.startChat()
-  let result = await chat.sendMessage(
-    `Investigate overdue receivables for customer ID: ${input.customerId}, invoice IDs: ${input.invoiceIds.join(", ")}. Call all 6 tools now.`,
-  )
+    if (name === "get_invoice_status") {
+      const invoiceId = (args.invoice_id as string) ?? input.invoiceIds[0]
+      const result = await getInvoiceStatus(supabase, invoiceId)
+      invoiceData = result as Record<string, unknown>
+      return result
+    }
+    if (name === "get_payment_history") {
+      const result = await getPaymentHistory(supabase, input.customerId, input.organizationId)
+      paymentData = result as Record<string, unknown>
+      return result
+    }
+    if (name === "get_customer_profile") {
+      const result = await getCustomerProfile(supabase, input.customerId)
+      profileData = result as Record<string, unknown>
+      return result
+    }
+    if (name === "get_appointment_behavior") {
+      const result = await getAppointmentBehavior(supabase, input.customerId, input.organizationId)
+      behaviorData = result as Record<string, unknown>
+      return result
+    }
+    if (name === "get_all_open_invoices") {
+      const result = await getAllOpenInvoices(supabase, input.customerId, input.organizationId)
+      openInvData = result as Record<string, unknown>
+      return result
+    }
+    if (name === "run_verification_checks") {
+      verData = buildVerificationChecks(
+        (profileData ?? {}) as Parameters<typeof buildVerificationChecks>[0],
+        (paymentData ?? {}) as Parameters<typeof buildVerificationChecks>[1],
+      )
+      return verData
+    }
+    if (name === "evaluate_credit_report") {
+      creditData = await evaluateCreditReport(supabase, input.customerId, input.organizationId)
+      return creditData
+    }
+    if (name === "search_external_signals") {
+      const customerName = (args.customer_name as string) ?? "Customer"
+      const industryHint = args.industry_hint as string | undefined
+      const queries = [
+        `${customerName} bankruptcy insolvency news 2025 2026`,
+        `${customerName} business financial difficulties`,
+        ...(industryHint ? [`${industryHint} industry payment delays market conditions 2026`] : []),
+      ]
+      const results = await Promise.all(queries.map(async (q) => {
+        const r = await tinyFishSearch(q, { limit: 3 })
+        return r.degradedFromLive ? mockCollectionsSearch(customerName, q) : r
+      }))
+      const allArticles = results.flatMap((r) => r.results)
+      const mode = results[0]?.mode ?? "mock"
+      const nameLower = customerName.toLowerCase()
+      const industryLower = (industryHint ?? "").toLowerCase()
+      externalData = {
+        searched: true,
+        articles: allArticles.slice(0, 6).map((a) => ({
+          title:     a.title,
+          url:       a.url,
+          snippet:   a.snippet,
+          relevance: (a.title.toLowerCase().includes(nameLower) ? "high"
+                     : industryLower && a.title.toLowerCase().includes(industryLower) ? "medium"
+                     : "low") as "high" | "medium" | "low",
+        })),
+        marketContext: results.find((r) => /market|industry/i.test(r.query))?.results[0]?.snippet ?? "",
+        dataSource: mode === "live" ? "live" : "mock",
+      }
+      return externalData
+    }
+    if (name === "screen_watchlists") {
+      const names = (args.names as string[]) ?? []
+      const namesToScreen = names.slice(0, 3)
 
-  for (let turn = 0; turn < 10; turn++) {
-    const calls = result.response.functionCalls()
-    if (!calls || calls.length === 0) break
+      const LIST_CLUSTERS: Array<{ ids: WatchlistId[]; buildQuery: (n: string) => string }> = [
+        {
+          ids: ["ofac", "sdl"],
+          buildQuery: (n) => `"${n}" OFAC SDN sanctions blocked designated Treasury`,
+        },
+        {
+          ids: ["interpol", "un_security_council", "fatf"],
+          buildQuery: (n) => `"${n}" Interpol most wanted UN Security Council sanctions FATF`,
+        },
+        {
+          ids: ["eu_sanctions", "world_bank", "bis_entity"],
+          buildQuery: (n) => `"${n}" EU consolidated sanctions "World Bank" debarred BIS entity list`,
+        },
+      ]
 
-    const responses: Part[] = []
+      const allHits: WatchlistHit[] = []
+      let wlDataSource: "live" | "mock" = "mock"
 
-    for (const call of calls) {
-      let toolResult: unknown
-
-      if (call.name === "get_invoice_status") {
-        const { invoice_id } = call.args as { invoice_id: string }
-        toolResult = await getInvoiceStatus(supabase, invoice_id)
-        invoiceData = toolResult as Record<string, unknown>
-      } else if (call.name === "get_payment_history") {
-        toolResult = await getPaymentHistory(supabase, input.customerId, input.organizationId)
-        paymentData = toolResult as Record<string, unknown>
-      } else if (call.name === "get_customer_profile") {
-        toolResult = await getCustomerProfile(supabase, input.customerId)
-        profileData = toolResult as Record<string, unknown>
-      } else if (call.name === "get_appointment_behavior") {
-        toolResult = await getAppointmentBehavior(supabase, input.customerId, input.organizationId)
-        behaviorData = toolResult as Record<string, unknown>
-      } else if (call.name === "get_all_open_invoices") {
-        toolResult = await getAllOpenInvoices(supabase, input.customerId, input.organizationId)
-        openInvData = toolResult as Record<string, unknown>
-      } else if (call.name === "run_verification_checks") {
-        verData = buildVerificationChecks(
-          (profileData ?? {}) as Parameters<typeof buildVerificationChecks>[0],
-          (paymentData ?? {}) as Parameters<typeof buildVerificationChecks>[1],
+      for (const name of namesToScreen) {
+        const clusterResults = await Promise.all(
+          LIST_CLUSTERS.map(async ({ ids, buildQuery }) => {
+            const q = buildQuery(name)
+            const r = await tinyFishSearch(q, { limit: 5 })
+            if (r.mode === "live") wlDataSource = "live"
+            const usedResult = r.degradedFromLive ? mockWatchlistSearch(name, q) : r
+            return { ids, usedResult, screenedName: name }
+          })
         )
-        toolResult = verData
-      } else if (call.name === "evaluate_credit_report") {
-        creditData = await evaluateCreditReport(supabase, input.customerId, input.organizationId)
-        toolResult = creditData
-      } else if (call.name === "search_external_signals") {
-        const { customer_name, industry_hint } = call.args as { customer_name: string; industry_hint?: string }
-        const queries = [
-          `${customer_name} bankruptcy insolvency news 2025 2026`,
-          `${customer_name} business financial difficulties`,
-          ...(industry_hint ? [`${industry_hint} industry payment delays market conditions 2026`] : []),
-        ]
-        const results = await Promise.all(queries.map(async q => {
-          const r = await tinyFishSearch(q, { limit: 3 })
-          // If degraded to mock, substitute collections-specific fixtures
-          return r.degradedFromLive ? mockCollectionsSearch(customer_name, q) : r
-        }))
-        const allArticles = results.flatMap(r => r.results)
-        const mode = results[0]?.mode ?? "mock"
-        const nameLower = customer_name.toLowerCase()
-        const industryLower = (industry_hint ?? "").toLowerCase()
-        externalData = {
-          searched: true,
-          articles: allArticles.slice(0, 6).map(a => ({
-            title:     a.title,
-            url:       a.url,
-            snippet:   a.snippet,
-            relevance: (a.title.toLowerCase().includes(nameLower) ? "high"
-                       : industryLower && a.title.toLowerCase().includes(industryLower) ? "medium"
-                       : "low") as "high" | "medium" | "low",
-          })),
-          marketContext: results.find(r => /market|industry/i.test(r.query))?.results[0]?.snippet ?? "",
-          dataSource: mode === "live" ? "live" : "mock",
-        }
-        toolResult = externalData
-      } else if (call.name === "screen_watchlists") {
-        const { names } = call.args as { names: string[] }
-        const namesToScreen = names.slice(0, 3)
 
-        const LIST_CLUSTERS: Array<{ ids: WatchlistId[]; buildQuery: (n: string) => string }> = [
-          {
-            ids: ["ofac", "sdl"],
-            buildQuery: n => `"${n}" OFAC SDN sanctions blocked designated Treasury`,
-          },
-          {
-            ids: ["interpol", "un_security_council", "fatf"],
-            buildQuery: n => `"${n}" Interpol most wanted UN Security Council sanctions FATF`,
-          },
-          {
-            ids: ["eu_sanctions", "world_bank", "bis_entity"],
-            buildQuery: n => `"${n}" EU consolidated sanctions "World Bank" debarred BIS entity list`,
-          },
-        ]
+        for (const { ids, usedResult, screenedName } of clusterResults) {
+          const combined = usedResult.results
+            .map((r) => `${r.title} ${r.snippet}`)
+            .join(" ")
+            .toLowerCase()
+          const nameTokens = screenedName.toLowerCase().split(/\s+/).filter(Boolean)
+          const nameFound = nameTokens.every((token) => combined.includes(token))
+          const isMatch =
+            nameFound &&
+            /sanction|wanted|debarred|designated|blocked|prohibited|bounty|criminal|fugitive/.test(combined)
 
-        const allHits: WatchlistHit[] = []
-        let wlDataSource: "live" | "mock" = "mock"
-
-        for (const name of namesToScreen) {
-          const clusterResults = await Promise.all(
-            LIST_CLUSTERS.map(async ({ ids, buildQuery }) => {
-              const q = buildQuery(name)
-              const r = await tinyFishSearch(q, { limit: 5 })
-              if (r.mode === "live") wlDataSource = "live"
-              const usedResult = r.degradedFromLive ? mockWatchlistSearch(name, q) : r
-              return { ids, usedResult, screenedName: name }
+          for (const listId of ids) {
+            allHits.push({
+              list:   listId,
+              label:  WATCHLIST_LABELS[listId],
+              status: isMatch ? "flagged" : "clear",
+              detail: isMatch
+                ? `Potential match found for "${screenedName}" — manual review required`
+                : `No match found for "${screenedName}"`,
             })
-          )
-
-          for (const { ids, usedResult, screenedName } of clusterResults) {
-            const combined = usedResult.results
-              .map(r => `${r.title} ${r.snippet}`)
-              .join(" ")
-              .toLowerCase()
-            // Match any ordering of name tokens (handles "SINGH HARPREET" → "harpreet singh")
-            const nameTokens = screenedName.toLowerCase().split(/\s+/).filter(Boolean)
-            const nameFound = nameTokens.every(token => combined.includes(token))
-            const isMatch =
-              nameFound &&
-              /sanction|wanted|debarred|designated|blocked|prohibited|bounty|criminal|fugitive/.test(combined)
-
-            for (const listId of ids) {
-              allHits.push({
-                list:   listId,
-                label:  WATCHLIST_LABELS[listId],
-                status: isMatch ? "flagged" : "clear",
-                detail: isMatch
-                  ? `Potential match found for "${screenedName}" — manual review required`
-                  : `No match found for "${screenedName}"`,
-              })
-            }
           }
         }
-
-        const flaggedCount = allHits.filter(h => h.status === "flagged").length
-        watchlistData = {
-          screenedNames: namesToScreen,
-          hits:          allHits,
-          overallStatus: flaggedCount > 0 ? "flagged" : "clear",
-          dataSource:    wlDataSource,
-        }
-        toolResult = watchlistData
-      } else {
-        toolResult = { error: `Unknown tool: ${call.name}` }
       }
 
-      agentSteps.push({ tool: call.name, summary: `Called ${call.name}`, result: toolResult })
-      responses.push({ functionResponse: { name: call.name, response: toolResult as object } })
+      const flaggedCount = allHits.filter((h) => h.status === "flagged").length
+      watchlistData = {
+        screenedNames: namesToScreen,
+        hits:          allHits,
+        overallStatus: flaggedCount > 0 ? "flagged" : "clear",
+        dataSource:    wlDataSource,
+      }
+      return watchlistData
     }
 
-    result = await chat.sendMessage(responses)
+    return { error: `Unknown tool: ${name}` }
   }
 
-  // Extract final reasoning text from the model's last response
-  const reasoning = result.response.text().trim() || "Investigation complete."
+  // ── Agentic loop with Claude tool use ────────────────────────────────────
+  const messages: Anthropic.MessageParam[] = [
+    {
+      role: "user",
+      content: `Investigate overdue receivables for customer ID: ${input.customerId}, invoice IDs: ${input.invoiceIds.join(", ")}. Call all 9 tools now.`,
+    },
+  ]
 
-  // Deterministic post-processing — AI must not own these values
-  const profile = profileData ?? {}
-  const payment = paymentData ?? {}
-  const behavior = behaviorData ?? {}
-  const invoice = invoiceData ?? {}
-  const openInv = openInvData ?? {}
+  let response = await anthropic.messages.create({
+    model:      "claude-haiku-4-5-20251001",
+    max_tokens: 4096,
+    system:     SYSTEM_INSTRUCTION,
+    tools:      TOOLS,
+    messages,
+  })
+
+  for (let turn = 0; turn < 15 && response.stop_reason === "tool_use"; turn++) {
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+    )
+
+    // Append assistant turn
+    messages.push({ role: "assistant", content: response.content })
+
+    // Execute all tool calls in this turn
+    const toolResults: Anthropic.ToolResultBlockParam[] = []
+    for (const toolUse of toolUseBlocks) {
+      const result = await handleToolCall(toolUse.name, toolUse.input)
+      agentSteps.push({ tool: toolUse.name, summary: `Called ${toolUse.name}`, result })
+      toolResults.push({
+        type:        "tool_result",
+        tool_use_id: toolUse.id,
+        content:     JSON.stringify(result),
+      })
+    }
+
+    messages.push({ role: "user", content: toolResults })
+
+    response = await anthropic.messages.create({
+      model:      "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      system:     SYSTEM_INSTRUCTION,
+      tools:      TOOLS,
+      messages,
+    })
+  }
+
+  // Extract final reasoning text
+  const reasoning =
+    response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text.trim()
+    ?? "Investigation complete."
+
+  // ── Deterministic post-processing — AI must not own these values ──────────
+  const profile  = (profileData  ?? {}) as Record<string, unknown>
+  const payment  = (paymentData  ?? {}) as Record<string, unknown>
+  const behavior = (behaviorData ?? {}) as Record<string, unknown>
+  const invoice  = (invoiceData  ?? {}) as Record<string, unknown>
+  const openInv  = (openInvData  ?? {}) as Record<string, unknown>
+  // Cast closure-assigned vars explicitly — TypeScript narrows them to never
+  // when they are only assigned inside an inner async function.
+  const extData = externalData  as ExternalSignals | null
+  const wlData  = watchlistData as WatchlistScreening | null
 
   if (!verData) {
     verData = buildVerificationChecks(
@@ -769,9 +803,18 @@ export async function runReceivablesInvestigation(
     )
   }
 
+  // Fix: compute overdueDays as the max across all open invoices so it is
+  // always correct regardless of which specific invoice the AI queried first.
+  const openInvoiceList = (openInv.invoices as Array<{ daysOverdue: number }> | undefined) ?? []
+  const maxOverdueDays = openInvoiceList.reduce((max, i) => Math.max(max, i.daysOverdue), 0)
+  const daysOverdue = Math.max(
+    (invoice.daysOverdue as number | undefined) ?? 0,
+    maxOverdueDays,
+  )
+
   const { score, riskLevel, riskFactors } = computeRiskScore({
     onTimePct:     (payment.onTimePct as number | null | undefined) ?? null,
-    daysOverdue:   (invoice.daysOverdue as number | undefined) ?? 0,
+    daysOverdue,
     lifetimeValue: (profile.lifetimeValue as number | null | undefined) ?? null,
     noShowRate:    (behavior.noShowRate as number | null | undefined) ?? null,
     riskStatus:    (profile.riskStatus as string | null | undefined) ?? null,
@@ -786,9 +829,8 @@ export async function runReceivablesInvestigation(
 
   const customerName = (profile.name as string | undefined) ?? "Customer"
   const totalOverdue = (openInv.totalOpenAmount as number | undefined) ?? 0
-  const daysOverdue  = (invoice.daysOverdue as number | undefined) ?? 0
 
-  // Build companyInfo from profile data (address/keyPeople enriched by TinyFish if available)
+  // Build companyInfo from profile data
   const companyInfo: CompanyInfo = {
     companyName: customerName,
     email:       (profile.email as string | undefined) || undefined,
@@ -797,9 +839,7 @@ export async function runReceivablesInvestigation(
     keyPeople:   undefined,
   }
 
-  // Extract address and key people from TinyFish article snippets + customer notes
-  const snippetText = (externalData?.articles ?? []).map(a => a.snippet).join(" ")
-
+  const snippetText = (extData?.articles ?? []).map((a) => a.snippet).join(" ")
   if (snippetText) {
     const addrMatch = snippetText.match(/headquartered in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
       ?? snippetText.match(/based in ([A-Z][a-z]+(?:,\s*[A-Z]{2})?)/i)
@@ -808,29 +848,27 @@ export async function runReceivablesInvestigation(
 
     const peopleFromSnippets = [...snippetText.matchAll(
       /(?:CEO|founder|owner|president|director|CFO|COO)\s+([A-Z][a-z]+ [A-Z][a-z]+)/gi,
-    )].map(m => m[1])
+    )].map((m) => m[1])
 
     companyInfo.keyPeople = [...new Set(peopleFromSnippets)].slice(0, 3)
   }
 
-  // Also extract key people from customer notes (handles ALL-CAPS names and last-name-first format)
   const notes = (profile.notes as string | undefined) ?? ""
   if (notes) {
     const notePeopleMatches = notes.matchAll(
       /(?:CEO|founder|owner|president|director|CFO|COO)[:\s]+([A-Z][A-Z\s]+)/gi,
     )
     const notePeople = [...notePeopleMatches]
-      .map(m => m[1].trim().replace(/\s+/g, " "))
-      .filter(n => n.length > 3)
+      .map((m) => m[1].trim().replace(/\s+/g, " "))
+      .filter((n) => n.length > 3)
       .slice(0, 3)
     if (notePeople.length) {
       companyInfo.keyPeople = [...new Set([...(companyInfo.keyPeople ?? []), ...notePeople])].slice(0, 3)
     }
   }
 
-  // Override watchlistsClear in verificationChecks with actual screening result
-  if (watchlistData && verData) {
-    verData = { ...verData, watchlistsClear: watchlistData.overallStatus === "clear" }
+  if (wlData && verData) {
+    verData = { ...verData, watchlistsClear: wlData.overallStatus === "clear" }
   }
 
   return ReceivablesInvestigationResultSchema.parse({
@@ -844,8 +882,8 @@ export async function runReceivablesInvestigation(
     companyInfo,
     verificationChecks: verData,
     creditReport:       creditData ?? { redFlags: [], flagCount: 0, overallStatus: "clean" },
-    watchlistScreening: watchlistData ?? undefined,
-    externalSignals:    externalData ?? undefined,
+    watchlistScreening: wlData  ?? undefined,
+    externalSignals:    extData ?? undefined,
     riskFactors,
     recommendedAction,
     actionDraft:        buildActionDraft(recommendedAction, customerName, totalOverdue, daysOverdue),
