@@ -166,14 +166,14 @@ export default async function DashboardPage() {
           <div className="card-elevated p-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-4">Top risks</div>
             <div className="space-y-3">
-              {(overdueInvoices ?? []).slice(0, 3).map((inv) => {
+              {(overdueInvoices ?? []).slice(0, 3).map((inv: Record<string, unknown>) => {
                 const cust  = getInvoiceCustomer(inv.customers as InvoiceCustomer | InvoiceCustomer[] | undefined)
                 const bal   = Number(inv.total_amount) - Number(inv.amount_paid)
                 return (
-                  <div key={inv.id} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">
+                  <div key={inv.id as string} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">
                     <div>
                       <p className="text-[13px] font-medium">{cust?.full_name ?? "Unknown"}</p>
-                      <p className="text-[11px] text-steel">{formatDueDateLabel(inv.due_at)} · {inv.invoice_number}</p>
+                      <p className="text-[11px] text-steel">{formatDueDateLabel(inv.due_at as string | null | undefined)} · {inv.invoice_number as string}</p>
                     </div>
                     <span className="font-display text-base text-crimson shrink-0">{fmt(bal)}</span>
                   </div>

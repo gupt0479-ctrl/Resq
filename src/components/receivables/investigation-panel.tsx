@@ -283,6 +283,29 @@ export function InvestigationPanel({
   const [animating, setAnimating]         = useState(false)
   // Which check is selected for the 3-panel analyst workspace (null = closed)
   const [selectedCheck, setSelectedCheck] = useState<CheckKey | null>(null)
+  // Reminder state
+  const [reminderLoading, setReminderLoading] = useState(false)
+  const [reminderSent, setReminderSent] = useState<{ mode: string; emailSent?: boolean; hostedUrl?: string } | null>(null)
+  const [reminderError, setReminderError] = useState<string | null>(null)
+
+  async function sendReminder() {
+    setReminderLoading(true)
+    setReminderError(null)
+    try {
+      const res = await fetch("/api/receivables/send-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId }),
+      })
+      const json = await res.json()
+      if (!json.ok) throw new Error(json.error ?? "Failed to send reminder")
+      setReminderSent({ mode: json.mode ?? "mock", emailSent: json.emailSent, hostedUrl: json.hostedUrl })
+    } catch (e) {
+      setReminderError(e instanceof Error ? e.message : "Unknown error")
+    } finally {
+      setReminderLoading(false)
+    }
+  }
 
   // When result arrives, progressively reveal rows one by one from top to bottom
   useEffect(() => {

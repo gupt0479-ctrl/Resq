@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
         .in("action_type", ["customer_followup_sent", "payment_plan_suggested", "dispute_clarification_sent"])
         .gte("created_at", oneWeekAgo)
 
-      const actionsToday = (recentActions ?? []).filter((a) => a.created_at >= oneDayAgo).length
+      const actionsToday = (recentActions ?? []).filter((a: Record<string, string>) => a.created_at >= oneDayAgo).length
       const actionsThisWeek = (recentActions ?? []).length
 
       if (actionsToday >= 1) {
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
 
     // ── Phone channel: log only, no automated send ────────────────────────────
     if (channel === "phone") {
-      await recordAiAction(client, {
+      await recordAiAction({
         organizationId: orgId,
         entityType:     "invoice",
         entityId:       body.invoiceId,
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
         .update({ reminder_count: (Number(inv.reminder_count) || 0) + 1 })
         .eq("id", body.invoiceId)
 
-      await recordAiAction(client, {
+      await recordAiAction({
         organizationId: orgId,
         entityType:     "invoice",
         entityId:       body.invoiceId,
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
       .update({ reminder_count: (Number(inv.reminder_count) || 0) + 1 })
       .eq("id", body.invoiceId)
 
-    await recordAiAction(client, {
+    await recordAiAction({
       organizationId: orgId,
       entityType:     "invoice",
       entityId:       body.invoiceId,

@@ -44,7 +44,7 @@ export default async function CustomersPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const invoices = (Array.isArray(c.invoices) ? c.invoices : []) as any[]
     const outstanding = invoices
-      .filter((i) => i.status !== "paid")
+      .filter((i: { status: string }) => i.status !== "paid")
       .reduce((s: number, i: { total_amount: number; amount_paid: number }) => s + Number(i.total_amount) - Number(i.amount_paid), 0)
     const overdue = invoices
       .filter((i: { status: string }) => i.status === "overdue")

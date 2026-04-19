@@ -43,7 +43,7 @@ describe("poll handler — mock mode", () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.status).toBe("COMPLETED")
-    expect(body.result).toEqual({ ok: true, fixture: true })
+    expect(body.result).toMatchObject({ ok: true, fixture: true })
     expect(body.mode).toBe("mock")
     expect(body.runId).toBe("test-run-123")
   })

@@ -3,7 +3,18 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { RiskBadge, type RiskLevel } from "@/components/RiskBadge"
-import type { InvoiceRow } from "./page"
+
+export interface InvoiceRow {
+  id: string
+  number: string
+  customerName: string
+  amount: number
+  balance: number
+  status: "paid" | "overdue" | "pending" | "sent" | "draft"
+  dueAt: string | null
+  daysOverdue: number
+  lineItems: { description: string; amount: number }[]
+}
 
 function fmt(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })

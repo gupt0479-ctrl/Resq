@@ -9,7 +9,7 @@
  * Graceful degradation: live failures fall back to mock data with degradedFromLive: true.
  */
 
-import { getPortalReconMode, isSupabaseConfigured, DEMO_ORG_ID } from "@/lib/env"
+import { getPortalReconMode, isDatabaseConfigured, DEMO_ORG_ID } from "@/lib/env"
 import { getMockPortalRecon, selectScenarioByInvoiceId } from "@/lib/tinyfish/portal-mock-data"
 import { runPortalLogin, TinyFishError } from "@/lib/tinyfish/client"
 import { parsePortalHtml } from "@/lib/services/portal-html-parser"
@@ -521,14 +521,11 @@ async function logPortalReconAction(
   opts: PortalReconOptions,
   response: PortalReconnaissanceResponse
 ): Promise<void> {
-  if (!isSupabaseConfigured()) return
+  if (!isDatabaseConfigured()) return
 
-  const { createServerSupabaseClient } = await import("@/lib/db/supabase-server")
   const { recordAiAction } = await import("@/lib/services/ai-actions")
 
-  const client = createServerSupabaseClient()
-
-  await recordAiAction(client, {
+  await recordAiAction({
     organizationId: DEMO_ORG_ID,
     entityType:     "invoice",
     entityId:       opts.invoiceId,
@@ -569,14 +566,11 @@ async function logPortalReconError(
   errorMessage: string,
   recoveryAction: string
 ): Promise<void> {
-  if (!isSupabaseConfigured()) return
+  if (!isDatabaseConfigured()) return
 
-  const { createServerSupabaseClient } = await import("@/lib/db/supabase-server")
   const { recordAiAction } = await import("@/lib/services/ai-actions")
 
-  const client = createServerSupabaseClient()
-
-  await recordAiAction(client, {
+  await recordAiAction({
     organizationId: DEMO_ORG_ID,
     entityType:     "invoice",
     entityId:       opts.invoiceId,

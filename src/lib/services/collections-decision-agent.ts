@@ -360,7 +360,7 @@ async function checkLegalGuardrails(
     .order("created_at", { ascending: false })
 
   const actionsToday = (recentActions ?? []).filter(
-    (a) => a.created_at >= oneDayAgo
+    (a: Record<string, string>) => a.created_at >= oneDayAgo
   ).length
 
   const actionsThisWeek = (recentActions ?? []).length
@@ -708,7 +708,7 @@ export async function runCollectionsDecision(
   const customerId     = inv.customer_id as string
 
   // 2. Payment history profile
-  const profile = await getCustomerProfile(client, orgId, customerId)
+  const profile = await getCustomerProfile(orgId, customerId)
 
   // 3. Trajectory + LTV aggression
   const trajectory      = analyzeTrajectory(profile)

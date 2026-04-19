@@ -18,6 +18,7 @@ const mockIsSupabaseConfigured = vi.fn<() => boolean>()
 vi.mock("@/lib/env", () => ({
   getPortalReconMode: () => mockGetPortalReconMode(),
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
+  isDatabaseConfigured: () => mockIsSupabaseConfigured(),
   DEMO_ORG_ID: "00000000-0000-0000-0000-000000000001",
 }))
 
@@ -1219,7 +1220,7 @@ describe("Portal Reconnaissance Service", () => {
       await new Promise((r) => setTimeout(r, 50))
 
       expect(mockRecordAiAction).toHaveBeenCalledTimes(1)
-      const [, input] = mockRecordAiAction.mock.calls[0] as [unknown, Record<string, unknown>]
+      const [input] = mockRecordAiAction.mock.calls[0] as [Record<string, unknown>]
       expect(input.actionType).toBe("portal_reconnaissance")
       expect(input.entityType).toBe("invoice")
       expect(input.entityId).toBe("inv-audit-001")
@@ -1234,7 +1235,7 @@ describe("Portal Reconnaissance Service", () => {
       await investigate({ invoiceId: "inv-audit-002", customerId: "cust-123" })
       await new Promise((r) => setTimeout(r, 50))
 
-      const [, input] = mockRecordAiAction.mock.calls[0] as [unknown, Record<string, unknown>]
+      const [input] = mockRecordAiAction.mock.calls[0] as [Record<string, unknown>]
       const payload = input.outputPayload as Record<string, unknown>
       expect(payload).toHaveProperty("visibility")
       expect(payload).toHaveProperty("paymentStatus")
@@ -1255,7 +1256,7 @@ describe("Portal Reconnaissance Service", () => {
       })
       await new Promise((r) => setTimeout(r, 50))
 
-      const [, input] = mockRecordAiAction.mock.calls[0] as [unknown, Record<string, unknown>]
+      const [input] = mockRecordAiAction.mock.calls[0] as [Record<string, unknown>]
       const summary = input.inputSummary as string
       expect(summary).toContain("mode=mock")
       expect(summary).toContain("invoice=inv-audit-003")
@@ -1301,7 +1302,7 @@ describe("Portal Reconnaissance Service", () => {
       await new Promise((r) => setTimeout(r, 50))
 
       expect(mockRecordAiAction).toHaveBeenCalledTimes(1)
-      const [, input] = mockRecordAiAction.mock.calls[0] as [unknown, Record<string, unknown>]
+      const [input] = mockRecordAiAction.mock.calls[0] as [Record<string, unknown>]
       const payload = input.outputPayload as Record<string, unknown>
       expect(payload.mode).toBe("live")
       expect(payload.degradedFromLive).toBe(false)
@@ -1548,10 +1549,10 @@ describe("Portal Reconnaissance Service", () => {
       // Should have 2 audit calls: one for the error, one for the normal response audit
       expect(mockRecordAiAction).toHaveBeenCalled()
       const errorCall = mockRecordAiAction.mock.calls.find(
-        (call) => (call[1] as Record<string, unknown>).actionType === "portal_reconnaissance_error"
+        (call) => (call[0] as Record<string, unknown>).actionType === "portal_reconnaissance_error"
       )
       expect(errorCall).toBeDefined()
-      const errorInput = errorCall![1] as Record<string, unknown>
+      const errorInput = errorCall![0] as Record<string, unknown>
       expect(errorInput.actionType).toBe("portal_reconnaissance_error")
       expect(errorInput.status).toBe("failed")
       const errorPayload = errorInput.outputPayload as Record<string, unknown>
@@ -1571,10 +1572,10 @@ describe("Portal Reconnaissance Service", () => {
       await new Promise((r) => setTimeout(r, 100))
 
       const errorCall = mockRecordAiAction.mock.calls.find(
-        (call) => (call[1] as Record<string, unknown>).actionType === "portal_reconnaissance_error"
+        (call) => (call[0] as Record<string, unknown>).actionType === "portal_reconnaissance_error"
       )
       expect(errorCall).toBeDefined()
-      const errorInput = errorCall![1] as Record<string, unknown>
+      const errorInput = errorCall![0] as Record<string, unknown>
       const errorPayload = errorInput.outputPayload as Record<string, unknown>
       expect(errorPayload.errorType).toBe("parsing")
       expect(errorPayload.recoveryAction).toBe("returned_parsing_failed")

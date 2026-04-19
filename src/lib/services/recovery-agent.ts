@@ -1,4 +1,5 @@
 import "server-only"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq, and, inArray, notInArray, gte, desc, asc } from "drizzle-orm"
@@ -432,12 +433,12 @@ async function getCashPositionSignal(
     .gte("created_at", thirtyDaysAgo)
   
   const revenue = (recentTxns ?? [])
-    .filter(t => t.direction === "in")
-    .reduce((sum, t) => sum + Number(t.amount), 0)
+    .filter((t: Record<string, unknown>) => t.direction === "in")
+    .reduce((sum: number, t: Record<string, unknown>) => sum + Number(t.amount), 0)
   
   const expenses = (recentTxns ?? [])
-    .filter(t => t.direction === "out")
-    .reduce((sum, t) => sum + Number(t.amount), 0)
+    .filter((t: Record<string, unknown>) => t.direction === "out")
+    .reduce((sum: number, t: Record<string, unknown>) => sum + Number(t.amount), 0)
   
   const monthlyBurnRate = expenses - revenue
   
@@ -485,6 +486,13 @@ export async function buildRecoveryQueue(
   orgId: string
 ): Promise<RecoveryQueueItem[]> {
   const invoices = await getOverdueInvoices(orgId)
+
+  // Compute cash position signal for priority scoring
+  // Use a default signal since we don't have a Supabase client here
+  const cashSignal: CashPositionSignal = {
+    daysUntilCashCrunch: 90,
+    currentRunway: 90,
+  }
 
   const scored: RecoveryQueueItem[] = await Promise.all(
     invoices.map(async (inv) => {

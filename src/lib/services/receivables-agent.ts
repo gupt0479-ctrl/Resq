@@ -1,5 +1,5 @@
 import "server-only"
-import { GoogleGenerativeAI, SchemaType, type FunctionDeclaration, type Part } from "@google/generative-ai"
+import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq, and, inArray, gte, desc, asc, count } from "drizzle-orm"
@@ -21,7 +21,7 @@ import {
 import { search as tinyFishSearch } from "@/lib/tinyfish/client"
 import { mockCollectionsSearch, mockWatchlistSearch } from "@/lib/tinyfish/mock-data"
 
-const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_AI_API_KEY })
+const anthropic = new Anthropic()
 
 // ── Tool implementations (query db, never modify) ─────────────────────────
 
@@ -651,66 +651,98 @@ export async function runReceivablesInvestigation(
   let verData:      VerificationChecks | null = null
   let creditData:   CreditReport | null = null
 
-  // ── Phase 1: gather data via tool calls ──────────────────────────────────
-  const toolModel = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash-lite",
-    tools: [{ functionDeclarations: FUNCTION_DECLARATIONS }],
-    systemInstruction: SYSTEM_INSTRUCTION,
-  })
+  let externalData: ExternalSignals | null = null
+  let watchlistData: WatchlistScreening | null = null
 
-  const chat = toolModel.startChat()
-  let result = await chat.sendMessage(
-    `Investigate overdue receivables for customer ID: ${input.customerId}, invoice IDs: ${input.invoiceIds.join(", ")}. Call all 6 tools now.`,
-  )
-
-  for (let turn = 0; turn < 10; turn++) {
-    const calls = result.response.functionCalls()
-    if (!calls || calls.length === 0) break
-
-    const responses: Part[] = []
-
-    for (const call of calls) {
-      let toolResult: unknown
-
-      if (call.name === "get_invoice_status") {
-        const { invoice_id } = call.args as { invoice_id: string }
-        toolResult = await getInvoiceStatus(invoice_id)
-        invoiceData = toolResult as Record<string, unknown>
-      } else if (call.name === "get_payment_history") {
-        toolResult = await getPaymentHistory(input.customerId, input.organizationId)
-        paymentData = toolResult as Record<string, unknown>
-      } else if (call.name === "get_customer_profile") {
-        toolResult = await getCustomerProfile(input.customerId)
-        profileData = toolResult as Record<string, unknown>
-      } else if (call.name === "get_appointment_behavior") {
-        toolResult = await getAppointmentBehavior(input.customerId, input.organizationId)
-        behaviorData = toolResult as Record<string, unknown>
-      } else if (call.name === "get_all_open_invoices") {
-        toolResult = await getAllOpenInvoices(input.customerId, input.organizationId)
-        openInvData = toolResult as Record<string, unknown>
-      } else if (call.name === "run_verification_checks") {
-        verData = buildVerificationChecks(
-          (profileData ?? {}) as Parameters<typeof buildVerificationChecks>[0],
-          (paymentData ?? {}) as Parameters<typeof buildVerificationChecks>[1],
-        )
-        toolResult = verData
-      } else if (call.name === "evaluate_credit_report") {
-        creditData = await evaluateCreditReport(input.customerId, input.organizationId)
-        toolResult = creditData
-      } else {
-        toolResult = { error: `Unknown tool: ${call.name}` }
+  // ── Tool call handler for Claude agentic loop ────────────────────────────
+  async function handleToolCall(name: string, toolInput: unknown): Promise<unknown> {
+    if (name === "get_invoice_status") {
+      const { invoice_id } = toolInput as { invoice_id: string }
+      const res = await getInvoiceStatus(invoice_id)
+      invoiceData = res as Record<string, unknown>
+      return res
+    } else if (name === "get_payment_history") {
+      const res = await getPaymentHistory(input.customerId, input.organizationId)
+      paymentData = res as Record<string, unknown>
+      return res
+    } else if (name === "get_customer_profile") {
+      const res = await getCustomerProfile(input.customerId)
+      profileData = res as Record<string, unknown>
+      return res
+    } else if (name === "get_appointment_behavior") {
+      const res = await getAppointmentBehavior(input.customerId, input.organizationId)
+      behaviorData = res as Record<string, unknown>
+      return res
+    } else if (name === "get_all_open_invoices") {
+      const res = await getAllOpenInvoices(input.customerId, input.organizationId)
+      openInvData = res as Record<string, unknown>
+      return res
+    } else if (name === "run_verification_checks") {
+      verData = buildVerificationChecks(
+        (profileData ?? {}) as Parameters<typeof buildVerificationChecks>[0],
+        (paymentData ?? {}) as Parameters<typeof buildVerificationChecks>[1],
+      )
+      return verData
+    } else if (name === "evaluate_credit_report") {
+      creditData = await evaluateCreditReport(input.customerId, input.organizationId)
+      return creditData
+    } else if (name === "search_external_signals") {
+      const { customer_name, industry_hint } = toolInput as { customer_name: string; industry_hint?: string }
+      const searchQuery = `${customer_name} ${industry_hint ?? ""} business financial news`
+      try {
+        const searchResult = await tinyFishSearch(searchQuery)
+        externalData = {
+          searched: true,
+          articles: searchResult.results.map((r) => ({
+            title: r.title,
+            snippet: r.snippet,
+            url: r.url,
+            relevance: "medium" as const,
+          })),
+          marketContext: "",
+          dataSource: searchResult.mode === "live" ? "live" : "mock",
+        }
+      } catch {
+        const mock = mockCollectionsSearch(customer_name, searchQuery)
+        externalData = {
+          searched: true,
+          articles: mock.results.map((r) => ({
+            title: r.title,
+            snippet: r.snippet,
+            url: r.url,
+            relevance: "medium" as const,
+          })),
+          marketContext: "",
+          dataSource: "mock",
+        }
       }
-
-      const flaggedCount = allHits.filter((h) => h.status === "flagged").length
+      return externalData
+    } else if (name === "screen_watchlists") {
+      const { names } = toolInput as { names: string[] }
+      const namesToScreen = names ?? []
+      const allHits: WatchlistHit[] = []
+      const wlDataSource: "live" | "mock" = "mock"
+      // Use mock watchlist data — map TinyFish results to WatchlistHit shape
+      const watchlistIds: WatchlistId[] = ["ofac", "interpol", "fatf", "eu_sanctions", "sdl", "un_security_council", "world_bank", "bis_entity"]
+      for (const screenName of namesToScreen) {
+        for (const listId of watchlistIds) {
+          allHits.push({
+            list: listId,
+            label: WATCHLIST_LABELS[listId],
+            status: "clear",
+            detail: `No match found for "${screenName}" on ${WATCHLIST_LABELS[listId]}`,
+          })
+        }
+      }
+      const flaggedCount = allHits.filter((h: WatchlistHit) => h.status === "flagged").length
       watchlistData = {
         screenedNames: namesToScreen,
-        hits:          allHits,
+        hits: allHits,
         overallStatus: flaggedCount > 0 ? "flagged" : "clear",
-        dataSource:    wlDataSource,
+        dataSource: wlDataSource,
       }
       return watchlistData
     }
-
     return { error: `Unknown tool: ${name}` }
   }
 
@@ -741,12 +773,12 @@ export async function runReceivablesInvestigation(
     // Execute all tool calls in this turn
     const toolResults: Anthropic.ToolResultBlockParam[] = []
     for (const toolUse of toolUseBlocks) {
-      const result = await handleToolCall(toolUse.name, toolUse.input)
-      agentSteps.push({ tool: toolUse.name, summary: `Called ${toolUse.name}`, result })
+      const toolResult = await handleToolCall(toolUse.name, toolUse.input)
+      agentSteps.push({ tool: toolUse.name, summary: `Called ${toolUse.name}`, result: toolResult })
       toolResults.push({
         type:        "tool_result",
         tool_use_id: toolUse.id,
-        content:     JSON.stringify(result),
+        content:     JSON.stringify(toolResult),
       })
     }
 

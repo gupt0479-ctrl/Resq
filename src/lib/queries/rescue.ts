@@ -57,7 +57,7 @@ export async function getRescueQueue(
   if (invErr || !invoices || invoices.length === 0) return []
 
   // Fetch all rescue ai_actions for these invoices
-  const invoiceIds = invoices.map((i) => i.id as string)
+  const invoiceIds = invoices.map((i: Record<string, unknown>) => i.id as string)
   const { data: actions } = await client
     .from("ai_actions")
     .select("entity_id, action_type, input_summary, output_payload_json, created_at")
@@ -90,7 +90,7 @@ export async function getRescueQueue(
     const hasActions = invActions.length > 0
     if (daysOverdue === 0 && !hasActions && inv.status !== "overdue") continue
 
-    const actionTypes = invActions.map((a) => a.action_type as string)
+    const actionTypes = invActions.map((a: Record<string, unknown>) => a.action_type as string)
     const lastAction = invActions.at(-1)
 
     result.push({
@@ -105,7 +105,7 @@ export async function getRescueQueue(
       rescueState: inferState(actionTypes),
       lastActionType: (lastAction?.action_type as string) ?? null,
       lastActionAt: (lastAction?.created_at as string) ?? null,
-      auditTrail: invActions.map((a) => ({
+      auditTrail: invActions.map((a: Record<string, unknown>) => ({
         actionType: a.action_type as string,
         inputSummary: a.input_summary as string,
         outputPayload: (a.output_payload_json as Record<string, unknown>) ?? null,

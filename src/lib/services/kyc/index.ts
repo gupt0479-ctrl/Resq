@@ -137,7 +137,7 @@ export async function listKycRequests(
   if (opts.offset) query = query.range(opts.offset, opts.offset + (opts.limit ?? 50) - 1)
 
   const { data } = await query
-  return (data ?? []).map((r) => mapRowToRequest(r as Record<string, unknown>))
+  return (data ?? []).map((r: Record<string, unknown>) => mapRowToRequest(r as Record<string, unknown>))
 }
 
 export async function listOperatorAlerts(
@@ -154,7 +154,7 @@ export async function listOperatorAlerts(
   if (opts.status) query = query.eq("status", opts.status)
 
   const { data } = await query
-  return (data ?? []).map((r) => mapAlertRow(r as Record<string, unknown>))
+  return (data ?? []).map((r: Record<string, unknown>) => mapAlertRow(r as Record<string, unknown>))
 }
 
 export async function recordLinkOpened(

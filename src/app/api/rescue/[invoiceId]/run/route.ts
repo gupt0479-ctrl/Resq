@@ -30,7 +30,7 @@ export async function POST(
 
   const summary = `[${decision.classification.replace("_", " ")} · ${decision.confidence}% confidence] ${decision.outreachDraft.slice(0, 120)}`
 
-  const actionId = await recordAiAction(client, {
+  const actionId = await recordAiAction({
     organizationId: DEMO_ORG_ID,
     entityType:     "invoice",
     entityId:       invoiceId,
