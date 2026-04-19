@@ -9,10 +9,8 @@ const DATABASE_URL = process.env.DATABASE_URL
 // The pool is created lazily — connection errors surface at query time, not import time.
 const pool = new Pool({
   connectionString: DATABASE_URL || "postgresql://localhost:5432/opspilot",
-  max: 5,
-  connectionTimeoutMillis: 5000,
-  // AWS RDS requires SSL in production
-  ...(DATABASE_URL?.includes("rds.amazonaws.com") ? { ssl: { rejectUnauthorized: false } } : {}),
+  max: 20,
+  ssl: DATABASE_URL?.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined,
 })
 
 export const db = drizzle(pool, { schema })
