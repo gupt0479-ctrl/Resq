@@ -13,15 +13,15 @@ export async function POST(req: NextRequest) {
       invoiceId?:      string
       organizationId?: string
     }
-    const orgId = body.organizationId ?? DEMO_ORG_ID
-    const supabase = createServerSupabaseClient()
+    const orgId  = body.organizationId ?? DEMO_ORG_ID
+    const client = createServerSupabaseClient()
 
     let customerId = body.customerId
     let invoiceIds: string[] = body.invoiceId ? [body.invoiceId] : []
 
     // Resolve customerId from invoiceId when only an invoice is provided
     if (body.invoiceId && !customerId) {
-      const { data: inv } = await supabase
+      const { data: inv } = await client
         .from("invoices")
         .select("customer_id")
         .eq("id", body.invoiceId)
@@ -39,13 +39,13 @@ export async function POST(req: NextRequest) {
 
     // Fall back to all open invoices for this customer
     if (invoiceIds.length === 0) {
-      const { data } = await supabase
+      const { data: rows } = await client
         .from("invoices")
         .select("id")
         .eq("customer_id", customerId)
         .eq("organization_id", orgId)
         .in("status", ["overdue", "sent", "pending"])
-      invoiceIds = ((data ?? []) as { id: string }[]).map((i) => i.id)
+      invoiceIds = (rows ?? []).map((r: { id: string }) => r.id)
     }
 
     if (invoiceIds.length === 0) {
@@ -89,10 +89,10 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
-    const orgId = searchParams.get("orgId") ?? DEMO_ORG_ID
-    const supabase = createServerSupabaseClient()
+    const orgId  = searchParams.get("orgId") ?? DEMO_ORG_ID
+    const client = createServerSupabaseClient()
 
-    const { data, error } = await supabase
+    const { data: rows, error } = await client
       .from("invoices")
       .select("id, invoice_number, status, total_amount, amount_paid, due_at, reminder_count, customer_id, customers ( full_name, email, risk_status, lifetime_value )")
       .eq("organization_id", orgId)
@@ -102,25 +102,27 @@ export async function GET(req: NextRequest) {
 
     if (error) throw new Error(error.message)
 
-    const now = new Date().getTime()
-    const invoices = (data ?? []).map((inv: Record<string, unknown>) => {
-      const cust = (Array.isArray(inv.customers) ? inv.customers[0] : inv.customers) as { full_name: string; email: string | null; risk_status: string | null; lifetime_value: number | null } | null
-      const dueAt = inv.due_at as string | null
-      const daysOverdue = dueAt ? Math.max(0, Math.floor((now - new Date(dueAt).getTime()) / 86400000)) : 0
-
+    const now = Date.now()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const invoices = (rows ?? []).map((row: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cust = (Array.isArray(row.customers) ? row.customers[0] : row.customers) as any
+      const daysOverdue = row.due_at
+        ? Math.max(0, Math.floor((now - new Date(row.due_at as string).getTime()) / 86_400_000))
+        : 0
       return {
-        invoiceId:              inv.id,
-        invoiceNumber:          inv.invoice_number,
-        status:                 inv.status,
-        balance:                Number(inv.total_amount) - Number(inv.amount_paid),
-        dueAt,
+        invoiceId:             row.id,
+        invoiceNumber:         row.invoice_number,
+        status:                row.status,
+        balance:               Number(row.total_amount) - Number(row.amount_paid),
+        dueAt:                 row.due_at,
         daysOverdue,
-        reminderCount:          inv.reminder_count ?? 0,
-        customerId:             inv.customer_id,
-        customerName:           cust?.full_name ?? "Unknown",
-        customerEmail:          cust?.email ?? null,
-        customerRiskStatus:     cust?.risk_status ?? "none",
-        customerLifetimeValue:  Number(cust?.lifetime_value ?? 0),
+        reminderCount:         row.reminder_count,
+        customerId:            row.customer_id,
+        customerName:          cust?.full_name ?? "Unknown",
+        customerEmail:         cust?.email ?? null,
+        customerRiskStatus:    cust?.risk_status ?? "none",
+        customerLifetimeValue: Number(cust?.lifetime_value ?? 0),
       }
     })
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { DEMO_ORG_ID } from "@/lib/db"
 import { recordAiAction } from "@/lib/services/ai-actions"
 import { runCollectionsDecision } from "@/lib/services/collections-decision-agent"
 import type { AiActionType } from "@/lib/constants/enums"
@@ -16,11 +16,10 @@ export async function POST(
   { params }: { params: Promise<{ invoiceId: string }> }
 ) {
   const { invoiceId } = await params
-  const client = createServerSupabaseClient()
 
   let decision
   try {
-    decision = await runCollectionsDecision(client, invoiceId, DEMO_ORG_ID)
+    decision = await runCollectionsDecision(invoiceId, DEMO_ORG_ID)
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
