@@ -460,63 +460,59 @@ export async function logForecastRun(
   result: ForecastResult,
   organizationId: string,
 ): Promise<string> {
-  const supabase = createServerSupabaseClient()
+  try {
+    const supabase = createServerSupabaseClient()
 
-  // Get previous run's hash
-  const { data: prevRun } = await supabase
-    .from("forecast_runs")
-    .select("payload_hash")
-    .eq("organization_id", organizationId)
-    .order("run_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    // Get previous run's hash from ai_actions (forecast audit entries)
+    const { data: prevAction } = await supabase
+      .from("ai_actions")
+      .select("output_payload_json")
+      .eq("organization_id", organizationId)
+      .eq("action_type", "forecast_run_logged")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-  const prevHash = (prevRun as { payload_hash: string } | null)?.payload_hash ?? null
+    const prevHash = (prevAction?.output_payload_json as Record<string, unknown> | null)?.payloadHash as string ?? null
 
-  const { data, error } = await supabase
-    .from("forecast_runs")
-    .insert({
-      organization_id: organizationId,
-      as_of_date: result.asOfDate,
-      scenario: result.scenario,
-      status: "completed",
-      starting_cash: result.startingCash,
-      ending_cash: result.endingCash,
-      breakpoint_week: result.breakpointWeek,
-      runway_weeks: result.runwayWeeks,
-      threshold_cash: result.thresholdCash,
-      weekly_buckets: result.weeklyBuckets,
-      top_drivers: result.topDrivers,
-      actions: result.actions,
-      input_payload: result.inputPayload,
-      payload_hash: result.payloadHash,
-      prev_payload_hash: prevHash,
-    })
-    .select("id")
-    .single()
+    // Log the forecast run as an ai_action (this table is in PostgREST cache)
+    const { data, error } = await supabase
+      .from("ai_actions")
+      .insert({
+        organization_id: organizationId,
+        entity_type: "forecast",
+        entity_id: "00000000-0000-0000-0000-" + result.payloadHash.padEnd(12, "0").slice(0, 12),
+        trigger_type: "forecast_run",
+        action_type: "forecast_run_logged",
+        input_summary: `${result.scenario} forecast: ${result.startingCash.toFixed(0)} → ${result.endingCash.toFixed(0)}, breakpoint w${result.breakpointWeek ?? "none"}, runway ${result.runwayWeeks}w`,
+        output_payload_json: {
+          scenario: result.scenario,
+          asOfDate: result.asOfDate,
+          startingCash: result.startingCash,
+          endingCash: result.endingCash,
+          breakpointWeek: result.breakpointWeek,
+          runwayWeeks: result.runwayWeeks,
+          thresholdCash: result.thresholdCash,
+          driverCount: result.topDrivers.length,
+          actionCount: result.actions.length,
+          payloadHash: result.payloadHash,
+          prevPayloadHash: prevHash,
+        },
+        status: "executed",
+      })
+      .select("id")
+      .single()
 
-  if (error) {
-    console.error("Failed to log forecast run:", error.message)
-    // Log failed run
-    await supabase.from("forecast_runs").insert({
-      organization_id: organizationId,
-      as_of_date: result.asOfDate,
-      scenario: result.scenario,
-      status: "failed",
-      starting_cash: 0,
-      ending_cash: 0,
-      runway_weeks: 0,
-      threshold_cash: 0,
-      weekly_buckets: [],
-      input_payload: result.inputPayload,
-      payload_hash: result.payloadHash,
-      prev_payload_hash: prevHash,
-      error_payload: { error: error.message },
-    })
+    if (error) {
+      console.error("Audit log failed:", error.message)
+      return ""
+    }
+
+    return (data as { id: string }).id
+  } catch (err) {
+    console.error("Audit log failed:", err instanceof Error ? err.message : err)
     return ""
   }
-
-  return (data as { id: string }).id
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
