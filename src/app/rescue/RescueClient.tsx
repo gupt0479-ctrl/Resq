@@ -222,53 +222,104 @@ function TimelineStep({ step, isLast, isNew }: {
             </div>
           )}
 
-          {/* Structured agent reasoning - "agent working" format */}
+          {/* ── Analyst Brief ── */}
           {d && (
-            <div className="space-y-3">
-              {/* Assessment block */}
+            <div className="space-y-4 mt-1">
+
+              {/* Assessment — lead with verdict */}
               <div>
-                <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Assessment</div>
-                <div className="rounded-md bg-surface-muted px-3 py-2.5 space-y-1.5 text-[12px]">
-                  {d.chainOfThought && (
-                    <p className="leading-relaxed text-foreground/90">{d.chainOfThought}</p>
-                  )}
-                  {d.confidence && (
-                    <p className="text-steel">
-                      <span className="font-medium text-foreground/70">Confidence:</span> {d.confidence}%
-                    </p>
-                  )}
-                </div>
+                <p className="text-[13px] leading-relaxed text-foreground">
+                  {d.chainOfThought}
+                </p>
+                {d.confidence != null && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="h-1.5 flex-1 rounded-full bg-stone-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${d.confidence}%`,
+                          background: d.confidence >= 85 ? "#2d9b8a" : d.confidence >= 60 ? "#f59e0b" : "#c0522a",
+                        }}
+                      />
+                    </div>
+                    <span className="text-[11px] font-medium tabular-nums" style={{
+                      color: d.confidence >= 85 ? "#2d9b8a" : d.confidence >= 60 ? "#f59e0b" : "#c0522a",
+                    }}>
+                      {d.confidence}% confidence
+                    </span>
+                  </div>
+                )}
               </div>
 
-              {/* Portal Reconnaissance */}
+              {/* Portal Reconnaissance — "what we found" */}
               {d.portalReconnaissance && (
                 <PortalReconSection recon={d.portalReconnaissance} dataSource={d.externalSignals?.dataSource} />
               )}
 
-              {/* Action block */}
-              <div>
-                <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Action</div>
-                <div className="rounded-md bg-surface-muted px-3 py-2.5 space-y-1.5 text-[12px]">
-                  <p className="text-foreground/90">
-                    <span className="font-medium">Selected action:</span> {d.selectedAction.replace(/_/g, " ")}
-                  </p>
-                  <p className="text-foreground/90">
-                    <span className="font-medium">Channel:</span> {d.channel}
-                  </p>
-                  <p className="text-foreground/90">
-                    <span className="font-medium">Tone:</span> {d.tone}
-                  </p>
-                </div>
+              {/* Decision — explain the reasoning */}
+              <div className="rounded-lg border border-stone-100 bg-white px-4 py-3">
+                <p className="text-[13px] leading-relaxed text-foreground">
+                  {d.selectedAction === "skip" && d.chainOfThought?.toLowerCase().includes("processing")
+                    ? "We\u2019re holding off on outreach because the payment is already processing. Contacting the customer now would be premature and could damage the relationship."
+                    : d.selectedAction === "skip"
+                    ? "No outreach needed at this time. The account doesn\u2019t meet the threshold for collection action."
+                    : d.selectedAction === "reminder"
+                    ? `Sending a ${d.tone ?? "friendly"} reminder via ${d.channel ?? "email"}. The tone is calibrated to the customer\u2019s payment history and the severity of the overdue balance.`
+                    : d.selectedAction === "escalation"
+                    ? `Escalating this case. Standard reminders haven\u2019t worked, and the balance warrants direct intervention via ${d.channel ?? "email"}.`
+                    : `Taking action: ${d.selectedAction.replace(/_/g, " ")} via ${d.channel ?? "email"} with a ${d.tone ?? "professional"} tone.`}
+                </p>
               </div>
 
-              {/* Contingency block */}
-              {d.responsePlan && (
+              {/* External Signals — summarize what matters */}
+              {d.externalSignals && (
                 <div>
-                  <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Contingency</div>
-                  <div className="rounded-md bg-surface-muted px-3 py-2.5 space-y-1.5 text-[12px]">
-                    <p className="text-foreground/90">
-                      <span className="font-medium">If no reply:</span> {d.responsePlan.noReply}
-                    </p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">External Signals</span>
+                    <span className="text-[9px] font-mono bg-stone-50 border border-stone-100 px-1.5 py-0.5 rounded text-stone-400">{d.externalSignals.dataSource}</span>
+                    {d.externalSignals.distressFlag && (
+                      <span className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded">Distress signal</span>
+                    )}
+                  </div>
+                  <p className="text-[12.5px] leading-relaxed text-foreground/80">
+                    {d.externalSignals.distressFlag
+                      ? d.externalSignals.newsSummary ?? (d.externalSignals as unknown as { summary?: string }).summary ?? "Financial distress indicators detected in public records."
+                      : d.externalSignals.newsSummary ?? (d.externalSignals as unknown as { summary?: string }).summary
+                        ? (d.externalSignals.newsSummary ?? (d.externalSignals as unknown as { summary?: string }).summary)
+                        : `Searched public records for this entity \u2014 no material financial risk signals found.`}
+                  </p>
+                  {(d.externalSignals.rawSnippets ?? []).length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {(d.externalSignals.rawSnippets ?? []).slice(0, 2).map((s, i) => (
+                        <p key={i} className="text-[11px] text-stone-400 leading-relaxed pl-3 border-l-2 border-stone-100">
+                          {s.length > 160 ? s.slice(0, 160) + "\u2026" : s}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Response Plan — decision tree, only if meaningful */}
+              {d.responsePlan && (
+                d.responsePlan.noReply !== d.responsePlan.dispute ||
+                d.responsePlan.noReply !== d.responsePlan.partialPayment
+              ) && (
+                <div className="rounded-lg border border-stone-100 bg-stone-50/50 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 mb-2">If things don\u2019t go as planned</p>
+                  <div className="space-y-2">
+                    {([
+                      ["No reply after 48h", d.responsePlan.noReply],
+                      ["Customer pushes back", d.responsePlan.dispute],
+                      ["Partial payment received", d.responsePlan.partialPayment],
+                    ] as [string, string | undefined][])
+                      .filter(([, text]) => text && !text.toLowerCase().includes("no action needed"))
+                      .map(([label, text]) => (
+                        <div key={label}>
+                          <p className="text-[11px] font-medium text-stone-500">{label}</p>
+                          <p className="text-[12px] text-foreground/80 leading-relaxed">{text}</p>
+                        </div>
+                      ))}
                   </div>
                 </div>
               )}
@@ -277,57 +328,11 @@ function TimelineStep({ step, isLast, isNew }: {
 
           {/* Outreach draft */}
           {(step.detail || d?.outreachDraft) && (
-            <div>
-              <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Message drafted</div>
-              <pre className="whitespace-pre-wrap font-sans leading-relaxed text-[12px] rounded-md bg-surface-muted px-3 py-2.5">
+            <div className="mt-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 mb-1.5">Drafted message</div>
+              <pre className="whitespace-pre-wrap font-sans leading-relaxed text-[12.5px] rounded-lg border border-stone-100 bg-white px-4 py-3 text-foreground/90">
                 {d?.outreachDraft ?? step.detail}
               </pre>
-            </div>
-          )}
-
-          {/* External signals */}
-          {d?.externalSignals && (
-            <div>
-              <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5 flex items-center gap-1.5">
-                📡 External signals
-                <span className="font-mono text-[8px] bg-surface-muted px-1 py-0.5 rounded">{d.externalSignals.dataSource}</span>
-                {d.externalSignals.distressFlag && (
-                  <span className="text-crimson font-semibold text-[9px]">⚠ distress detected</span>
-                )}
-              </div>
-              {/* AI news summary */}
-              <p className={`text-[12px] leading-relaxed mb-2 ${d.externalSignals.distressFlag ? "text-crimson font-medium" : "text-foreground"}`}>
-                {d.externalSignals.newsSummary ?? (d.externalSignals as unknown as { summary?: string }).summary ?? "—"}
-              </p>
-              {/* Raw snippets */}
-              {(d.externalSignals.rawSnippets ?? []).length > 0 && (
-                <div className="space-y-1.5">
-                  {(d.externalSignals.rawSnippets ?? []).map((s, i) => (
-                    <div key={i} className="rounded bg-surface-muted px-3 py-2 text-[11px] text-steel leading-relaxed">
-                      <span className="font-mono text-[9px] text-steel/50 mr-1.5">[{i + 1}]</span>{s}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Full response plan (collapsed by default, shown on expand) */}
-          {d?.responsePlan && (
-            <div>
-              <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5">Full response plan</div>
-              <div className="space-y-1">
-                {([
-                  ["No reply", d.responsePlan.noReply],
-                  ["Customer disputes", d.responsePlan.dispute],
-                  ["Partial payment", d.responsePlan.partialPayment],
-                ] as [string, string][]).map(([label, text]) => (
-                  <div key={label} className="flex items-start gap-2 text-[12px]">
-                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-steel" />
-                    <span><span className="font-medium text-foreground/70">{label}:</span> <span className="text-foreground/80">{text}</span></span>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </div>
