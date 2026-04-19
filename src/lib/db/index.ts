@@ -10,6 +10,7 @@ const DATABASE_URL = process.env.DATABASE_URL
 const pool = new Pool({
   connectionString: DATABASE_URL || "postgresql://localhost:5432/opspilot",
   max: 20,
+  ssl: DATABASE_URL?.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined,
 })
 
 export const db = drizzle(pool, { schema })
