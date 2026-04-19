@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { RiskBadge, type RiskLevel } from "@/components/RiskBadge"
 import { InvestigationPanel } from "@/components/receivables/investigation-panel"
 import type { RescueInvoice } from "@/lib/queries/rescue"
+import { SurvivalScanPanel } from "@/components/rescue/SurvivalScanPanel"
 
 interface RunResult {
   actionType: string
@@ -269,6 +270,11 @@ export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }
           <div className="font-display text-2xl mt-1">{activeCount}</div>
           <div className="text-[11.5px] text-steel mt-1">In recovery workflow</div>
         </div>
+      </div>
+
+      {/* Survival scan — async progress UX */}
+      <div className="mb-8">
+        <SurvivalScanPanel />
       </div>
 
       {queue.length === 0 ? (
