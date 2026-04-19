@@ -528,6 +528,30 @@ export const clientReminders = pgTable(
   ],
 )
 
+// ─── Obligations (known future outflows) ────────────────────────────────
+
+export const obligations = pgTable(
+  "obligations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    category: text("category").notNull().default("other"),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    dueAt: date("due_at").notNull(),
+    recurring: boolean("recurring").notNull().default(false),
+    recurrenceRule: text("recurrence_rule"),
+    status: text("status").notNull().default("upcoming"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_obligations_org").on(table.organizationId, table.dueAt),
+    index("idx_obligations_org_status").on(table.organizationId, table.status),
+  ],
+)
+
 // ─── Legacy tables (used by reservation.service.ts / invoice.service.ts) ──
 
 export const reservations = pgTable("reservations", {

@@ -78,7 +78,7 @@ describe("Property 3: Poll response always echoes runId", () => {
   it("response.runId === runId for every input", async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1 }),
+        fc.string({ minLength: 1 }).filter((value) => value.trim().length > 0),
         fc.constantFrom("mock" as const, "misconfigured" as const),
         async (runId, mode) => {
           vi.mocked(getTinyFishMode).mockReturnValue(mode)

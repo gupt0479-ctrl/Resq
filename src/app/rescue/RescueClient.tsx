@@ -24,8 +24,6 @@ import { SurvivalScanPanel } from "@/components/rescue/SurvivalScanPanel"
 
 import type { CollectionsDecision, CustomerClassification } from "@/lib/schemas/collections-decision"
 
-import type { CollectionsDecision, CustomerClassification } from "@/lib/schemas/collections-decision"
-
 interface RunResult {
   actionType: string
   summary: string
