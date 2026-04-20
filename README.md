@@ -1,4 +1,4 @@
-# OpsPilot Rescue
+# Resq
 
 OpsPilot Rescue is an autonomous SMB survival agent for the O1 Summit 2026
 hackathon. The product helps small businesses stay alive during cash stress by
