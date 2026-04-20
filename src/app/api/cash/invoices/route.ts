@@ -31,7 +31,7 @@ export async function GET() {
       return {
         id: inv.id as string,
         number: (inv.invoice_number as string) ?? "—",
-        guest: cust?.full_name ?? "Guest",
+        customerName: cust?.full_name ?? "Customer",
         amount: Number(inv.total_amount ?? 0),
         status: validStatuses.includes(status) ? status : "draft",
         date: fmtDate((inv.paid_at as string) ?? (inv.created_at as string)),

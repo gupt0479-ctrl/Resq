@@ -33,7 +33,9 @@ export default function LoginPage() {
     if (mode === "signin") {
       const { error: authError } = await supabaseBrowser.auth.signInWithPassword({ email, password })
       if (authError) { setError(authError.message); setLoading(false); return }
-      router.push("/dashboard")
+      // Full page navigation ensures cookies are available to the middleware
+      window.location.href = "/dashboard"
+      return
     } else {
       const { error: authError } = await supabaseBrowser.auth.signUp({ email, password })
       if (authError) { setError(authError.message); setLoading(false); return }

@@ -23,7 +23,7 @@ export default function LandingPage() {
       <header className="border-b border-border/60">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-md bg-foreground text-background grid place-items-center font-display text-sm font-semibold">O</div>
+            <div className="h-7 w-7 rounded-md bg-foreground text-background grid place-items-center font-display text-sm font-semibold">R</div>
             <div className="leading-tight">
               <div className="font-display text-[15px] font-semibold tracking-tight">Resq</div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-steel -mt-0.5">CFO Workspace</div>
@@ -205,7 +205,7 @@ export default function LandingPage() {
       <footer className="border-t border-border/60">
         <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-steel">
           <div className="flex items-center gap-2">
-            <div className="h-5 w-5 rounded-md bg-foreground text-background grid place-items-center font-display text-[11px]">O</div>
+            <div className="h-5 w-5 rounded-md bg-foreground text-background grid place-items-center font-display text-[11px]">R</div>
             <span>Resq · Autonomous operator for business survival</span>
           </div>
           <div className="flex gap-5">

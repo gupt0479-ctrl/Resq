@@ -6,13 +6,13 @@ import { cn } from "@/lib/utils"
 import {
   Zap,
   DollarSign,
-  Users,
+  FileText,
 } from "lucide-react"
 
 const navItems = [
   { href: "/rescue",       label: "Rescue Queue", icon: Zap          },
   { href: "/cashflow",     label: "Cashflow",     icon: DollarSign   },
-  { href: "/customers",    label: "Customers",    icon: Users        },
+  { href: "/invoices",     label: "Receivables",  icon: FileText     },
 ]
 
 const systemHealth = [

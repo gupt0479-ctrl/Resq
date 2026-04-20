@@ -108,8 +108,12 @@ describe("Collection Lag Tier Bucketing", () => {
           // Recompute daysLate independently to verify
           const daysToCollect = invoices.map((i) => daysBetween(i.createdAt, i.paidAt))
           const paymentTerms = invoices.map((i) => daysBetween(i.createdAt, i.dueAt))
-          const avgCollect = daysToCollect.reduce((s, d) => s + d, 0) / daysToCollect.length
-          const avgTerms = paymentTerms.reduce((s, d) => s + d, 0) / paymentTerms.length
+          const avgCollect = round2(
+            daysToCollect.reduce((s, d) => s + d, 0) / daysToCollect.length
+          )
+          const avgTerms = round2(
+            paymentTerms.reduce((s, d) => s + d, 0) / paymentTerms.length
+          )
           const daysLate = avgCollect - avgTerms
 
           if (daysLate <= 5) {

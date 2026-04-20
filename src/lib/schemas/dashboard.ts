@@ -1,24 +1,12 @@
 import { z } from "zod"
 
 export const DashboardKpisSchema = z.object({
-  todayReservationCount: z.number(),
-  upcomingReservationCount: z.number(),
   todayRevenue: z.number(),
   overdueInvoiceCount: z.number(),
   overdueInvoiceAmount: z.number(),
   pendingInvoiceCount: z.number(),
   pendingInvoiceAmount: z.number(),
-  unhappyGuestCount: z.number(),
   activeRescueActionsCount: z.number(),
-})
-
-export const RecentReservationSchema = z.object({
-  id: z.string(),
-  customerName: z.string(),
-  serviceName: z.string(),
-  covers: z.number(),
-  startsAt: z.string(),
-  status: z.string(),
 })
 
 export const DashboardConnectorHealthSchema = z.object({
@@ -37,15 +25,6 @@ export const DashboardManagerSummarySchema = z.object({
   generatedAt: z.string().optional(),
 })
 
-export const DashboardFeedbackSpotlightItemSchema = z.object({
-  id:         z.string(),
-  guestName:  z.string(),
-  score:      z.number(),
-  summary:    z.string(),
-  urgency:    z.number(),
-  safetyFlag: z.boolean(),
-})
-
 export const DashboardAiActivityItemSchema = z.object({
   id:           z.string(),
   actionType:   z.string(),
@@ -56,16 +35,14 @@ export const DashboardAiActivityItemSchema = z.object({
 
 export const DashboardSummarySchema = z.object({
   kpis: DashboardKpisSchema,
-  recentReservations: z.array(RecentReservationSchema),
   financeSnapshot: z.object({
     weeklyRevenue: z.number(),
     weeklyExpenses: z.number(),
     netCashFlow: z.number(),
   }),
   integrationConnectors: z.array(DashboardConnectorHealthSchema),
-  managerSummary:          DashboardManagerSummarySchema,
-  feedbackSpotlight:     z.array(DashboardFeedbackSpotlightItemSchema),
-  recentAiActivity:      z.array(DashboardAiActivityItemSchema),
+  managerSummary: DashboardManagerSummarySchema,
+  recentAiActivity: z.array(DashboardAiActivityItemSchema),
 })
 
 export type DashboardSummary = z.infer<typeof DashboardSummarySchema>

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
-import { eq, and, count, gte, lte, ne, desc, inArray } from "drizzle-orm"
+import { eq, and, count, gte, lte, desc, inArray } from "drizzle-orm"
 import type { FinanceSummaryResponse } from "@/lib/schemas/finance"
 
 // ─── Create revenue transaction (idempotent) ─────────────────────────────
@@ -35,7 +35,7 @@ export async function createRevenueTransaction(
       organizationId: input.organizationId,
       invoiceId:      input.invoiceId,
       type:           "revenue",
-      category:       "dining_revenue",
+      category:       "invoice_collection",
       amount:         String(input.amount),
       direction:      "in",
       occurredAt:     new Date(),
@@ -120,108 +120,7 @@ export async function listTransactions(
     .limit(opts.limit ?? 50)
     .offset(opts.offset ?? 0)
 
-  if (data.length > 0) return data
-
-  // Ledger is empty — synthesize from shipments (expenses) + reservations (revenue)
-  return buildSyntheticTransactions(opts.limit ?? 20)
-}
-
-async function buildSyntheticTransactions(limit: number) {
-  const [shipmentsData, reservationsData, menuItemsData] = await Promise.all([
-    db
-      .select({
-        id:        schema.shipments.id,
-        vendorName: schema.shipments.vendorName,
-        totalCost: schema.shipments.totalCost,
-        orderedAt: schema.shipments.orderedAt,
-        status:    schema.shipments.status,
-      })
-      .from(schema.shipments)
-      .where(ne(schema.shipments.status, "cancelled"))
-      .orderBy(desc(schema.shipments.orderedAt))
-      .limit(limit),
-    db
-      .select({
-        id:          schema.reservations.id,
-        date:        schema.reservations.date,
-        covers:      schema.reservations.covers,
-        menuItemIds: schema.reservations.menuItemIds,
-      })
-      .from(schema.reservations)
-      .orderBy(desc(schema.reservations.date))
-      .limit(limit),
-    db
-      .select({ id: schema.menuItems.id, price: schema.menuItems.price })
-      .from(schema.menuItems),
-  ])
-
-  const priceMap = new Map(
-    menuItemsData.map((m) => [m.id, Number(m.price)])
-  )
-
-  type SyntheticRow = {
-    id: string
-    organization_id: string
-    invoice_id: null
-    type: string
-    category: string
-    amount: number
-    direction: "in" | "out"
-    occurred_at: string
-    payment_method: null
-    tax_relevant: boolean
-    writeoff_eligible: boolean
-    notes: string | null
-    external_ref: null
-    created_at: string
-  }
-
-  const rows: SyntheticRow[] = []
-
-  for (const s of shipmentsData) {
-    rows.push({
-      id: s.id,
-      organization_id: "",
-      invoice_id: null,
-      type: "inventory_purchase",
-      category: "inventory_purchase",
-      amount: Number(s.totalCost),
-      direction: "out",
-      occurred_at: s.orderedAt.toISOString(),
-      payment_method: null,
-      tax_relevant: true,
-      writeoff_eligible: false,
-      notes: `Shipment from ${s.vendorName}`,
-      external_ref: null,
-      created_at: s.orderedAt.toISOString(),
-    })
-  }
-
-  for (const r of reservationsData) {
-    const ids = (r.menuItemIds as string[]) ?? []
-    const total = Number(r.covers) * ids.reduce((s, id) => s + (priceMap.get(id) ?? 0), 0)
-    if (total <= 0) continue
-    rows.push({
-      id: r.id,
-      organization_id: "",
-      invoice_id: null,
-      type: "revenue",
-      category: "dining_revenue",
-      amount: round2(total),
-      direction: "in",
-      occurred_at: `${r.date}T19:00:00.000Z`,
-      payment_method: null,
-      tax_relevant: true,
-      writeoff_eligible: false,
-      notes: `Reservation · ${r.covers} covers`,
-      external_ref: null,
-      created_at: `${r.date}T19:00:00.000Z`,
-    })
-  }
-
-  // Sort by date desc, cap at limit
-  rows.sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
-  return rows.slice(0, limit)
+  return data
 }
 
 // ─── Finance summary ─────────────────────────────────────────────────────
@@ -242,7 +141,6 @@ export async function getFinanceSummary(
   let revenueThisWeek = 0
   let revenueToday = 0
   let expensesThisWeek = 0
-  let usedLedgerForWeekly = false
 
   if (organizationId) {
     const ledgerRows = await db
@@ -260,77 +158,45 @@ export async function getFinanceSummary(
         ),
       )
 
-    if (ledgerRows.length > 0) {
-      usedLedgerForWeekly = true
-      const todayPrefix = `${todayStr}T`
-      for (const r of ledgerRows) {
-        const amt = Number(r.amount) || 0
-        if (r.direction === "in" && r.type === "revenue") {
-          revenueThisWeek += amt
-          const oc = r.occurredAt.toISOString()
-          if (oc.startsWith(todayPrefix) || oc.slice(0, 10) === todayStr) {
-            revenueToday += amt
-          }
+    const todayPrefix = `${todayStr}T`
+    for (const r of ledgerRows) {
+      const amt = Number(r.amount) || 0
+      if (r.direction === "in" && r.type === "revenue") {
+        revenueThisWeek += amt
+        const oc = r.occurredAt.toISOString()
+        if (oc.startsWith(todayPrefix) || oc.slice(0, 10) === todayStr) {
+          revenueToday += amt
         }
-        if (r.direction === "out") {
-          expensesThisWeek += amt
+      }
+      if (r.direction === "out") {
+        expensesThisWeek += amt
+      }
+    }
+    if (revenueThisWeek === 0) {
+      const paidInvoices = await db
+        .select({
+          amountPaid: schema.invoices.amountPaid,
+          paidAt: schema.invoices.paidAt,
+        })
+        .from(schema.invoices)
+        .where(
+          and(
+            eq(schema.invoices.organizationId, organizationId),
+            eq(schema.invoices.status, "paid"),
+            gte(schema.invoices.paidAt, new Date(sinceIso)),
+          ),
+        )
+
+      for (const invoice of paidInvoices) {
+        const amount = Number(invoice.amountPaid) || 0
+        revenueThisWeek += amount
+        if (!invoice.paidAt) continue
+        const paidAt = invoice.paidAt.toISOString()
+        if (paidAt.startsWith(todayPrefix) || paidAt.slice(0, 10) === todayStr) {
+          revenueToday += amount
         }
       }
     }
-  }
-
-  if (!usedLedgerForWeekly) {
-    // ── Revenue from reservations × menu prices (legacy / non-ledger demos) ─
-    const [reservationsData, menuItemsData] = await Promise.all([
-      db
-        .select({
-          id:          schema.reservations.id,
-          date:        schema.reservations.date,
-          covers:      schema.reservations.covers,
-          menuItemIds: schema.reservations.menuItemIds,
-        })
-        .from(schema.reservations)
-        .where(
-          and(
-            gte(schema.reservations.date, sevenDaysAgoStr),
-            lte(schema.reservations.date, todayStr),
-          ),
-        ),
-      db
-        .select({ id: schema.menuItems.id, price: schema.menuItems.price })
-        .from(schema.menuItems),
-    ])
-
-    const priceMap = new Map(
-      menuItemsData.map((m) => [m.id, Number(m.price)])
-    )
-
-    for (const r of reservationsData) {
-      const ids = (r.menuItemIds as string[]) ?? []
-      const total = Number(r.covers) * ids.reduce((s, id) => s + (priceMap.get(id) ?? 0), 0)
-      revenueThisWeek += total
-      if (r.date === todayStr) revenueToday += total
-    }
-
-    // ── Expenses from shipments (inventory purchases last 7 days) ───────────
-    const shipmentsData = await db
-      .select({
-        totalCost: schema.shipments.totalCost,
-        orderedAt: schema.shipments.orderedAt,
-        status:    schema.shipments.status,
-      })
-      .from(schema.shipments)
-      .where(
-        and(
-          ne(schema.shipments.status, "cancelled"),
-          gte(schema.shipments.orderedAt, new Date(sinceIso)),
-        ),
-      )
-
-    expensesThisWeek = shipmentsData.reduce(
-      (s, r) => s + Number(r.totalCost),
-      0
-    )
   }
 
   // ── Receivables from invoices (graceful fallback if table is empty/missing) ─

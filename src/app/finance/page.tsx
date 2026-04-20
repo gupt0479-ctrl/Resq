@@ -337,7 +337,7 @@ export default async function FinancePage() {
   type PageInvoice = {
     id: string
     number: string
-    guest: string
+    customerName: string
     amount: number
     status: InvoiceStatus
     dueDate: string
@@ -347,7 +347,7 @@ export default async function FinancePage() {
   const pageInvoices: PageInvoice[] = invoices.map((inv) => ({
     id:          inv.id,
     number:      inv.invoiceNumber,
-    guest:       inv.customerName,
+    customerName: inv.customerName,
     amount:      inv.totalAmount,
     status:      inv.status,
     dueDate:     formatDueDate(inv.dueAt),
@@ -560,7 +560,7 @@ export default async function FinancePage() {
                       <TableCell className="font-mono text-[11px] text-muted-foreground">
                         {inv.number}
                       </TableCell>
-                      <TableCell className="font-medium text-foreground">{inv.guest}</TableCell>
+                      <TableCell className="font-medium text-foreground">{inv.customerName}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${
                         inv.status === "paid"    ? "text-green-400" :
                         inv.status === "overdue" ? "text-red-400"   : "text-amber-400"

@@ -2,17 +2,7 @@ import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq, and, asc } from "drizzle-orm"
 import type { WebhookPayload } from "@/lib/schemas/integrations"
-import {
-  cancelAppointment,
-  completeAppointment,
-  rescheduleAppointment,
-} from "@/lib/services/appointments"
 import { sendInvoice, markInvoicePaid } from "@/lib/services/invoices"
-import {
-  analyzeAndPersistFeedback,
-  ingestFeedbackRow,
-  resolveCustomerIdByEmail,
-} from "@/lib/services/feedback"
 import { logWebhookProcessed } from "@/lib/logging/server-log"
 import {
   MUTATING_INTEGRATION_EVENTS,
@@ -329,34 +319,6 @@ async function dispatchWebhookCommand(
   }
 
   const invoiceId = getString(payload.data, "invoiceId", "invoice_id")
-  const appointmentId = getString(payload.data, "appointmentId", "appointment_id")
-
-  if (normalizedEvent === "reservation.cancelled") {
-    if (!appointmentId) throw new Error("reservation.cancelled requires appointmentId in webhook data.")
-    await cancelAppointment(appointmentId, organizationId)
-    return
-  }
-
-  if (normalizedEvent === "reservation.rescheduled") {
-    const startsAt = getString(payload.data, "startsAt", "starts_at", "startAt")
-    const endsAt = getString(payload.data, "endsAt", "ends_at", "endAt")
-    if (!appointmentId) throw new Error("reservation.rescheduled requires appointmentId in webhook data.")
-    if (!startsAt || !endsAt) {
-      throw new Error("reservation.rescheduled requires startsAt and endsAt in webhook data.")
-    }
-    await rescheduleAppointment(appointmentId, organizationId, startsAt, endsAt)
-    return
-  }
-
-  if (normalizedEvent === "reservation.completed") {
-    if (!appointmentId) throw new Error("reservation.completed requires appointmentId in webhook data.")
-    await completeAppointment(
-      appointmentId,
-      organizationId,
-      `Completed by ${provider} webhook`
-    )
-    return
-  }
 
   if (normalizedEvent === "invoice.sent") {
     if (!invoiceId) throw new Error("invoice.sent requires invoiceId in webhook data.")
@@ -390,71 +352,6 @@ async function dispatchWebhookCommand(
       notes:         `Paid by ${provider} webhook`,
     })
     return
-  }
-
-  if (normalizedEvent === "feedback.received") {
-    const data = payload.data
-    const score = getNumber(data, "score", "rating", "stars")
-    if (score == null || score < 1 || score > 5) {
-      throw new Error("feedback.received requires numeric score between 1 and 5.")
-    }
-    let guestName =
-      getString(data, "guestName", "guest_name", "reviewerName", "reviewer_name") ?? ""
-    const comment = getString(data, "comment", "text", "body") ?? ""
-    let customerId = getString(data, "customerId", "customer_id") ?? null
-    const email = getString(data, "guestEmail", "guest_email", "email")
-    if (!customerId && email) {
-      customerId = await resolveCustomerIdByEmail(organizationId, email)
-    }
-    if (!guestName && customerId) {
-      const [cust] = await db
-        .select({ fullName: schema.customers.fullName })
-        .from(schema.customers)
-        .where(
-          and(
-            eq(schema.customers.id, customerId),
-            eq(schema.customers.organizationId, organizationId),
-          ),
-        )
-        .limit(1)
-      guestName = cust?.fullName ?? "Guest"
-    }
-    if (!guestName) guestName = "Guest"
-
-    const sourceRaw =
-      getString(data, "source", "review_source", "channel")?.toLowerCase() ?? provider
-    const source =
-      sourceRaw.includes("yelp") ? "yelp" :
-      sourceRaw.includes("google") ? "google" :
-      sourceRaw.includes("opentable") ? "opentable" :
-      "internal"
-
-    const externalReviewId =
-      getString(data, "externalReviewId", "external_review_id", "reviewId", "review_id") ??
-      payload.externalEventId ??
-      null
-    const externalSource = getString(data, "externalSource", "external_source") ?? provider
-
-    const { feedbackId } = await ingestFeedbackRow({
-      organizationId,
-      customerId,
-      appointmentId:            getString(data, "appointmentId", "appointment_id") ?? null,
-      integrationSyncEventId:   syncEventId,
-      guestName,
-      score,
-      comment,
-      source,
-      externalReviewId,
-      externalSource,
-    })
-
-    await analyzeAndPersistFeedback(organizationId, feedbackId, {
-      guestName,
-      score,
-      comment,
-      source,
-      customerId,
-    }, { skipIfAlreadyAnalyzed: true })
   }
 }
 

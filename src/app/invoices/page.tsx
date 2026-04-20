@@ -50,7 +50,7 @@ async function fetchInvoices(organizationId: string): Promise<Invoice[]> {
       return {
         id:            inv.id,
         number:        inv.invoiceNumber ?? "—",
-        guest:         customer?.fullName ?? "Guest",
+        customerName:  customer?.fullName ?? "Customer",
         amount:        Number(inv.totalAmount ?? 0),
         status,
         date:          fmtDate(inv.paidAt?.toISOString() ?? inv.createdAt?.toISOString()),

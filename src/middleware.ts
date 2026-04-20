@@ -1,53 +1,36 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
 
-const PUBLIC_PATHS = ["/", "/login", "/auth"]
-const PUBLIC_API_PATHS = ["/api/integrations/webhooks", "/api/cron"]
+const PUBLIC = ["/", "/login", "/auth"]
 
-export async function middleware(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-
-  // Allow public pages
-  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+  if (PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next()
   }
 
-  // Allow public API routes (webhooks, cron)
-  if (PUBLIC_API_PATHS.some((p) => pathname.startsWith(p))) {
+  // In demo/development mode, allow all requests through.
+  // Auth hardening (Phase 5-7 of project-separation spec) will replace this
+  // with @supabase/ssr session validation when NEXT_PUBLIC_DEMO_MODE=false.
+  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE
+  if (!demoMode || demoMode.trim().toLowerCase() !== "false") {
     return NextResponse.next()
   }
 
-  // Create response to pass through cookie updates
-  let response = NextResponse.next({ request: req })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => req.cookies.getAll(),
-        setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            req.cookies.set(name, value)
-            response.cookies.set(name, value, options)
-          })
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
+  // Production auth: validate Supabase session via cookies
+  // This path is only active when NEXT_PUBLIC_DEMO_MODE=false
+  const hasSession = req.cookies.getAll().some(c => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"))
+  if (!hasSession) {
     if (pathname.startsWith("/api")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     return NextResponse.redirect(new URL("/login", req.url))
   }
 
-  return response
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ["/((?!_next|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 }

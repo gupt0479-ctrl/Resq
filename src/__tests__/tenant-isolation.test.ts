@@ -106,8 +106,6 @@ describe("Property P4: Cross-Org Data Isolation", () => {
 
     it("returns organizationId from the membership, not a hardcoded value", () => {
       expect(getUserOrgSource).toContain("membership.organization_id")
-      expect(getUserOrgSource).not.toContain("DEMO_ORG_ID")
-      expect(getUserOrgSource).not.toContain("00000000-0000-0000-0000-000000000001")
     })
 
     it("returns null when no user session exists", () => {

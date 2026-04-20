@@ -111,7 +111,7 @@ function CashMetricBoxes() {
     )
   }
 
-  if (summaryError || !summary) {
+  if (summaryError || !summary || !summary.currentCashPosition) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {["Current Cash Position", "Cash Collected (90d)", "Breakpoint Week", "Largest Risk Driver"].map((label) => (

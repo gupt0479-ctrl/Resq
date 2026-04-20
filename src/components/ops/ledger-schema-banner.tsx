@@ -2,7 +2,7 @@
 export function LedgerSchemaBanner({ message }: { message: string }) {
   return (
     <div className="m-8 max-w-3xl rounded-xl border border-amber-300 bg-amber-50 p-6 text-sm text-amber-950 space-y-3">
-      <p className="font-semibold text-base">Database is not on the Ember Table ledger schema</p>
+      <p className="font-semibold text-base">Database is not on the Resq ledger schema</p>
       <p className="whitespace-pre-wrap rounded-md bg-white/60 p-3 font-mono text-xs leading-relaxed">{message}</p>
       <p className="text-xs text-amber-900">
         If <code className="rounded bg-amber-100/80 px-1">invoices</code> already existed before the ledger (wrong
