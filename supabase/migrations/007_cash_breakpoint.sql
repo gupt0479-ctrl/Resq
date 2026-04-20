@@ -1,4 +1,4 @@
--- OpsPilot · Cash Breakpoint Agent
+-- Resq · Cash Breakpoint Agent
 -- Migration: 007_cash_breakpoint
 -- Adds cash_obligations and cash_forecast_snapshots tables for
 -- 13-week cash forecasting, breakpoint detection, and deviation tracking.

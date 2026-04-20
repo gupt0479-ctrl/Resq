@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { ensureInvoiceForCompletedAppointment, getInvoiceDetail } from "@/lib/services/invoices"
 
 export async function POST(req: NextRequest) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   let body: {
     appointmentId?: string
     reservation_id?: string
@@ -19,8 +22,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { invoiceId, created } = await ensureInvoiceForCompletedAppointment(appointmentId, DEMO_ORG_ID)
-    const invoice = await getInvoiceDetail(invoiceId, DEMO_ORG_ID)
+    const { invoiceId, created } = await ensureInvoiceForCompletedAppointment(appointmentId, ctx.organizationId)
+    const invoice = await getInvoiceDetail(invoiceId, ctx.organizationId)
     return NextResponse.json({ invoice, created }, { status: created ? 201 : 200 })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate invoice"

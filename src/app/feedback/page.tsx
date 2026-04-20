@@ -1,4 +1,5 @@
-import { DEMO_ORG_ID } from "@/lib/db"
+import { redirect } from "next/navigation"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { listFeedbackQuery } from "@/lib/queries/feedback"
 import { isDatabaseConfigured } from "@/lib/env"
@@ -8,6 +9,9 @@ import { FeedbackPageClient } from "@/components/feedback/FeedbackPageClient"
 export const dynamic = "force-dynamic"
 
 export default async function FeedbackPage() {
+  const ctx = await getUserOrg()
+  if (!ctx) redirect("/login")
+
   if (!isDatabaseConfigured()) {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">
@@ -25,7 +29,7 @@ export default async function FeedbackPage() {
 
   let pageData
   try {
-    pageData = await listFeedbackQuery(DEMO_ORG_ID)
+    pageData = await listFeedbackQuery(ctx.organizationId)
   } catch {
     return (
       <div className="m-8 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm">

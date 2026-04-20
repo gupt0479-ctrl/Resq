@@ -2,7 +2,7 @@
 
 ## Product
 
-OpsPilot Rescue
+OpsPilot Rescue → Resq
 
 ## Goal
 

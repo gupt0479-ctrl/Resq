@@ -6,7 +6,7 @@ This is the fastest stable setup for the TinyFish financing-scout lane.
 
 - Kiro workspace MCP config: `.kiro/settings/mcp.json`
 - Repo-level compatibility MCP config: `.mcp.json`
-- Shared Kiro local agent: `.kiro/agents/opspilot-rescue.json`
+- Shared Kiro local agent: `.kiro/agents/resq.json`
 - Shared hook commands: `.kiro/hooks/`
 - Shared starter specs: `.kiro/specs/`
 - App runtime TinyFish auth: `.env.local`
@@ -32,7 +32,7 @@ Obsidian, GitHub, or local filesystem tools.
 1. Install Kiro and sign in.
 2. Open this workspace in Kiro.
 3. Enable MCP support in Kiro settings.
-4. Switch to the local `opspilot-rescue` agent if your Kiro build exposes local agents.
+4. Switch to the local `resq` agent if your Kiro build exposes local agents.
 5. Open the MCP panel and confirm the TinyFish and AWS servers appear.
 6. Trigger a TinyFish tool once.
 7. Complete the OAuth browser flow for TinyFish.

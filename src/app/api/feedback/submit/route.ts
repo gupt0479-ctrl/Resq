@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { FeedbackSubmitBodySchema } from "@/lib/schemas/feedback"
 import {
   analyzeAndPersistFeedback,
@@ -7,6 +7,9 @@ import {
 } from "@/lib/services/feedback"
 
 export async function POST(request: NextRequest) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   let body: unknown
   try {
     body = await request.json()
@@ -34,7 +37,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const { feedbackId, created } = await ingestFeedbackRow({
-      organizationId: DEMO_ORG_ID,
+      organizationId: ctx.organizationId,
       customerId:     customerId ?? null,
       appointmentId:  appointmentId ?? null,
       guestName,
@@ -46,7 +49,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (analyze) {
-      await analyzeAndPersistFeedback(DEMO_ORG_ID, feedbackId, {
+      await analyzeAndPersistFeedback(ctx.organizationId, feedbackId, {
         guestName,
         score,
         comment,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { getAppointment } from "@/lib/services/appointments"
 
 /**
@@ -11,7 +11,10 @@ export async function POST(
 ) {
   const { appointmentId } = await ctx.params
   try {
-    await getAppointment(appointmentId, DEMO_ORG_ID)
+    const ctxOrg = await getUserOrg()
+    if (!ctxOrg) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    await getAppointment(appointmentId, ctxOrg.organizationId)
     return NextResponse.json({
       data: {
         appointmentId,

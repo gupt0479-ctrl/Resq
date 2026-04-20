@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { runForecast, logForecastRun } from "@/lib/services/cash/forecast-engine"
-import { DEMO_ORG_ID } from "@/lib/data/cash-forecast-config"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const body = await req.json().catch(() => ({})) as {
       scenario?: "base" | "stress" | "upside"
       organizationId?: string
@@ -14,7 +17,7 @@ export async function POST(req: NextRequest) {
     }
 
     const scenario = body.scenario ?? "base"
-    const orgId = body.organizationId ?? DEMO_ORG_ID
+    const orgId = body.organizationId ?? ctx.organizationId
 
     if (!["base", "stress", "upside"].includes(scenario)) {
       return NextResponse.json({ error: "Invalid scenario. Use: base, stress, upside" }, { status: 400 })
@@ -49,11 +52,14 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const scenario = (searchParams.get("scenario") ?? "base") as "base" | "stress" | "upside"
 
   try {
-    const result = await runForecast({ scenario })
+    const result = await runForecast({ organizationId: ctx.organizationId, scenario })
     return NextResponse.json({ data: result })
   } catch (err) {
     return NextResponse.json(

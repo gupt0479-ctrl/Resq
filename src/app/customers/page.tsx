@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { createUserSupabaseServerClient } from "@/lib/auth/create-user-supabase-server-client"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { CustomersClient } from "./CustomersClient"
 
 export type CustomerRow = {
@@ -21,7 +22,16 @@ export type CustomerRow = {
 }
 
 export default async function CustomersPage() {
-  const client = createServerSupabaseClient()
+  const ctx = await getUserOrg()
+  if (!ctx) {
+    return (
+      <div className="p-8 lg:p-10 max-w-[1280px] mx-auto">
+        <div className="text-sm text-steel">Sign in to load customers.</div>
+      </div>
+    )
+  }
+
+  const client = await createUserSupabaseServerClient()
 
   const { data, error } = await client
     .from("customers")
@@ -29,7 +39,7 @@ export default async function CustomersPage() {
       id, full_name, email, risk_status,
       invoices ( id, invoice_number, total_amount, amount_paid, status, due_at )
     `)
-    .eq("organization_id", DEMO_ORG_ID)
+    .eq("organization_id", ctx.organizationId)
     .order("full_name", { ascending: true })
 
   if (error || !data) {

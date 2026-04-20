@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { FeedbackFlagBodySchema } from "@/lib/schemas/feedback"
 import { setFeedbackFlagged } from "@/lib/services/feedback"
 
@@ -8,6 +8,8 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params
+  const ctxOrg = await getUserOrg()
+  if (!ctxOrg) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   let body: unknown = {}
   try {
     body = await request.json()
@@ -23,7 +25,7 @@ export async function POST(
   }
 
   try {
-    await setFeedbackFlagged(DEMO_ORG_ID, id, parsed.data.flagged)
+    await setFeedbackFlagged(ctxOrg.organizationId, id, parsed.data.flagged)
     return NextResponse.json({ data: { feedbackId: id, flagged: parsed.data.flagged } })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error"

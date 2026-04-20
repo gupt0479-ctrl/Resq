@@ -2,7 +2,7 @@
 
 ## Product shape
 
-OpsPilot Rescue is an agentic fintech product built on top of an existing
+Resq is an agentic fintech product built on top of an existing
 small-business operations codebase. The app is not a generic chatbot and not a
 full ERP. It is a focused survival decision system.
 

@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { DEMO_ORG_ID } from "@/lib/env"
 import { ingestWebhookPayload } from "@/lib/services/integrations"
 import { normalizeWebhookPayload } from "@/lib/schemas/integrations"
 import {

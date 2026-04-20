@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { executeAction } from "@/lib/services/action-executor"
 import type { InterventionCategory } from "@/lib/schemas/cash"
 
@@ -9,11 +9,15 @@ export async function POST(
 ) {
   const { id } = await params
   const body = await request.json()
+  const ctx = await getUserOrg()
+  if (!ctx) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   const category = body.category as InterventionCategory | undefined
   const description = body.description as string | undefined
   const executable = body.executable as boolean | undefined
-  const orgId = (body.organizationId as string) ?? DEMO_ORG_ID
+  const orgId = (body.organizationId as string) ?? ctx.organizationId
   const clientName = body.clientName as string | undefined
 
   if (!category || !description || executable === undefined) {

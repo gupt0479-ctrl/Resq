@@ -1,6 +1,7 @@
 import { Fragment } from "react"
 import { AlertTriangle, CheckCircle2, MinusCircle, Plug, XCircle } from "lucide-react"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { redirect } from "next/navigation"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { isDatabaseConfigured } from "@/lib/env"
 import { CONNECTOR_STATUS_LABEL } from "@/lib/constants/enums"
@@ -84,6 +85,9 @@ function ConnectorRow({ connector }: { connector: Record<string, unknown> }) {
 }
 
 export default async function IntegrationsPage() {
+  const ctx = await getUserOrg()
+  if (!ctx) redirect("/login")
+
   const tinyfish = await healthCheck()
   let connectors: Record<string, unknown>[] = []
   let connectorsLoadError: string | null = null
@@ -94,7 +98,7 @@ export default async function IntegrationsPage() {
       return <LedgerSchemaBanner message={schema.message} />
     }
     try {
-      connectors = (await listConnectors(DEMO_ORG_ID)) as unknown as Record<string, unknown>[]
+      connectors = (await listConnectors(ctx.organizationId)) as unknown as Record<string, unknown>[]
     } catch (err: unknown) {
       connectorsLoadError = err instanceof Error ? err.message : String(err)
     }

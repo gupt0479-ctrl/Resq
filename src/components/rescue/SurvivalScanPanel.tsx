@@ -105,7 +105,7 @@ export function SurvivalScanPanel() {
     if (timerRef.current) clearTimeout(timerRef.current)
   }, [])
 
-  const poll = useCallback(async (id: string) => {
+  const poll = useCallback(async function pollRun(id: string) {
     if (pollCount.current >= MAX_POLLS) {
       stopPolling()
       setPhase("error")
@@ -141,7 +141,9 @@ export function SurvivalScanPanel() {
       }
 
       // Still running — schedule next poll
-      timerRef.current = setTimeout(() => poll(id), POLL_INTERVAL_MS)
+      timerRef.current = setTimeout(() => {
+        void pollRun(id)
+      }, POLL_INTERVAL_MS)
     } catch (err) {
       stopPolling()
       setPhase("error")

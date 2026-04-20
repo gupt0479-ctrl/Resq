@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { generateReminder, type InvoiceReminderFacts } from "@/lib/ai/generate-reminder"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { getInvoiceDetail, recordInvoiceReminderSent } from "@/lib/services/invoices"
 import Anthropic from "@anthropic-ai/sdk"
 
@@ -63,6 +63,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   const { id } = await params
 
   // Parse optional body — frontend sends followUpType and invoiceFallback for mock data
@@ -83,7 +86,7 @@ export async function POST(
   }
 
   // Try DB first; fall back to the client-provided invoice data for mock IDs
-  const dbInvoice = await getInvoiceDetail(id, DEMO_ORG_ID).catch(() => null)
+  const dbInvoice = await getInvoiceDetail(id, ctx.organizationId).catch(() => null)
   if (!dbInvoice && !body.invoiceFallback) {
     return NextResponse.json({ error: "Invoice not found." }, { status: 404 })
   }
@@ -129,7 +132,7 @@ export async function POST(
 
   const reminder = await generateReminder(reminderFacts)
   const persistedReminderCount = dbInvoice
-    ? await recordInvoiceReminderSent(id, DEMO_ORG_ID)
+    ? await recordInvoiceReminderSent(id, ctx.organizationId)
     : null
 
   return NextResponse.json({

@@ -2,7 +2,7 @@
 
 ## Final pitch
 
-**OpsPilot Rescue** is an auditable survival copilot for a small business under
+**Resq** is an auditable survival copilot for a small business under
 cash pressure. It runs one-button investigation across receivables, financing,
 and cost pressure, then returns ranked rescue actions with a visible audit
 trail.

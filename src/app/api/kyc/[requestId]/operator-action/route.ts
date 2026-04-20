@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { createUserSupabaseServerClient } from "@/lib/auth/create-user-supabase-server-client"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { applyOperatorAction } from "@/lib/services/kyc"
 import { OperatorActionSchema } from "@/lib/schemas/kyc"
 
@@ -8,6 +9,9 @@ export async function POST(
   { params }: { params: Promise<{ requestId: string }> }
 ) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const { requestId } = await params
     const body: unknown = await req.json().catch(() => ({}))
     const parsed = OperatorActionSchema.safeParse(body)
@@ -15,14 +19,14 @@ export async function POST(
       return NextResponse.json({ error: "Validation failed", details: parsed.error.issues }, { status: 422 })
     }
 
-    const supabase = createServerSupabaseClient()
+    const supabase = await createUserSupabaseServerClient()
 
     // Confirm request exists
     const { data: req_ } = await supabase
       .from("kyc_verification_requests")
       .select("id, status")
       .eq("id", requestId)
-      .eq("organization_id", DEMO_ORG_ID)
+      .eq("organization_id", ctx.organizationId)
       .single()
 
     if (!req_) {
@@ -32,7 +36,7 @@ export async function POST(
     await applyOperatorAction(
       supabase,
       requestId,
-      DEMO_ORG_ID,
+      ctx.organizationId,
       parsed.data.action,
       parsed.data.notes,
       parsed.data.actorId

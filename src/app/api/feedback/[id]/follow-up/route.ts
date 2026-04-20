@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { FeedbackFollowUpBodySchema } from "@/lib/schemas/feedback"
 import { enqueueFollowUpFromBody } from "@/lib/services/feedback"
 
@@ -8,6 +8,8 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params
+  const ctxOrg = await getUserOrg()
+  if (!ctxOrg) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   let body: unknown
   try {
     body = await request.json()
@@ -24,7 +26,7 @@ export async function POST(
   }
 
   try {
-    await enqueueFollowUpFromBody(DEMO_ORG_ID, id, {
+    await enqueueFollowUpFromBody(ctxOrg.organizationId, id, {
       actionType:   parsed.data.actionType,
       channel:      parsed.data.channel,
       priority:     parsed.data.priority,

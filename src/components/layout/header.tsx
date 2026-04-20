@@ -17,7 +17,6 @@ export function Header() {
 
   async function handleLogout() {
     await supabaseBrowser.auth.signOut()
-    document.cookie = "sb-logged-in=; path=/; max-age=0"
     router.push("/login")
   }
 

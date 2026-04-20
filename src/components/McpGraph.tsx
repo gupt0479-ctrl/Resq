@@ -5,17 +5,17 @@ const NODES: Node[] = [
   { id: "gmail",   label: "Gmail",          sub: ["Outreach"],                                            x: 310, y: 55,  w: 110, h: 44 },
   { id: "vendor",  label: "Vendor Sources", sub: ["Catalog"],                                             x: 490, y: 80,  w: 130, h: 44 },
   { id: "tinyfish",label: "TinyFish",       sub: ["Web agent"],                                           x: 100, y: 160, w: 110, h: 44 },
-  { id: "opspilot",label: "Resq",sub: ["Agent core"],                                          x: 310, y: 210, w: 150, h: 50, primary: true },
+  { id: "resq",label: "Resq",sub: ["Agent core"],                                          x: 310, y: 210, w: 150, h: 50, primary: true },
   { id: "stripe",  label: "Stripe",         sub: ["Ledger"],                                              x: 100, y: 305, w: 110, h: 44 },
   { id: "insurance",label: "Insurance",     sub: ["Autonomous multi-step tool use", "Mock-safe and live-ready"], x: 490, y: 290, w: 160, h: 58 },
 ]
 
 const EDGES: Edge[] = [
-  { from: "tinyfish",  to: "opspilot", label: "fetch offers" },
-  { from: "gmail",     to: "opspilot", label: "draft outreach" },
-  { from: "vendor",    to: "opspilot", label: "compare pricing" },
-  { from: "opspilot",  to: "stripe",   label: "inspect invoice state" },
-  { from: "opspilot",  to: "insurance",label: "check renewal terms" },
+  { from: "tinyfish",  to: "resq", label: "fetch offers" },
+  { from: "gmail",     to: "resq", label: "draft outreach" },
+  { from: "vendor",    to: "resq", label: "compare pricing" },
+  { from: "resq",  to: "stripe",   label: "inspect invoice state" },
+  { from: "resq",  to: "insurance",label: "check renewal terms" },
 ]
 
 const nodeMap = Object.fromEntries(NODES.map(n => [n.id, n]))

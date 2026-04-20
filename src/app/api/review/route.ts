@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { db } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import * as schema from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { analyzeReview } from "../../../../agents/customer-service/agent.js"
@@ -14,6 +15,9 @@ const ReviewInputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   // 1. Validate input
   let body: unknown
   try {
@@ -47,7 +51,7 @@ export async function POST(req: NextRequest) {
       .where(
         and(
           eq(schema.customers.id, guestId),
-          eq(schema.customers.organizationId, DEMO_ORG_ID),
+          eq(schema.customers.organizationId, ctx.organizationId),
         ),
       )
       .limit(1)
@@ -82,7 +86,7 @@ export async function POST(req: NextRequest) {
   const [feedbackRow] = await db
     .insert(schema.feedback)
     .values({
-      organizationId:    DEMO_ORG_ID,
+      organizationId:    ctx.organizationId,
       customerId,
       source,
       guestNameSnapshot: guestName,
@@ -117,7 +121,7 @@ export async function POST(req: NextRequest) {
 
   // 5. Insert into ai_actions
   await db.insert(schema.aiActions).values({
-    organizationId: DEMO_ORG_ID,
+    organizationId: ctx.organizationId,
     entityType:     "feedback",
     entityId:       feedbackId,
     triggerType:    "feedback.received",
@@ -148,7 +152,7 @@ export async function POST(req: NextRequest) {
         .where(
           and(
             eq(schema.customers.id, customerId),
-            eq(schema.customers.organizationId, DEMO_ORG_ID),
+            eq(schema.customers.organizationId, ctx.organizationId),
           ),
         )
     }

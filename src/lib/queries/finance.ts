@@ -3,7 +3,7 @@ import type {
   FinanceSummaryResponse,
   FinanceTransactionResponse,
 } from "@/lib/schemas/finance"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { DEMO_ORG_ID } from "@/lib/env"
 
 type TransactionRow = Record<string, unknown> & {
   id: string

@@ -34,7 +34,7 @@ strategy, not the product story.
 docker build \
   --build-arg NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co \
   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key \
-  -t opspilot .
+  -t resq .
 ```
 
 ## Required runtime env vars

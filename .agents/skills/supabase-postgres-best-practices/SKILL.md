@@ -12,7 +12,7 @@ metadata:
 
 # Supabase Postgres Best Practices
 
-## Project overlay: OpsPilot Rescue
+## Project overlay: Resq
 
 For this repo, use these best practices primarily when they support the
 survival-agent demo's deterministic financial layer:

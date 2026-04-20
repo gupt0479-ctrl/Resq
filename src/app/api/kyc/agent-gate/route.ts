@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { createUserSupabaseServerClient } from "@/lib/auth/create-user-supabase-server-client"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import type { KycBand } from "@/lib/types/kyc"
 
 /**
@@ -14,6 +15,9 @@ import type { KycBand } from "@/lib/types/kyc"
  */
 export async function GET(req: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const { searchParams } = new URL(req.url)
     const customerId = searchParams.get("customerId")
 
@@ -21,13 +25,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "customerId is required" }, { status: 400 })
     }
 
-    const supabase = createServerSupabaseClient()
+    const supabase = await createUserSupabaseServerClient()
 
     const { data: customer } = await supabase
       .from("customers")
       .select("id, full_name, kyc_status, kyc_score, kyc_band")
       .eq("id", customerId)
-      .eq("organization_id", DEMO_ORG_ID)
+      .eq("organization_id", ctx.organizationId)
       .single()
 
     if (!customer) {

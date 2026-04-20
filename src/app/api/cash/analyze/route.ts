@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { generate } from "@/lib/services/forecast-engine"
 import { detect } from "@/lib/services/breakpoint-detector"
 import { analyze } from "@/lib/services/risk-driver-analyzer"
@@ -21,8 +21,11 @@ function fallbackLag(clientId: string): ClientCollectionLag {
 }
 
 export async function POST(request: Request) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   const body = await request.json()
-  const orgId = body.organizationId ?? DEMO_ORG_ID
+  const orgId = body.organizationId ?? ctx.organizationId
   const clientId = body.clientId
 
   if (!clientId) {

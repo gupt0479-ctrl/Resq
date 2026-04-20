@@ -1,6 +1,6 @@
 # 🚀 Stripe Setup Checklist
 
-Quick reference for setting up Stripe with OpsPilot Rescue.
+Quick reference for setting up Stripe with Resq.
 
 ---
 

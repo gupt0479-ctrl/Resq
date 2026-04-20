@@ -1,6 +1,6 @@
 export type Theme = "light" | "dark"
 
-export const THEME_STORAGE_KEY = "opspilot-theme"
+export const THEME_STORAGE_KEY = "resq-theme"
 
 export function sanitizeTheme(value: unknown): Theme {
   return value === "dark" ? "dark" : "light"

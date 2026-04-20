@@ -37,6 +37,26 @@ export const organizations = pgTable("organizations", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
+// ─── Organization Memberships ───────────────────────────────────────────────
+
+export const organizationMemberships = pgTable(
+  "organization_memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    organizationId: uuid("organization_id").notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("owner"),
+    isDefault: boolean("is_default").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_org_memberships_user").on(table.userId),
+    index("idx_org_memberships_org").on(table.organizationId),
+    uniqueIndex("org_memberships_user_org").on(table.userId, table.organizationId),
+  ],
+)
+
 // ─── Customers ─────────────────────────────────────────────────────────────
 
 export const customers = pgTable(

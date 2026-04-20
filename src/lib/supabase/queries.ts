@@ -1,5 +1,6 @@
 import "server-only"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { db } from "@/lib/db"
+import { DEMO_ORG_ID } from "@/lib/env"
 import {
   inventoryItems,
   services,

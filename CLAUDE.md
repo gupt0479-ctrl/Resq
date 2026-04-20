@@ -1,4 +1,4 @@
-# OpsPilot Rescue Agent Brief
+# Resq Agent Brief
 
 ## Current mission
 

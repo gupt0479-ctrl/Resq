@@ -612,7 +612,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for OpsPilot, an SMB cashflow recovery system.
+const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for Resq, an SMB cashflow recovery system.
 
 REQUIRED: Call ALL NINE tools before writing any conclusions.
 

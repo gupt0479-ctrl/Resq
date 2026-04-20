@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { getAppointmentDetailQuery } from "@/lib/queries/appointments"
 
 export async function GET(
@@ -7,8 +7,11 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctxOrg = await getUserOrg()
+    if (!ctxOrg) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
     const { id } = await ctx.params
-    const data    = await getAppointmentDetailQuery(id, DEMO_ORG_ID)
+    const data    = await getAppointmentDetailQuery(id, ctxOrg.organizationId)
 
     return Response.json({ data })
   } catch (err) {

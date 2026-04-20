@@ -26,7 +26,7 @@ export function LoadingOverlay({ isVisible, catchphrase }: LoadingOverlayProps) 
         {!imgError && (
           <img
             src="/next.svg"
-            alt="OpsPilot"
+            alt="Resq"
             width={80}
             height={80}
             onError={() => setImgError(true)}

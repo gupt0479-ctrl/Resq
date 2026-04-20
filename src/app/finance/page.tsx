@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { redirect } from "next/navigation"
 import { connection } from "next/server"
 import {
   Table,
@@ -26,7 +27,7 @@ import { TaxFilterPills } from "@/components/finance/TaxFilterPills"
 import type { TaxTransaction } from "@/components/finance/TaxFilterPills"
 import { CountUpNumber } from "@/components/finance/CountUpNumber"
 import { FinanceAnimations } from "@/components/finance/FinanceAnimations"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { isDatabaseConfigured } from "@/lib/env"
 import { getFinanceSummaryQuery, listTransactionsQuery } from "@/lib/queries/finance"
 import { listInvoicesQuery } from "@/lib/queries/invoices"
@@ -306,6 +307,9 @@ function InsightCard({
 export default async function FinancePage() {
   await connection()
 
+  const ctx = await getUserOrg()
+  if (!ctx) redirect("/login")
+
   if (!isDatabaseConfigured()) {
     return (
       <div className="p-6">
@@ -317,9 +321,9 @@ export default async function FinancePage() {
   }
 
   const [summary, transactions, invoices] = await Promise.all([
-    getFinanceSummaryQuery(DEMO_ORG_ID),
-    listTransactionsQuery(DEMO_ORG_ID, { limit: 50 }),
-    listInvoicesQuery(DEMO_ORG_ID),
+    getFinanceSummaryQuery(ctx.organizationId),
+    listTransactionsQuery(ctx.organizationId, { limit: 50 }),
+    listInvoicesQuery(ctx.organizationId),
   ])
 
   // ── Derived transaction data ────────────────────────────────────────────────

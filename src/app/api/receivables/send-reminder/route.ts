@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { createUserSupabaseServerClient } from "@/lib/auth/create-user-supabase-server-client"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { syncStripeCustomer, createStripeInvoice } from "@/lib/services/stripe-helper"
 import { recordAiAction } from "@/lib/services/ai-actions"
 import { sendOutreachEmail } from "@/lib/services/email-sender"
@@ -8,6 +9,9 @@ import { sendOutreachEmail } from "@/lib/services/email-sender"
 // Body: { invoiceId, organizationId?, channel?, tone?, outreachDraft?, customerEmail? }
 export async function POST(req: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const body = await req.json().catch(() => ({})) as {
       invoiceId:        string
       organizationId?:  string
@@ -18,13 +22,13 @@ export async function POST(req: NextRequest) {
       outreachDraft?:   string
       customerEmail?:   string
     }
-    const orgId = body.organizationId ?? DEMO_ORG_ID
+    const orgId = body.organizationId ?? ctx.organizationId
 
     if (!body.invoiceId) {
       return NextResponse.json({ ok: false, error: "invoiceId is required" }, { status: 400 })
     }
 
-    const client = createServerSupabaseClient()
+    const client = await createUserSupabaseServerClient()
 
     // Load invoice + customer
     const { data: inv, error: invErr } = await client
@@ -40,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     const cust          = inv.customers as unknown as { full_name: string; email: string | null; notes: string | null } | null
     const customerName  = cust?.full_name ?? "Customer"
-    const customerEmail = cust?.email ?? `noreply+${body.invoiceId}@opspilot.app`
+    const customerEmail = cust?.email ?? `noreply+${body.invoiceId}@resq.app`
     const balance       = Number(inv.total_amount) - Number(inv.amount_paid)
     const customerId    = inv.customer_id as string
 
@@ -124,7 +128,7 @@ export async function POST(req: NextRequest) {
     if (channel === "email" || channel === "formal_notice") {
       const toEmail     = body.customerEmail ?? customerEmail
       const effectiveTone = channel === "formal_notice" ? "formal" : tone
-      const draft       = body.outreachDraft ?? `Hi ${customerName},\n\nThis is a reminder about your overdue invoice of $${balance.toFixed(2)} (${inv.invoice_number as string}). Please contact us to arrange payment.\n\nBest regards,\nOpsPilot`
+      const draft       = body.outreachDraft ?? `Hi ${customerName},\n\nThis is a reminder about your overdue invoice of $${balance.toFixed(2)} (${inv.invoice_number as string}). Please contact us to arrange payment.\n\nBest regards,\nResq`
 
       const { sent, messageId, mode } = await sendOutreachEmail({
         toEmail,

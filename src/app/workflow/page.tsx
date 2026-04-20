@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
+import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq, desc } from "drizzle-orm"
 
@@ -110,6 +111,20 @@ function getRunMeta(outputPayload: unknown) {
 }
 
 export default async function WorkflowPage() {
+  const ctx = await getUserOrg()
+  if (!ctx) {
+    return (
+      <div className="space-y-5 p-6">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Workflow Timeline</h1>
+          <p className="text-xs text-muted-foreground">
+            Sign in to view organization activity and workflow history.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const timeline = await db
     .select({
       id:           schema.aiActions.id,
@@ -121,7 +136,7 @@ export default async function WorkflowPage() {
       output_payload_json: schema.aiActions.outputPayloadJson,
     })
     .from(schema.aiActions)
-    .where(eq(schema.aiActions.organizationId, DEMO_ORG_ID))
+    .where(eq(schema.aiActions.organizationId, ctx.organizationId))
     .orderBy(desc(schema.aiActions.createdAt))
     .limit(20)
 

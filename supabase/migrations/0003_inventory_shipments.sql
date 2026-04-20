@@ -1,4 +1,4 @@
--- OpsPilot · Ember Table — Inventory & Shipments schema + seed
+-- Resq · Ember Table — Inventory & Shipments schema + seed
 -- Migration: 0003_inventory_shipments
 
 -- ─── inventory_items ──────────────────────────────────────────────────────────

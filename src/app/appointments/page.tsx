@@ -1,11 +1,14 @@
 import { Suspense } from "react"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { listAppointmentsQuery } from "@/lib/queries/appointments"
 import { isDatabaseConfigured } from "@/lib/env"
 import { ReservationsClient } from "./ReservationsClient"
 
 async function ReservationsData() {
-  const appointments = await listAppointmentsQuery(DEMO_ORG_ID, { limit: 100 }).catch(() => [])
+  const ctx = await getUserOrg()
+  const appointments = ctx
+    ? await listAppointmentsQuery(ctx.organizationId, { limit: 100 }).catch(() => [])
+    : []
 
   return <ReservationsClient initialAppointments={appointments} />
 }

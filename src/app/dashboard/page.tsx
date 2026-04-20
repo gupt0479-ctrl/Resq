@@ -1,7 +1,6 @@
 import Link from "next/link"
-import { createServerSupabaseClient } from "@/lib/db/supabase-server"
-import { DEMO_ORG_ID } from "@/lib/db"
-import { createServerSupabaseClient } from "@/lib/db/supabase-server"
+import { createUserSupabaseServerClient } from "@/lib/auth/create-user-supabase-server-client"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { getLedgerSchemaHealth } from "@/lib/db/ledger-schema"
 import { getDashboardSummary } from "@/lib/queries/dashboard"
 import { isDatabaseConfigured } from "@/lib/env"
@@ -40,6 +39,15 @@ function formatDueDateLabel(iso: string | null | undefined) {
 }
 
 export default async function DashboardPage() {
+  const ctx = await getUserOrg()
+  if (!ctx) {
+    return (
+      <div className="m-8 rounded-lg border border-amber/30 bg-amber/10 p-6 text-sm text-amber">
+        Sign in to view dashboard data.
+      </div>
+    )
+  }
+
   if (!isDatabaseConfigured()) {
     return (
       <div className="m-8 rounded-lg border border-amber/30 bg-amber/10 p-6 text-sm text-amber">
@@ -54,7 +62,7 @@ export default async function DashboardPage() {
     return <LedgerSchemaBanner message={schema.message} />
   }
 
-  const summaryResult = await getDashboardSummary(DEMO_ORG_ID)
+  const summaryResult = await getDashboardSummary(ctx.organizationId)
     .then((data) => ({ summary: data, error: null as string | null }))
     .catch((err: unknown) => ({
       summary: null,
@@ -77,11 +85,11 @@ export default async function DashboardPage() {
   const runwayDays  = weeklyBurn > 0 ? Math.round((cashOnHand / weeklyBurn) * 7) : 0
 
   // Top overdue invoices for survival briefing + top risks
-  const client = createServerSupabaseClient()
+  const client = await createUserSupabaseServerClient()
   const { data: overdueInvoices } = await client
     .from("invoices")
     .select("id, invoice_number, total_amount, amount_paid, due_at, customers(full_name)")
-    .eq("organization_id", DEMO_ORG_ID)
+    .eq("organization_id", ctx.organizationId)
     .eq("status", "overdue")
     .order("total_amount", { ascending: false })
     .limit(5)

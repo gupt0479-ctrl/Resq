@@ -6,10 +6,10 @@ read the relevant guide in `node_modules/next/dist/docs/` and check for
 deprecations.
 <!-- END:nt extjs-agent-rules -->
 
-# OpsPilot Rescue Agent Rules
+# Resq Agent Rules
 
-This repository is no longer a generic restaurant-ops demo. The active mission
-is to ship an autonomous SMB survival agent for the O1 Summit fintech track.
+This repository is the Resq fintech product — an autonomous SMB survival agent
+for the O1 Summit fintech track.
 
 ## Product target
 

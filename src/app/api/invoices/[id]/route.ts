@@ -1,14 +1,17 @@
-import { type NextRequest } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { type NextRequest, NextResponse } from "next/server"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { getInvoiceDetailQuery } from "@/lib/queries/invoices"
 
 export async function GET(
   _req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
+  routeCtx: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   try {
-    const { id } = await ctx.params
-    const data    = await getInvoiceDetailQuery(id, DEMO_ORG_ID)
+    const { id } = await routeCtx.params
+    const data    = await getInvoiceDetailQuery(id, ctx.organizationId)
 
     return Response.json({ data })
   } catch (err) {

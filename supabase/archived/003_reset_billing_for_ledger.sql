@@ -1,4 +1,4 @@
--- OpsPilot · Ember Table — reset billing tables for ledger reconciliation
+-- Resq · Ember Table — reset billing tables for ledger reconciliation
 -- Use when `invoices` is a legacy/hybrid shape (e.g. columns like `total`, `line_items`)
 -- so `CREATE TABLE IF NOT EXISTS invoices` in 0001 never ran.
 --

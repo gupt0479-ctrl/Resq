@@ -1,6 +1,6 @@
-# OpsPilot Rescue
+# Resq
 
-OpsPilot Rescue is an autonomous SMB survival agent for the O1 Summit 2026
+Resq is an autonomous SMB survival agent for the O1 Summit 2026
 hackathon. The product helps small businesses stay alive during cash stress by
 combining three agentic workflows:
 
@@ -18,7 +18,7 @@ Small businesses do not usually fail because they lack dashboards. They fail
 because cash arrives late, vendor costs rise, insurance renewals jump, and the
 owner has no time to investigate options across disconnected tools.
 
-OpsPilot Rescue detects survival risk, investigates live context, and produces
+Resq detects survival risk, investigates live context, and produces
 or executes next-best actions:
 
 - recover overdue cash faster

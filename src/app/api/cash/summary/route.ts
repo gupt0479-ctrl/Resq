@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { db } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { cashForecastSnapshots } from "@/lib/db/schema"
 import { eq, and, sql, desc } from "drizzle-orm"
 import { computePosition } from "@/lib/services/cash-model"
@@ -13,8 +14,11 @@ function fmtUsd(n: number): string {
 }
 
 export async function GET(request: Request) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   const { searchParams } = new URL(request.url)
-  const orgId = searchParams.get("organizationId") ?? DEMO_ORG_ID
+  const orgId = searchParams.get("organizationId") ?? ctx.organizationId
 
   try {
     const position = await computePosition(orgId)

@@ -1,4 +1,4 @@
--- OpsPilot · Ember Table — Core ledger schema
+-- Resq · Ember Table — Core ledger schema
 -- Migration: 0001_core_ledger
 -- Applies to: organizations, customers, staff, services, appointments,
 --             appointment_events, invoices, invoice_items, finance_transactions,

@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { db } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { cashForecastSnapshots } from "@/lib/db/schema"
 import { generate } from "@/lib/services/forecast-engine"
 import { detect } from "@/lib/services/breakpoint-detector"
 import type { ForecastResponse } from "@/lib/schemas/cash"
 
 export async function GET(request: Request) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   const { searchParams } = new URL(request.url)
-  const orgId = searchParams.get("organizationId") ?? DEMO_ORG_ID
+  const orgId = searchParams.get("organizationId") ?? ctx.organizationId
 
   try {
     // Generate all 3 scenarios in parallel

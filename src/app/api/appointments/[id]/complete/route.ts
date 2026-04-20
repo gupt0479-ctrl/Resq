@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
+import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { completeAppointment } from "@/lib/services/appointments"
@@ -11,6 +12,9 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctxOrg = await getUserOrg()
+    if (!ctxOrg) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
     const { id } = await ctx.params
 
     let body: unknown = {}
@@ -24,9 +28,7 @@ export async function POST(
       )
     }
 
-    const result = await completeAppointment(
-      id, DEMO_ORG_ID, parsed.data.notes, parsed.data.lineItems
-    )
+    const result = await completeAppointment(id, ctxOrg.organizationId, parsed.data.notes, parsed.data.lineItems)
 
     // Fetch customer for personalised follow-up
     const [customer] = await db

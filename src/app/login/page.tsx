@@ -14,10 +14,6 @@ export default function LoginPage() {
   const [success, setSuccess]   = useState<string | null>(null)
   const [loading, setLoading]   = useState(false)
 
-  function setAuthCookie() {
-    document.cookie = `sb-logged-in=1; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
-  }
-
   async function handleGoogleLogin() {
     setError(null)
     setLoading(true)
@@ -37,7 +33,6 @@ export default function LoginPage() {
     if (mode === "signin") {
       const { error: authError } = await supabaseBrowser.auth.signInWithPassword({ email, password })
       if (authError) { setError(authError.message); setLoading(false); return }
-      setAuthCookie()
       router.push("/dashboard")
     } else {
       const { error: authError } = await supabaseBrowser.auth.signUp({ email, password })

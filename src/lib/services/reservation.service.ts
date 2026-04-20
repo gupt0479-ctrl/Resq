@@ -1,4 +1,5 @@
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { db } from "@/lib/db"
+import { DEMO_ORG_ID } from "@/lib/env"
 import { reservations, customers, followUps, appointments } from "@/lib/db/schema"
 import { eq, ne, and, lt, gt, gte, lte, inArray, count } from "drizzle-orm"
 import type {

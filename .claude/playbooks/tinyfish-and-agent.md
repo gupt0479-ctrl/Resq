@@ -1,6 +1,6 @@
 # TinyFish and Agent Playbook
 
-This is the canonical guide for TinyFish-backed behavior in OpsPilot Rescue.
+This is the canonical guide for TinyFish-backed behavior in Resq.
 
 ## TinyFish role in the product
 

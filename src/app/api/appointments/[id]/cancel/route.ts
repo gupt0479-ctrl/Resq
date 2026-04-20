@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { cancelAppointment } from "@/lib/services/appointments"
 
 export async function PATCH(
@@ -7,8 +7,11 @@ export async function PATCH(
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctxOrg = await getUserOrg()
+    if (!ctxOrg) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
     const { id } = await ctx.params
-    await cancelAppointment(id, DEMO_ORG_ID)
+    await cancelAppointment(id, ctxOrg.organizationId)
     return Response.json({ data: { status: "cancelled" } })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error"

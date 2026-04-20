@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { db } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import * as schema from "@/lib/db/schema"
 import { eq, and, inArray, asc } from "drizzle-orm"
 import { runReceivablesInvestigation } from "@/lib/services/receivables-agent"
@@ -9,12 +10,15 @@ import { recordAiAction } from "@/lib/services/ai-actions"
 // Body: { customerId?, invoiceId?, organizationId? }
 export async function POST(req: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const body = await req.json().catch(() => ({})) as {
       customerId?:     string
       invoiceId?:      string
       organizationId?: string
     }
-    const orgId = body.organizationId ?? DEMO_ORG_ID
+    const orgId = body.organizationId ?? ctx.organizationId
 
     let customerId = body.customerId
     let invoiceIds: string[] = body.invoiceId ? [body.invoiceId] : []
@@ -96,8 +100,11 @@ export async function POST(req: NextRequest) {
 // Returns all open invoices enriched with basic risk signals for the Rescue Queue UI
 export async function GET(req: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const { searchParams } = new URL(req.url)
-    const orgId = searchParams.get("orgId") ?? DEMO_ORG_ID
+    const orgId = ctx.organizationId
 
     const rows = await db
       .select()

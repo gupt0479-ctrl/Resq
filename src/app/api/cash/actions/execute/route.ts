@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/db/supabase-server"
-import { DEMO_ORG_ID } from "@/lib/data/cash-forecast-config"
+import { createUserSupabaseServerClient } from "@/lib/auth/create-user-supabase-server-client"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { runForecast, logForecastRun } from "@/lib/services/cash/forecast-engine"
 import { getObligations, getReceivables, getRefundExposure } from "@/lib/data/cash-forecast-config"
 import type { CashObligation, CashReceivable, RefundExposureItem } from "@/lib/data/cash-forecast-config"
@@ -22,6 +22,9 @@ export const dynamic = "force-dynamic"
  */
 export async function POST(req: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const body = await req.json().catch(() => ({})) as {
       actionId: string
       forecastRunId?: string
@@ -33,6 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     const actionId = body.actionId
+    const organizationId = ctx.organizationId
     let mutationType = "advisory"
     let mutationDetail = ""
 
@@ -80,7 +84,7 @@ export async function POST(req: NextRequest) {
 
     // Re-run forecast with the mutation applied
     const newForecast = await runForecast({
-      organizationId: DEMO_ORG_ID,
+      organizationId,
       scenario: "base",
       overrides: { obligations, receivables, refundExposure },
     })
@@ -88,14 +92,14 @@ export async function POST(req: NextRequest) {
     // Log the new forecast run
     let newRunId = ""
     try {
-      newRunId = await logForecastRun(newForecast, DEMO_ORG_ID)
+      newRunId = await logForecastRun(newForecast, organizationId)
     } catch { /* best effort */ }
 
     // Log the action execution to ai_actions (best effort)
     try {
-      const supabase = createServerSupabaseClient()
+      const supabase = await createUserSupabaseServerClient()
       await supabase.from("ai_actions").insert({
-        organization_id: DEMO_ORG_ID,
+        organization_id: organizationId,
         entity_type: "forecast",
         entity_id: body.forecastRunId ?? newRunId ?? "unknown",
         trigger_type: "operator_action",

@@ -1,3 +1,5 @@
+> **Historical Note:** This spec was written during the OpsPilot → Resq transition. References to "OpsPilot" are historical.
+
 # Requirements Document
 
 ## Introduction

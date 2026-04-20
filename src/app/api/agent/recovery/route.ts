@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import {
   buildRecoveryQueue,
   runRecoveryAgent,
@@ -22,8 +22,11 @@ import { z } from "zod"
 
 export async function GET(req: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const { searchParams } = new URL(req.url)
-    const orgId  = searchParams.get("orgId") ?? DEMO_ORG_ID
+    const orgId  = ctx.organizationId
     const view   = searchParams.get("view")
 
     if (view === "audit") {
@@ -94,11 +97,13 @@ const PostBodySchema = z.object({
   invoiceId:   z.string().uuid().optional(),
   dryRun:      z.boolean().default(false),
   maxInvoices: z.number().int().min(1).max(100).default(20),
-  orgId:       z.string().optional(),
 })
 
 export async function POST(req: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const raw    = await req.json().catch(() => ({}))
     const parsed = PostBodySchema.safeParse(raw)
 
@@ -109,8 +114,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { mode, invoiceId, dryRun, maxInvoices, orgId: bodyOrgId } = parsed.data
-    const orgId  = bodyOrgId ?? DEMO_ORG_ID
+    const { mode, invoiceId, dryRun, maxInvoices } = parsed.data
+    const orgId  = ctx.organizationId
 
     if (mode === "single") {
       if (!invoiceId) {

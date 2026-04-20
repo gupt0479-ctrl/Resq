@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
+import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { generateFollowUp } from "@/lib/ai/generate-followup"
@@ -9,6 +10,9 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctxOrg = await getUserOrg()
+    if (!ctxOrg) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
     const { id } = await ctx.params
 
     // Fetch appointment with customer join
@@ -19,7 +23,7 @@ export async function POST(
       .where(
         and(
           eq(schema.appointments.id, id),
-          eq(schema.appointments.organizationId, DEMO_ORG_ID),
+          eq(schema.appointments.organizationId, ctxOrg.organizationId),
         ),
       )
       .limit(1)

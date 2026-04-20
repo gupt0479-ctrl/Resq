@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
+import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { listAppointmentsQuery } from "@/lib/queries/appointments"
@@ -10,6 +11,9 @@ import { CreateBookingBodySchema } from "@/lib/schemas/appointment"
 
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
     const { searchParams } = request.nextUrl
     const rawStatus = searchParams.get("status")
     const limit     = Number(searchParams.get("limit") ?? "50")
@@ -20,7 +24,7 @@ export async function GET(request: NextRequest) {
         ? (rawStatus as AppointmentStatus)
         : undefined
 
-    const appointments = await listAppointmentsQuery(DEMO_ORG_ID, {
+    const appointments = await listAppointmentsQuery(ctx.organizationId, {
       status,
       limit,
       offset,
@@ -34,6 +38,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getUserOrg()
+    if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
     const body = await request.json()
     const parsed = CreateBookingBodySchema.safeParse(body)
     if (!parsed.success) {
@@ -44,7 +51,7 @@ export async function POST(request: NextRequest) {
     const startsDate = new Date(starts_at)
     const endsDate = ends_at ? new Date(ends_at) : new Date(startsDate.getTime() + 2 * 60 * 60 * 1000)
 
-    const appointmentId = await createAppointment(DEMO_ORG_ID, {
+    const appointmentId = await createAppointment(ctx.organizationId, {
       customerName: customer_name,
       customerEmail: customer_email,
       customerPhone: customer_phone,

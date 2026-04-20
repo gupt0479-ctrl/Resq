@@ -1,6 +1,6 @@
 {
-  "name": "opspilot-rescue",
-  "description": "Workspace agent for OpsPilot Rescue. Start from .claude canon, keep financing scout as the hero live lane, and protect deterministic finance truth.",
+  "name": "resq",
+  "description": "Workspace agent for Resq. Start from .claude canon, keep financing scout as the hero live lane, and protect deterministic finance truth.",
   "includeMcpJson": true,
   "resources": [
     "file://.claude/README.md",
