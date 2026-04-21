@@ -98,8 +98,6 @@ async function main() {
   const today = new Date()
   const week3Date = new Date(today)
   week3Date.setDate(week3Date.getDate() + 18)
-  const week3Str = week3Date.toISOString().slice(0, 10)
-
   // We can't pass overrides via the API directly, so let's test via the
   // action execution endpoint by checking the refund exposure is in the base
   const baseW2 = base.weeklyBuckets.find(b => b.weekNumber === 2)
@@ -164,7 +162,6 @@ async function main() {
   // Execute the defer action on the week-3 vendor bill
   const deferResult = await executeAction("action-defer-obl-vendor-w3")
   if (deferResult) {
-    const newForecast = await runForecast() // Re-run to see the effect
     // Note: the override was applied in the action execution, but the base
     // config is immutable. The action endpoint returns the mutated forecast.
     // Let's check the action result directly.

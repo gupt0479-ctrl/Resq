@@ -19,7 +19,7 @@ import {
   WATCHLIST_LABELS,
 } from "@/lib/schemas/receivables-agent"
 import { search as tinyFishSearch } from "@/lib/tinyfish/client"
-import { mockCollectionsSearch, mockWatchlistSearch } from "@/lib/tinyfish/mock-data"
+import { mockCollectionsSearch } from "@/lib/tinyfish/mock-data"
 
 const anthropic = new Anthropic()
 

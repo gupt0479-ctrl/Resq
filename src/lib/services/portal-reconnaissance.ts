@@ -12,7 +12,6 @@
 import { getPortalReconMode, isDatabaseConfigured, DEMO_ORG_ID } from "@/lib/env"
 import { getMockPortalRecon, selectScenarioByInvoiceId } from "@/lib/tinyfish/portal-mock-data"
 import { runPortalLogin, TinyFishError } from "@/lib/tinyfish/client"
-import { parsePortalHtml } from "@/lib/services/portal-html-parser"
 import type { PortalReconOptions } from "@/lib/tinyfish/portal-types"
 import type {
   PortalReconnaissanceResponse,
@@ -23,7 +22,6 @@ import type {
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
 const MOCK_DELAY_MS = 80 // small delay to simulate async work in mock mode
 const LIVE_MODE_TIMEOUT_MS = 30_000 // never block collections workflow for more than 30s
 const MAX_RETRY_ATTEMPTS = 2 // max retry attempts for retryable errors
