@@ -1,79 +1,35 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle,
   ChevronDown,
   ChevronRight,
   Clock,
-  Eye,
-  EyeOff,
-  Loader2,
-  Zap,
-  Mail,
   Globe,
+  Loader2,
+  X,
+  Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RiskBadge, type RiskLevel } from "@/components/RiskBadge"
-import { InvestigationPanel } from "@/components/receivables/investigation-panel"
 import type { RescueInvoice } from "@/lib/queries/rescue"
-import { SurvivalScanPanel } from "@/components/rescue/SurvivalScanPanel"
+import type {
+  CashSummaryResponse,
+  AnalysisResponse,
+  Intervention,
+  ActionExecuteResponse,
+} from "@/lib/schemas/cash"
 
-import type { CollectionsDecision, CustomerClassification } from "@/lib/schemas/collections-decision"
-
-interface RunResult {
-  actionType: string
-  summary: string
-  detail: string | null
-  nextRecommendedStep?: string
-  decision?: CollectionsDecision
-}
-
-const CLASSIFICATION_LABELS: Record<CustomerClassification, string> = {
-  forgot:     "Forgot to pay",
-  cash_flow:  "Cash flow issue",
-  disputing:  "Disputing quality",
-  bad_actor:  "Bad actor",
-}
-
-const CLASSIFICATION_STYLES: Record<CustomerClassification, string> = {
-  forgot:    "bg-teal/10 text-teal border-teal/20",
-  cash_flow: "bg-amber/10 text-amber border-amber/20",
-  disputing: "bg-steel/10 text-steel border-steel/20",
-  bad_actor: "bg-crimson/10 text-crimson border-crimson/20",
-}
-
-const STATE_LABELS: Record<RescueInvoice["rescueState"], string> = {
-  detected:      "Risk Detected",
-  investigating: "Investigating",
-  action_taken:  "Action Taken",
-  resolved:      "Resolved",
-  escalated:     "Escalated",
-}
-
-const ACTION_LABELS: Record<string, string> = {
-  receivable_risk_detected:  "Risk Flagged",
-  customer_followup_sent:    "Follow-up Drafted",
-  financing_options_scouted: "Financing Scouted",
-  payment_plan_suggested:    "Plan Proposed",
-  rescue_case_resolved:      "Case Escalated",
-  dispute_clarification_sent: "Clarification Sent",
-}
-
-const ACTION_ICONS: Record<string, string> = {
-  receivable_risk_detected:   "🔍",
-  customer_followup_sent:     "✉️",
-  financing_options_scouted:  "💰",
-  payment_plan_suggested:     "📋",
-  rescue_case_resolved:       "⚡",
-  dispute_clarification_sent: "💬",
-}
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  })
 }
 
 function timeAgo(iso: string) {
@@ -83,438 +39,644 @@ function timeAgo(iso: string) {
   return `${Math.floor(diff / 1440)}d ago`
 }
 
-function stateFromActionType(
-  actionType: string,
-  current: RescueInvoice["rescueState"]
-): RescueInvoice["rescueState"] {
-  switch (actionType) {
-    case "receivable_risk_detected":      return "investigating"
-    case "customer_followup_sent":        return "action_taken"
-    case "financing_options_scouted":     return "action_taken"
-    case "payment_plan_suggested":        return "resolved"
-    case "rescue_case_resolved":          return "resolved"
-    default:                              return current
-  }
-}
-
 function riskLevelFromCase(item: RescueInvoice): RiskLevel {
   if (item.daysOverdue > 60 || item.rescueState === "escalated") return "Critical"
   if (item.daysOverdue > 30) return "High"
-  if (item.daysOverdue > 0)  return "Moderate"
+  if (item.daysOverdue > 0) return "Moderate"
   return "Stable"
 }
 
-function AgentTimeline({ trail, latestResult }: {
-  trail: RescueInvoice["auditTrail"]
-  latestResult?: RunResult
-}) {
-  type Entry = {
-    actionType: string
-    summary: string
-    detail: string | null
-    nextStep: string | null
-    decision?: CollectionsDecision
-    createdAt: string
-    isNew: boolean
-  }
-  const steps: Entry[] = trail.map((s) => ({
-    actionType: s.actionType,
-    summary: s.inputSummary,
-    detail: (s.outputPayload?.detail as string | null) ?? null,
-    nextStep: (s.outputPayload?.nextRecommendedStep as string | null) ?? null,
-    decision: (s.outputPayload?.decision as CollectionsDecision | undefined),
-    createdAt: s.createdAt,
-    isNew: false,
-  }))
-  if (latestResult && latestResult.actionType !== "already_resolved") {
-    steps.push({
-      actionType: latestResult.actionType,
-      summary: latestResult.summary,
-      detail: latestResult.detail,
-      nextStep: latestResult.nextRecommendedStep ?? null,
-      decision: latestResult.decision,
-      createdAt: new Date().toISOString(),
-      isNew: true,
-    })
-  }
-  if (steps.length === 0) return null
-  return (
-    <div className="mt-6">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-3">Agent Timeline</div>
-      <div className="relative">
-        <div className="absolute left-3 top-3 bottom-3 w-px bg-border" />
-        <div className="space-y-2.5 pl-8">
-          {steps.map((step, i) => (
-            <TimelineStep key={i} step={step} isLast={i === steps.length - 1} isNew={step.isNew} />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
+const CLASSIFICATION_LABELS: Record<string, string> = {
+  forgot: "Forgot to pay",
+  cash_flow: "Cash flow issue",
+  disputing: "Disputing quality",
+  bad_actor: "Bad actor",
 }
 
-function TimelineStep({ step, isLast, isNew }: {
-  step: {
-    actionType: string
-    summary: string
-    detail: string | null
-    nextStep: string | null
-    decision?: CollectionsDecision
-    createdAt: string
+const CLASSIFICATION_STYLES: Record<string, string> = {
+  forgot: "bg-teal/10 text-teal border-teal/20",
+  cash_flow: "bg-amber/10 text-amber border-amber/20",
+  disputing: "bg-steel/10 text-steel border-steel/20",
+  bad_actor: "bg-crimson/10 text-crimson border-crimson/20",
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  receivable_risk_detected: "Risk Flagged",
+  customer_followup_sent: "Follow-up Drafted",
+  financing_options_scouted: "Financing Scouted",
+  payment_plan_suggested: "Plan Proposed",
+  rescue_case_resolved: "Case Escalated",
+  dispute_clarification_sent: "Clarification Sent",
+  cash_analysis_run: "Cash Analysis",
+  action_executed: "Action Executed",
+}
+
+const ACTION_ICONS: Record<string, string> = {
+  receivable_risk_detected: "🔍",
+  customer_followup_sent: "✉️",
+  financing_options_scouted: "💰",
+  payment_plan_suggested: "📋",
+  rescue_case_resolved: "⚡",
+  dispute_clarification_sent: "💬",
+  cash_analysis_run: "📊",
+  action_executed: "✅",
+}
+
+// ─── CashMetricBoxes (Task 9.1) ───────────────────────────────────────────
+
+function CashMetricBoxes() {
+  const [summary, setSummary] = useState<CashSummaryResponse | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(true)
+  const [summaryError, setSummaryError] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/cash/summary")
+      .then((r) => r.json())
+      .then((data) => setSummary(data))
+      .catch(() => setSummaryError(true))
+      .finally(() => setSummaryLoading(false))
+  }, [])
+
+  if (summaryLoading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card-elevated p-5 animate-pulse">
+            <div className="h-3 w-24 bg-surface-muted rounded mb-3" />
+            <div className="h-7 w-32 bg-surface-muted rounded mb-2" />
+            <div className="h-3 w-20 bg-surface-muted rounded" />
+          </div>
+        ))}
+      </div>
+    )
   }
-  isLast: boolean
-  isNew: boolean
-}) {
-  const [open, setOpen] = useState(isNew && isLast)
-  const d = step.decision
+
+  if (summaryError || !summary || !summary.currentCashPosition) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {["Current Cash Position", "Cash Collected (90d)", "Breakpoint Week", "Largest Risk Driver"].map((label) => (
+          <div key={label} className="card-elevated p-5">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-steel">{label}</div>
+            <div className="font-display text-xl mt-1 text-steel/50">—</div>
+            <div className="text-[11.5px] text-steel mt-1">No data available</div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const boxes = [
+    summary.currentCashPosition,
+    summary.cashCollected,
+    summary.breakpointWeek,
+    summary.largestRiskDriver,
+  ]
 
   return (
-    <div className={cn(
-      "relative rounded-md border p-3 text-xs transition-all",
-      isNew ? "border-foreground/20 bg-foreground/5 animate-in slide-in-from-bottom-2 duration-300" : "border-border bg-surface"
-    )}>
-      <div className={cn(
-        "absolute -left-5 top-3.5 h-2 w-2 rounded-full border-2 border-background",
-        isNew ? "bg-foreground" : "bg-steel/40"
-      )} />
-      <button className="w-full text-left" onClick={() => setOpen(v => !v)}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span>{ACTION_ICONS[step.actionType] ?? "⚙️"}</span>
-            <span className={cn("font-semibold", isNew ? "text-foreground" : "")}>
-              {ACTION_LABELS[step.actionType] ?? step.actionType.replace(/_/g, " ")}
-            </span>
-            {d && (
-              <span className={cn(
-                "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
-                CLASSIFICATION_STYLES[d.classification]
-              )}>
-                {CLASSIFICATION_LABELS[d.classification]}
-              </span>
-            )}
-            {d && (
-              <span className="text-[10px] text-steel font-mono">
-                {d.confidence}% confidence
-              </span>
-            )}
-            {isNew && (
-              <span className="rounded-full bg-foreground px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-background">new</span>
-            )}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {boxes.map((box) => (
+        <div key={box.label} className="card-elevated p-5">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-steel">{box.label}</div>
+          <div className={cn(
+            "font-display text-xl mt-1",
+            box.label.includes("Breakpoint") && box.value !== "No risk" ? "text-crimson" : "",
+            box.label.includes("Risk") ? "text-amber" : "",
+          )}>
+            {box.value}
           </div>
-          <div className="flex items-center gap-1 text-steel shrink-0">
-            <span>{timeAgo(step.createdAt)}</span>
-            {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          </div>
+          {box.detail && (
+            <div className="text-[11.5px] text-steel mt-1">{box.detail}</div>
+          )}
         </div>
-        <p className="mt-1 text-steel leading-relaxed">{step.summary}</p>
-      </button>
-
-      {open && (
-        <div className="mt-2 border-t border-border pt-2 space-y-3">
-          {/* Human review banner */}
-          {d?.humanReviewFlag && (
-            <div className="flex items-start gap-2 rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-[11.5px] text-amber">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold">Flagged for human review</span>
-                {d.humanReviewReason && <span className="ml-1 text-amber/80">— {d.humanReviewReason}</span>}
-              </div>
+      ))}
+      {summary.deviation && (
+        <div className="col-span-full">
+          <div className={cn(
+            "rounded-md border px-4 py-3 text-[12.5px]",
+            summary.deviation.urgency === "critical"
+              ? "border-crimson/30 bg-crimson/5 text-crimson"
+              : "border-amber/30 bg-amber/5 text-amber",
+          )}>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span className="font-semibold">
+                {summary.deviation.urgency === "critical" ? "Critical deviation" : "Deviation detected"}
+              </span>
             </div>
-          )}
-
-          {/* ── Analyst Brief ── */}
-          {d && (
-            <div className="space-y-4 mt-1">
-
-              {/* Assessment — lead with verdict */}
-              <div>
-                <p className="text-[13px] leading-relaxed text-foreground">
-                  {d.chainOfThought}
-                </p>
-                {d.confidence != null && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="h-1.5 flex-1 rounded-full bg-stone-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${d.confidence}%`,
-                          background: d.confidence >= 85 ? "#2d9b8a" : d.confidence >= 60 ? "#f59e0b" : "#c0522a",
-                        }}
-                      />
-                    </div>
-                    <span className="text-[11px] font-medium tabular-nums" style={{
-                      color: d.confidence >= 85 ? "#2d9b8a" : d.confidence >= 60 ? "#f59e0b" : "#c0522a",
-                    }}>
-                      {d.confidence}% confidence
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Portal Reconnaissance — "what we found" */}
-              {d.portalReconnaissance && (
-                <PortalReconSection recon={d.portalReconnaissance} dataSource={d.externalSignals?.dataSource} />
-              )}
-
-              {/* Decision — explain the reasoning */}
-              <div className="rounded-lg border border-stone-100 bg-white px-4 py-3">
-                <p className="text-[13px] leading-relaxed text-foreground">
-                  {d.selectedAction === "skip" && d.chainOfThought?.toLowerCase().includes("processing")
-                    ? "We\u2019re holding off on outreach because the payment is already processing. Contacting the customer now would be premature and could damage the relationship."
-                    : d.selectedAction === "skip"
-                    ? "No outreach needed at this time. The account doesn\u2019t meet the threshold for collection action."
-                    : d.selectedAction === "reminder"
-                    ? `Sending a ${d.tone ?? "friendly"} reminder via ${d.channel ?? "email"}. The tone is calibrated to the customer\u2019s payment history and the severity of the overdue balance.`
-                    : d.selectedAction === "escalation"
-                    ? `Escalating this case. Standard reminders haven\u2019t worked, and the balance warrants direct intervention via ${d.channel ?? "email"}.`
-                    : `Taking action: ${d.selectedAction.replace(/_/g, " ")} via ${d.channel ?? "email"} with a ${d.tone ?? "professional"} tone.`}
-                </p>
-              </div>
-
-              {/* External Signals — summarize what matters */}
-              {d.externalSignals && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">External Signals</span>
-                    <span className="text-[9px] font-mono bg-stone-50 border border-stone-100 px-1.5 py-0.5 rounded text-stone-400">{d.externalSignals.dataSource}</span>
-                    {d.externalSignals.distressFlag && (
-                      <span className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded">Distress signal</span>
-                    )}
-                  </div>
-                  <p className="text-[12.5px] leading-relaxed text-foreground/80">
-                    {d.externalSignals.distressFlag
-                      ? d.externalSignals.newsSummary ?? (d.externalSignals as unknown as { summary?: string }).summary ?? "Financial distress indicators detected in public records."
-                      : d.externalSignals.newsSummary ?? (d.externalSignals as unknown as { summary?: string }).summary
-                        ? (d.externalSignals.newsSummary ?? (d.externalSignals as unknown as { summary?: string }).summary)
-                        : `Searched public records for this entity \u2014 no material financial risk signals found.`}
-                  </p>
-                  {(d.externalSignals.rawSnippets ?? []).length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {(d.externalSignals.rawSnippets ?? []).slice(0, 2).map((s, i) => (
-                        <p key={i} className="text-[11px] text-stone-400 leading-relaxed pl-3 border-l-2 border-stone-100">
-                          {s.length > 160 ? s.slice(0, 160) + "\u2026" : s}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Response Plan — decision tree, only if meaningful */}
-              {d.responsePlan && (
-                d.responsePlan.noReply !== d.responsePlan.dispute ||
-                d.responsePlan.noReply !== d.responsePlan.partialPayment
-              ) && (
-                <div className="rounded-lg border border-stone-100 bg-stone-50/50 px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 mb-2">If things don\u2019t go as planned</p>
-                  <div className="space-y-2">
-                    {([
-                      ["No reply after 48h", d.responsePlan.noReply],
-                      ["Customer pushes back", d.responsePlan.dispute],
-                      ["Partial payment received", d.responsePlan.partialPayment],
-                    ] as [string, string | undefined][])
-                      .filter(([, text]) => text && !text.toLowerCase().includes("no action needed"))
-                      .map(([label, text]) => (
-                        <div key={label}>
-                          <p className="text-[11px] font-medium text-stone-500">{label}</p>
-                          <p className="text-[12px] text-foreground/80 leading-relaxed">{text}</p>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Outreach draft */}
-          {(step.detail || d?.outreachDraft) && (
-            <div className="mt-3">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 mb-1.5">Drafted message</div>
-              <pre className="whitespace-pre-wrap font-sans leading-relaxed text-[12.5px] rounded-lg border border-stone-100 bg-white px-4 py-3 text-foreground/90">
-                {d?.outreachDraft ?? step.detail}
-              </pre>
-            </div>
-          )}
+            <p className="mt-1 text-foreground/80">{summary.deviation.summary}</p>
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-// ─── Portal Reconnaissance Card (inline, always visible after agent run) ───
+// ─── CaseList (Task 9.2 — left column) ────────────────────────────────────
 
-function PortalReconCard({ recon }: {
-  recon: NonNullable<CollectionsDecision["portalReconnaissance"]>
+function CaseList({
+  queue,
+  selectedId,
+  onSelect,
+}: {
+  queue: RescueInvoice[]
+  selectedId: string
+  onSelect: (id: string) => void
 }) {
   return (
-    <div className="mt-6 rounded-lg border border-foreground/10 bg-surface overflow-hidden animate-in slide-in-from-bottom-2 duration-300">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-muted">
-        <Globe className="h-3.5 w-3.5 text-steel" />
-        <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-steel">Portal Reconnaissance</span>
-        <span className="ml-auto font-mono text-[9px] text-steel/60">mock</span>
+    <div className="space-y-2">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-3">
+        Cases · {queue.length} total
       </div>
-      <div className="px-4 py-4 space-y-4">
-        {/* Status pills row */}
-        <div className="flex flex-wrap gap-2">
-          <span className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
-            recon.visibility ? "bg-teal/10 text-teal border-teal/20" : "bg-crimson/10 text-crimson border-crimson/20"
-          )}>
-            {recon.visibility ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-            Invoice {recon.visibility ? "visible in portal" : "NOT visible in portal"}
-          </span>
+      {queue.map((item) => {
+        const level = riskLevelFromCase(item)
+        const active = item.id === selectedId
+        return (
+          <button
+            key={item.id}
+            onClick={() => onSelect(item.id)}
+            className={cn(
+              "w-full text-left rounded-md border bg-card transition-all px-4 py-3.5",
+              active
+                ? "border-l-4 border-l-foreground border-y-border border-r-border shadow-sm"
+                : "border-border hover:bg-surface-muted",
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-[13.5px] truncate">{item.customerName}</div>
+                <div className="text-[11.5px] text-steel mt-0.5 font-mono">
+                  #{item.invoiceNumber}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="font-display text-base leading-none">{fmt(item.amount)}</div>
+                {item.daysOverdue > 0 && (
+                  <div className="text-[11px] text-crimson mt-1">{item.daysOverdue}d overdue</div>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <RiskBadge level={level} />
+              {item.lastActionAt && (
+                <span className="text-[11px] text-steel">{timeAgo(item.lastActionAt)}</span>
+              )}
+            </div>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
-          <span className={cn(
-            "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize",
-            recon.paymentStatus === "paid" || recon.paymentStatus === "processing"
-              ? "bg-teal/10 text-teal border-teal/20"
-              : recon.paymentStatus === "unpaid" || recon.paymentStatus === "failed"
-              ? "bg-crimson/10 text-crimson border-crimson/20"
-              : "bg-steel/10 text-steel border-steel/20"
-          )}>
-            {recon.paymentStatus === "processing" ? "⏳ " : recon.paymentStatus === "paid" ? "✓ " : ""}
-            {recon.paymentStatus}
-          </span>
+// ─── RecentAuditTrail (Task 9.2 — compact trail in MainArea) ──────────────
 
-          <span className={cn(
-            "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize",
-            recon.engagementLevel === "high" ? "bg-teal/10 text-teal border-teal/20"
-            : recon.engagementLevel === "medium" ? "bg-amber/10 text-amber border-amber/20"
-            : "bg-steel/10 text-steel border-steel/20"
-          )}>
-            {recon.engagementLevel} engagement
-          </span>
+function RecentAuditTrail({ trail }: { trail: RescueInvoice["auditTrail"] }) {
+  const recent = trail.slice(-3)
+  if (recent.length === 0) return null
 
-          {recon.hasRecentActivity && (
-            <span className="inline-flex items-center rounded-full border border-teal/20 bg-teal/10 px-2.5 py-1 text-[11px] font-semibold text-teal">
-              Active recently
+  return (
+    <div className="mt-5">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-2">
+        Recent agent actions
+      </div>
+      <div className="space-y-1.5">
+        {recent.map((entry, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[12px]"
+          >
+            <span>{ACTION_ICONS[entry.actionType] ?? "⚙️"}</span>
+            <span className="font-medium">
+              {ACTION_LABELS[entry.actionType] ?? entry.actionType.replace(/_/g, " ")}
             </span>
-          )}
-        </div>
-
-        {/* Key signals */}
-        <div className="grid grid-cols-2 gap-3 text-[12px]">
-          {recon.shouldSkipCollection && (
-            <div className="col-span-2 rounded-md bg-teal/10 border border-teal/20 px-3 py-2.5 text-teal font-medium">
-              Payment already processing — collection skipped automatically
-            </div>
-          )}
-          {recon.messageSent && (
-            <div className="col-span-2 rounded-md bg-teal/10 border border-teal/20 px-3 py-2.5 text-teal font-medium">
-              ✉ Message sent via customer portal
-            </div>
-          )}
-          <div className="rounded-md bg-surface-muted px-3 py-2">
-            <div className="text-[10px] text-steel mb-0.5">Confidence</div>
-            <div className="font-semibold">{recon.confidence}%</div>
+            <span className="ml-auto text-steel text-[11px]">{timeAgo(entry.createdAt)}</span>
           </div>
-          <div className="rounded-md bg-surface-muted px-3 py-2">
-            <div className="text-[10px] text-steel mb-0.5">Portal activity</div>
-            <div className="font-semibold">{recon.hasRecentActivity ? "Within 7 days" : "None recent"}</div>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   )
 }
 
-// ─── Portal Reconnaissance Section ─────────────────────────────────────────
+// ─── MainArea (Task 9.2 — right column) ───────────────────────────────────
 
-const VISIBILITY_STYLES: Record<string, string> = {
-  true:  "bg-teal/10 text-teal border-teal/20",
-  false: "bg-crimson/10 text-crimson border-crimson/20",
-}
-
-const PAYMENT_STYLES: Record<string, string> = {
-  paid:       "bg-teal/10 text-teal border-teal/20",
-  processing: "bg-amber/10 text-amber border-amber/20",
-  unpaid:     "bg-crimson/10 text-crimson border-crimson/20",
-  failed:     "bg-crimson/10 text-crimson border-crimson/20",
-  unknown:    "bg-steel/10 text-steel border-steel/20",
-}
-
-const ENGAGEMENT_STYLES: Record<string, string> = {
-  high:   "bg-teal/10 text-teal border-teal/20",
-  medium: "bg-amber/10 text-amber border-amber/20",
-  low:    "bg-steel/10 text-steel border-steel/20",
-  none:   "bg-steel/10 text-steel border-steel/20",
-}
-
-const MODE_STYLES: Record<string, string> = {
-  live:          "bg-teal/10 text-teal border-teal/20",
-  mock:          "bg-steel/10 text-steel border-steel/20",
-  misconfigured: "bg-amber/10 text-amber border-amber/20",
-}
-
-function PortalReconSection({ recon, dataSource }: {
-  recon: NonNullable<CollectionsDecision["portalReconnaissance"]>
-  dataSource?: "live" | "mock"
+function MainArea({
+  selected,
+  analysisLoading,
+  analysisError,
+  onRunAnalysis,
+}: {
+  selected: RescueInvoice
+  analysisLoading: boolean
+  analysisError: string | null
+  onRunAnalysis: () => void
 }) {
-  const mode = dataSource ?? "mock"
+  const level = riskLevelFromCase(selected)
 
   return (
-    <div>
-      <div className="text-[9px] uppercase tracking-[0.18em] text-steel mb-1.5 flex items-center gap-1.5">
-        <Globe className="h-3 w-3" />
-        Portal reconnaissance
-        <span className={cn(
-          "rounded-full border px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide",
-          MODE_STYLES[mode] ?? MODE_STYLES.mock
-        )}>
-          {mode}
-        </span>
+    <div className="card-elevated p-6 lg:p-8">
+      {/* ClientHeader */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-steel">Selected client</div>
+          <h2 className="font-display text-2xl mt-1">{selected.customerName}</h2>
+          <div className="flex items-center gap-3 mt-2">
+            <span className="font-display text-lg">
+              {fmt(selected.amount)}
+            </span>
+            {selected.daysOverdue > 0 && (
+              <span className={cn(
+                "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                selected.daysOverdue > 30
+                  ? "border-crimson/20 bg-crimson/10 text-crimson"
+                  : "border-amber/20 bg-amber/10 text-amber",
+              )}>
+                {selected.daysOverdue}d overdue
+              </span>
+            )}
+          </div>
+        </div>
+        <RiskBadge level={level} />
       </div>
-      <div className="rounded-md bg-surface-muted px-3 py-2.5 space-y-2">
-        {/* Badges row */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {/* Visibility */}
-          <span className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
-            VISIBILITY_STYLES[String(recon.visibility)]
-          )}>
-            {recon.visibility
-              ? <><Eye className="h-2.5 w-2.5" /> Visible</>
-              : <><EyeOff className="h-2.5 w-2.5" /> Not visible</>}
-          </span>
 
-          {/* Payment status */}
-          <span className={cn(
-            "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
-            PAYMENT_STYLES[recon.paymentStatus] ?? PAYMENT_STYLES.unknown
-          )}>
-            {recon.paymentStatus}
-          </span>
+      {/* Due date context */}
+      {selected.dueDate && (
+        <div className="mt-4 flex items-center gap-2 text-[12.5px] text-steel">
+          <Clock className="h-3.5 w-3.5 shrink-0" />
+          Due{" "}
+          {new Date(selected.dueDate).toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })}
+        </div>
+      )}
 
-          {/* Engagement level */}
-          <span className={cn(
-            "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
-            ENGAGEMENT_STYLES[recon.engagementLevel] ?? ENGAGEMENT_STYLES.none
-          )}>
-            {recon.engagementLevel} engagement
-          </span>
+      {/* RecentAuditTrail */}
+      <RecentAuditTrail trail={selected.auditTrail} />
 
-          {/* Skip collection flag */}
-          {recon.shouldSkipCollection && (
-            <span className="rounded-full border border-teal/20 bg-teal/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-teal">
-              skip collection
-            </span>
+      {/* RunAnalysisButton — single primary CTA */}
+      <div className="mt-6">
+        <button
+          onClick={onRunAnalysis}
+          disabled={analysisLoading}
+          className="inline-flex items-center gap-2 rounded-md bg-foreground px-5 py-2.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {analysisLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Analyzing…
+            </>
+          ) : (
+            <>
+              <Zap className="h-4 w-4" /> Run AI Analysis
+            </>
           )}
+        </button>
+      </div>
 
-          {/* Message sent */}
-          {recon.messageSent && (
-            <span className="rounded-full border border-teal/20 bg-teal/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-teal">
-              ✉ portal msg sent
+      {selected.auditTrail.length === 0 && !analysisError && (
+        <div className="mt-6 rounded-md border border-border bg-surface p-4 text-[12.5px] text-steel">
+          No agent actions yet. Click{" "}
+          <strong className="text-foreground">Run AI Analysis</strong> to begin.
+        </div>
+      )}
+
+      {analysisError && (
+        <div className="mt-4 flex items-start gap-2 rounded-md border border-crimson/30 bg-crimson/5 px-4 py-3 text-[12.5px] text-crimson">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{analysisError}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── AnalysisOverlay (Task 9.3) ───────────────────────────────────────────
+
+function AnalysisOverlay({
+  result,
+  onClose,
+  onExecuteAction,
+  onMarkReviewed,
+  executing,
+  executeResult,
+}: {
+  result: AnalysisResponse
+  onClose: () => void
+  onExecuteAction: (intervention: Intervention) => void
+  onMarkReviewed: () => void
+  executing: boolean
+  executeResult: ActionExecuteResponse | null
+}) {
+  const [snippetsOpen, setSnippetsOpen] = useState(false)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative w-full max-w-5xl max-h-[90vh] mx-4 rounded-lg border border-border bg-card shadow-xl flex flex-col overflow-hidden">
+        {/* OverlayHeader */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-surface-muted shrink-0">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-steel">AI Analysis</div>
+            <h3 className="font-display text-lg mt-0.5">{result.clientName}</h3>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={cn(
+              "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              result.mode === "live"
+                ? "bg-teal/10 text-teal border-teal/20"
+                : "bg-steel/10 text-steel border-steel/20",
+            )}>
+              {result.mode}
             </span>
-          )}
+            <button
+              onClick={onClose}
+              className="rounded-md p-1.5 hover:bg-surface transition-colors"
+            >
+              <X className="h-4 w-4 text-steel" />
+            </button>
+          </div>
         </div>
 
-        {/* Confidence */}
-        {recon.confidence > 0 && (
-          <p className="text-[11px] text-steel">
-            <span className="font-medium text-foreground/70">Confidence:</span> {recon.confidence}%
-            {recon.hasRecentActivity && <span className="ml-2">· Recent portal activity</span>}
-          </p>
-        )}
+        {/* OverlayBody */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="grid lg:grid-cols-12 gap-0 divide-x divide-border">
+            {/* OverlayLeftRail */}
+            <div className="lg:col-span-4 p-5 space-y-6 overflow-y-auto">
+              {/* PaymentBehaviorSection */}
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-3 flex items-center gap-1.5">
+                  <Clock className="h-3 w-3" />
+                  Payment behavior
+                </div>
+                <div className="space-y-2">
+                  <div className="rounded-md border border-border bg-surface p-3">
+                    <div className="text-[10px] text-steel">Avg days to pay</div>
+                    <div className="font-display text-lg mt-0.5">
+                      {result.collectionLag.avgDaysToCollect}d
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-surface p-3">
+                    <div className="text-[10px] text-steel">Collection tier</div>
+                    <div className={cn(
+                      "mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                      result.collectionLag.tier === "on_time"
+                        ? "bg-teal/10 text-teal border-teal/20"
+                        : result.collectionLag.tier === "slightly_late"
+                        ? "bg-amber/10 text-amber border-amber/20"
+                        : "bg-crimson/10 text-crimson border-crimson/20",
+                    )}>
+                      {result.collectionLag.tier.replace(/_/g, " ")}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-surface p-3">
+                    <div className="text-[10px] text-steel">On-time rate</div>
+                    <div className="font-display text-lg mt-0.5">
+                      {result.collectionLag.onTimePercent}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ExternalResearchSection */}
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-3 flex items-center gap-1.5">
+                  <Globe className="h-3 w-3" />
+                  External research
+                  <span className={cn(
+                    "rounded-full border px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide",
+                    result.externalFindings.dataSource === "live"
+                      ? "bg-teal/10 text-teal border-teal/20"
+                      : "bg-steel/10 text-steel border-steel/20",
+                  )}>
+                    {result.externalFindings.dataSource}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[12px] leading-relaxed text-foreground/80">
+                    {result.externalFindings.newsSummary}
+                  </p>
+
+                  {result.externalFindings.distressFlag && (
+                    <div className="flex items-center gap-2 rounded-md border border-crimson/20 bg-crimson/5 px-3 py-2 text-[11px] text-crimson font-medium">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      Financial distress signals detected
+                    </div>
+                  )}
+
+                  {result.externalFindings.rawSnippets.length > 0 && (
+                    <div>
+                      <button
+                        onClick={() => setSnippetsOpen((v) => !v)}
+                        className="flex items-center gap-1 text-[11px] text-steel hover:text-foreground transition-colors"
+                      >
+                        {snippetsOpen ? (
+                          <ChevronDown className="h-3 w-3" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3" />
+                        )}
+                        {result.externalFindings.rawSnippets.length} source snippets
+                      </button>
+                      {snippetsOpen && (
+                        <div className="mt-2 space-y-1.5">
+                          {result.externalFindings.rawSnippets.map((s, i) => (
+                            <div
+                              key={i}
+                              className="rounded bg-surface-muted px-3 py-2 text-[11px] text-steel leading-relaxed"
+                            >
+                              <span className="font-mono text-[9px] text-steel/50 mr-1.5">
+                                [{i + 1}]
+                              </span>
+                              {s}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* OverlayCenterPanel */}
+            <div className="lg:col-span-8 p-5 space-y-6">
+              {/* ClientSummaryBoxes — 2x2 grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-md border border-border bg-surface p-4">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-steel">
+                    Total outstanding
+                  </div>
+                  <div className="font-display text-xl mt-1 text-amber">
+                    {fmt(result.clientSummary.totalOutstanding)}
+                  </div>
+                </div>
+                <div className="rounded-md border border-border bg-surface p-4">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-steel">
+                    Avg days to pay
+                  </div>
+                  <div className="font-display text-xl mt-1">
+                    {result.clientSummary.avgDaysToPay}d
+                  </div>
+                </div>
+                <div className="rounded-md border border-border bg-surface p-4">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-steel">
+                    Payment reliability
+                  </div>
+                  <div className={cn(
+                    "font-display text-xl mt-1",
+                    result.clientSummary.paymentReliabilityPercent >= 80
+                      ? "text-teal"
+                      : result.clientSummary.paymentReliabilityPercent >= 50
+                      ? "text-amber"
+                      : "text-crimson",
+                  )}>
+                    {result.clientSummary.paymentReliabilityPercent}%
+                  </div>
+                </div>
+                <div className="rounded-md border border-border bg-surface p-4">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-steel">
+                    Risk classification
+                  </div>
+                  <div className="mt-1">
+                    <span className={cn(
+                      "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                      CLASSIFICATION_STYLES[result.clientSummary.riskClassification] ??
+                        "bg-steel/10 text-steel border-steel/20",
+                    )}>
+                      {CLASSIFICATION_LABELS[result.clientSummary.riskClassification] ??
+                        result.clientSummary.riskClassification}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* AiSummaryText */}
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-2">
+                  AI summary
+                </div>
+                <div className="rounded-md border border-border bg-surface p-4 text-[13px] leading-relaxed text-foreground/90">
+                  {result.aiSummary}
+                </div>
+              </div>
+
+              {/* InterventionList — read-only ranked actions */}
+              {result.interventions.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-steel mb-2">
+                    Ranked interventions
+                  </div>
+                  <div className="space-y-2">
+                    {result.interventions.map((intervention, i) => (
+                      <div
+                        key={intervention.id}
+                        className={cn(
+                          "rounded-md border bg-surface p-3 text-[12px]",
+                          i === 0 ? "border-foreground/20" : "border-border",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              {i === 0 && (
+                                <span className="rounded-full bg-foreground px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-background">
+                                  recommended
+                                </span>
+                              )}
+                              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-steel capitalize">
+                                {intervention.category.replace(/_/g, " ")}
+                              </span>
+                              <span className={cn(
+                                "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase",
+                                intervention.riskLevel === "low"
+                                  ? "bg-teal/10 text-teal border-teal/20"
+                                  : intervention.riskLevel === "medium"
+                                  ? "bg-amber/10 text-amber border-amber/20"
+                                  : "bg-crimson/10 text-crimson border-crimson/20",
+                              )}>
+                                {intervention.riskLevel}
+                              </span>
+                            </div>
+                            <p className="mt-1.5 text-foreground/80">{intervention.description}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="font-display text-sm text-teal">
+                              +{fmt(intervention.cashImpactEstimate)}
+                            </div>
+                            <div className="text-[10px] text-steel mt-0.5">
+                              {intervention.speedDays}d · {Math.round(intervention.confidenceScore * 100)}%
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Warning banner */}
+              {result.warning && (
+                <div className="rounded-md border border-amber/30 bg-amber/5 px-4 py-2.5 text-[12px] text-amber">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {result.warning}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* OverlayFooter */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-surface-muted shrink-0">
+          <div className="text-[11px] text-steel">
+            Generated {new Date(result.generatedAt).toLocaleString()}
+          </div>
+          <div className="flex items-center gap-3">
+            {executeResult ? (
+              <div className="flex items-center gap-2 text-[12.5px] text-teal font-medium">
+                <CheckCircle className="h-4 w-4" />
+                {executeResult.status === "executed"
+                  ? "Action executed"
+                  : executeResult.status === "requires_manual"
+                  ? "Requires manual action"
+                  : "Action failed"}
+                {executeResult.guidanceText && (
+                  <span className="text-steel font-normal ml-1">— {executeResult.guidanceText}</span>
+                )}
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={onMarkReviewed}
+                  className="rounded-md border border-border px-4 py-2 text-[12.5px] font-semibold transition-colors hover:bg-surface"
+                >
+                  Mark Reviewed
+                </button>
+                {result.recommendedAction && (
+                  <button
+                    onClick={() => onExecuteAction(result.recommendedAction!)}
+                    disabled={executing || !result.recommendedAction.executable}
+                    className="inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-[12.5px] font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    {executing ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Executing…
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-3.5 w-3.5" /> Execute Recommended Action
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -522,372 +684,138 @@ function PortalReconSection({ recon, dataSource }: {
 
 // ─── Main Component ────────────────────────────────────────────────────────
 
-type Filter = "all" | "collections" | "high"
-
 export function RescueClient({ initialQueue }: { initialQueue: RescueInvoice[] }) {
-  const [queue, setQueue]           = useState(initialQueue)
+  const queue = initialQueue
   const [selectedId, setSelectedId] = useState<string>(initialQueue[0]?.id ?? "")
-  const [filter, setFilter]         = useState<Filter>("all")
-  const [running, setRunning]       = useState<string | null>(null)
-  const [results, setResults]       = useState<Record<string, RunResult>>({})
-  const [reminderLoading, setReminderLoading] = useState<string | null>(null)
-  const [reminderDone, setReminderDone]       = useState<Record<string, { hostedUrl?: string; emailSent?: boolean; mode?: string }>>({})
-  const [reminderError, setReminderError]     = useState<Record<string, string>>({})
-  const [executeLoading, setExecuteLoading]   = useState<string | null>(null)
-  const [executeDone, setExecuteDone]         = useState<Record<string, { channel: string; tone: string; mode: string }>>({})
-  const [executeError, setExecuteError]       = useState<Record<string, string>>({})
-  const router = useRouter()
 
-  const filtered = queue.filter(item => {
-    if (filter === "collections") return item.daysOverdue > 0
-    if (filter === "high")        return item.daysOverdue > 30
-    return true
-  })
+  // Analysis overlay state
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
+  const [showOverlay, setShowOverlay] = useState(false)
 
-  const selected = filtered.find(i => i.id === selectedId) ?? filtered[0] ?? null
+  // Action execution state
+  const [executing, setExecuting] = useState(false)
+  const [executeResult, setExecuteResult] = useState<ActionExecuteResponse | null>(null)
 
-  const totalAtRisk  = queue.reduce((s, i) => s + i.amount, 0)
-  const overdueCount = queue.filter(i => i.daysOverdue > 0).length
-  const activeCount  = queue.filter(i => i.rescueState === "investigating" || i.rescueState === "action_taken").length
+  const selected = queue.find((i) => i.id === selectedId) ?? queue[0] ?? null
 
-  async function sendReminder(invoiceId: string) {
-    setReminderLoading(invoiceId)
-    setReminderError(prev => { const n = { ...prev }; delete n[invoiceId]; return n })
+  async function runAnalysis() {
+    if (!selected) return
+    setAnalysisLoading(true)
+    setAnalysisResult(null)
+    setExecuteResult(null)
+    setAnalysisError(null)
     try {
-      const res  = await fetch("/api/receivables/send-reminder", {
+      const res = await fetch("/api/cash/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:   JSON.stringify({ invoiceId }),
-      })
-      const json = await res.json() as { ok: boolean; hostedUrl?: string; emailSent?: boolean; mode?: string; error?: string }
-      if (!json.ok) throw new Error(json.error ?? "Failed")
-      setReminderDone(prev => ({ ...prev, [invoiceId]: { hostedUrl: json.hostedUrl, emailSent: json.emailSent, mode: json.mode } }))
-    } catch (e) {
-      setReminderError(prev => ({ ...prev, [invoiceId]: e instanceof Error ? e.message : "Error" }))
-    } finally {
-      setReminderLoading(null)
-    }
-  }
-
-  async function executeAgentDecision(invoiceId: string, decision: CollectionsDecision, customerEmail?: string) {
-    setExecuteLoading(invoiceId)
-    setExecuteError(prev => { const n = { ...prev }; delete n[invoiceId]; return n })
-    try {
-      const res  = await fetch("/api/receivables/send-reminder", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          invoiceId,
-          channel:       decision.channel,
-          tone:          decision.tone,
-          outreachDraft: decision.outreachDraft,
-          customerEmail,
+        body: JSON.stringify({
+          organizationId: undefined, // server defaults to DEMO_ORG_ID
+          clientId: selected.customerId,
         }),
       })
-      const json = await res.json() as { ok: boolean; channel?: string; tone?: string; mode?: string; error?: string }
-      if (!json.ok) throw new Error(json.error ?? "Failed")
-      setExecuteDone(prev => ({ ...prev, [invoiceId]: { channel: json.channel ?? decision.channel, tone: json.tone ?? decision.tone, mode: json.mode ?? "mock" } }))
-      router.refresh()
-    } catch (e) {
-      setExecuteError(prev => ({ ...prev, [invoiceId]: e instanceof Error ? e.message : "Error" }))
-    } finally {
-      setExecuteLoading(null)
-    }
-  }
-
-  async function runAgent(invoiceId: string) {
-    setRunning(invoiceId)
-    try {
-      const res  = await fetch(`/api/rescue/${invoiceId}/run`, { method: "POST" })
-      const data: RunResult = await res.json()
-      setResults(prev => ({ ...prev, [invoiceId]: data }))
-      router.refresh()
-      setQueue(prev => prev.map(item => {
-        if (item.id !== invoiceId) return item
-        return {
-          ...item,
-          rescueState:    stateFromActionType(data.actionType, item.rescueState),
-          lastActionType: data.actionType,
-          lastActionAt:   new Date().toISOString(),
-        }
-      }))
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setAnalysisError(data.error ?? data.detail ?? "Analysis failed. Please try again.")
+        return
+      }
+      setAnalysisResult(data as AnalysisResponse)
+      setShowOverlay(true)
     } catch {
-      setResults(prev => ({
-        ...prev,
-        [invoiceId]: { actionType: "error", summary: "Failed to run agent. Try again.", detail: "", nextRecommendedStep: undefined },
-      }))
+      setAnalysisError("Network error. Please try again.")
     } finally {
-      setRunning(null)
+      setAnalysisLoading(false)
     }
   }
 
-  const FILTERS: { key: Filter; label: string }[] = [
-    { key: "all",         label: "All" },
-    { key: "collections", label: "Collections" },
-    { key: "high",        label: "High urgency" },
-  ]
+  async function executeAction(intervention: Intervention) {
+    setExecuting(true)
+    try {
+      const res = await fetch(`/api/cash/actions/${intervention.id}/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: intervention.category,
+          description: intervention.description,
+          executable: intervention.executable,
+          clientName: analysisResult?.clientName,
+        }),
+      })
+      const data: ActionExecuteResponse = await res.json()
+      setExecuteResult(data)
+    } catch {
+      // Silently fail
+    } finally {
+      setExecuting(false)
+    }
+  }
+
+  function markReviewed() {
+    setShowOverlay(false)
+    setAnalysisResult(null)
+    setExecuteResult(null)
+  }
 
   return (
     <div className="p-8 lg:p-10 max-w-[1280px] mx-auto">
       {/* Page header */}
       <div className="mb-10">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-steel">Collections · recovery</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-steel">
+          Cash control tower
+        </div>
         <h1 className="font-display text-2xl lg:text-3xl mt-1">Rescue Queue</h1>
       </div>
 
-      {/* Summary KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="card-elevated p-5">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-steel">At-risk receivables</div>
-          <div className="font-display text-2xl mt-1 text-amber">{fmt(totalAtRisk)}</div>
-          <div className="text-[11.5px] text-steel mt-1">Needs recovery action</div>
-        </div>
-        <div className="card-elevated p-5">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-steel">Overdue invoices</div>
-          <div className="font-display text-2xl mt-1">{overdueCount}</div>
-          <div className="text-[11.5px] text-steel mt-1">Past due date</div>
-        </div>
-        <div className="card-elevated p-5">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-steel">Active cases</div>
-          <div className="font-display text-2xl mt-1">{activeCount}</div>
-          <div className="text-[11.5px] text-steel mt-1">In recovery workflow</div>
-        </div>
-      </div>
-
-      {/* Survival scan — async progress UX */}
-      <div className="mb-8">
-        <SurvivalScanPanel />
-      </div>
+      {/* CashMetricBoxes — top row (Task 9.1) */}
+      <CashMetricBoxes />
 
       {queue.length === 0 ? (
         <div className="card-elevated p-12 flex flex-col items-center gap-3 text-center">
           <CheckCircle className="h-8 w-8 text-teal" />
           <p className="font-medium">No at-risk receivables</p>
-          <p className="text-[12.5px] text-steel">All invoices are current — check back later.</p>
+          <p className="text-[12.5px] text-steel">
+            All invoices are current — check back later.
+          </p>
         </div>
       ) : (
         <div className="grid lg:grid-cols-12 gap-6">
-          {/* Left: case list */}
+          {/* Left: CaseList (Task 9.2) */}
           <div className="lg:col-span-5">
-            {/* Filter tabs */}
-            <div className="flex gap-1 mb-3">
-              {FILTERS.map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => { setFilter(f.key); const first = queue.filter(i => f.key === "all" ? true : f.key === "collections" ? i.daysOverdue > 0 : i.daysOverdue > 30)[0]; if (first) setSelectedId(first.id) }}
-                  className={cn(
-                    "px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors",
-                    filter === f.key
-                      ? "bg-foreground text-background"
-                      : "text-steel hover:text-foreground hover:bg-surface-muted"
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="space-y-2">
-              {filtered.map((item, idx) => {
-                const level  = riskLevelFromCase(item)
-                const active = item.id === selectedId
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setSelectedId(item.id)}
-                    className={cn(
-                      "w-full text-left rounded-md border bg-card transition-all px-4 py-3.5",
-                      active
-                        ? "border-l-4 border-l-foreground border-y-border border-r-border shadow-sm"
-                        : "border-border hover:bg-surface-muted"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          {idx === 0 && filter === "all" && (
-                            <AlertTriangle className="h-3.5 w-3.5 text-amber shrink-0" />
-                          )}
-                          <div className="font-medium text-[13.5px] truncate">{item.customerName}</div>
-                        </div>
-                        <div className="text-[11.5px] text-steel mt-0.5 font-mono">#{item.invoiceNumber}</div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="font-display text-base leading-none">{fmt(item.amount)}</div>
-                        {item.daysOverdue > 0 && (
-                          <div className="text-[11px] text-crimson mt-1">{item.daysOverdue}d overdue</div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <RiskBadge level={level} />
-                      <span className="text-[11px] text-steel capitalize">{STATE_LABELS[item.rescueState]}</span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
+            <CaseList
+              queue={queue}
+              selectedId={selected?.id ?? ""}
+              onSelect={setSelectedId}
+            />
           </div>
 
-          {/* Right: detail panel */}
-          {selected && (() => {
-            const isRunning = running === selected.id
-            const result    = results[selected.id]
-            const level     = riskLevelFromCase(selected)
-            return (
-              <div className="lg:col-span-7">
-                <div className="card-elevated p-6 lg:p-8">
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-steel">Recovery case</div>
-                      <h2 className="font-display text-2xl mt-1">{selected.customerName}</h2>
-                      <div className="font-mono text-[12px] text-steel mt-1">#{selected.invoiceNumber}</div>
-                    </div>
-                    <RiskBadge level={level} />
-                  </div>
-
-                  {/* Metrics */}
-                  <div className="grid grid-cols-3 gap-3 mt-6">
-                    <div className="rounded-md border border-border bg-surface p-4">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-steel">Balance</div>
-                      <div className={cn("font-display text-xl mt-1", selected.daysOverdue > 0 ? "text-amber" : "")}>
-                        {fmt(selected.amount)}
-                      </div>
-                    </div>
-                    <div className="rounded-md border border-border bg-surface p-4">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-steel">Days overdue</div>
-                      <div className={cn("font-display text-xl mt-1", selected.daysOverdue > 0 ? "text-crimson" : "")}>
-                        {selected.daysOverdue > 0 ? `${selected.daysOverdue}d` : "—"}
-                      </div>
-                    </div>
-                    <div className="rounded-md border border-border bg-surface p-4">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-steel">State</div>
-                      <div className="font-display text-xl mt-1 capitalize text-[15px]">
-                        {STATE_LABELS[selected.rescueState]}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Due date context */}
-                  {selected.dueDate && (
-                    <div className="mt-4 flex items-center gap-2 text-[12.5px] text-steel">
-                      <Clock className="h-3.5 w-3.5 shrink-0" />
-                      Due {new Date(selected.dueDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                      {selected.lastActionAt && (
-                        <span className="ml-auto">Last action {timeAgo(selected.lastActionAt)}</span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="mt-6 flex flex-wrap items-center gap-3">
-                      <button
-                        onClick={() => runAgent(selected.id)}
-                        disabled={isRunning || running !== null}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-[12.5px] font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-                      >
-                        {isRunning
-                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running…</>
-                          : <><Zap className="h-3.5 w-3.5" /> Run Agent</>}
-                      </button>
-
-                    <InvestigationPanel
-                      invoiceId={selected.id}
-                      invoiceNumber={selected.invoiceNumber}
-                      customerName={selected.customerName}
-                      balance={selected.amount}
-                      daysOverdue={selected.daysOverdue}
-                    />
-
-                    {/* Send Reminder */}
-                    {reminderDone[selected.id] ? (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[12px] text-teal font-medium">
-                          {reminderDone[selected.id].emailSent ? "✓ Reminder emailed" : "✓ Invoice created"}
-                          {reminderDone[selected.id].mode && reminderDone[selected.id].mode !== "live" && (
-                            <span className="ml-1.5 text-[10px] text-steel uppercase">{reminderDone[selected.id].mode}</span>
-                          )}
-                        </span>
-                        {reminderDone[selected.id].hostedUrl && (
-                          <a href={reminderDone[selected.id].hostedUrl} target="_blank" rel="noreferrer" className="text-[11.5px] text-steel underline hover:text-foreground">
-                            View invoice →
-                          </a>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-1">
-                        <button
-                          onClick={() => sendReminder(selected.id)}
-                          disabled={reminderLoading === selected.id}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-[12.5px] font-semibold transition-colors hover:bg-surface-muted disabled:opacity-50"
-                        >
-                          {reminderLoading === selected.id
-                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending…</>
-                            : <><Mail className="h-3.5 w-3.5" /> Send Reminder</>}
-                        </button>
-                        {reminderError[selected.id] && (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[11.5px] text-crimson font-medium">
-                              {reminderError[selected.id].includes("frequency") && "⏱ "}
-                              {reminderError[selected.id].includes("Time restriction") && "🕐 "}
-                              {reminderError[selected.id].includes("do-not-contact") && "🚫 "}
-                              {reminderError[selected.id].includes("requires approval") && "⚠️ "}
-                              {reminderError[selected.id]}
-                            </span>
-                            {reminderError[selected.id].includes("requires approval") && (
-                              <span className="text-[11px] text-steel">Contact your manager to approve this action</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Portal Reconnaissance Card — shown inline after agent runs */}
-                  {result?.decision?.portalReconnaissance && (
-                    <PortalReconCard recon={result.decision.portalReconnaissance} />
-                  )}
-
-                  {/* Execute Agent Recommendation */}
-                  {result?.decision && !result.decision.portalReconnaissance?.shouldSkipCollection && (
-                    <div className="mt-4">
-                      {executeDone[selected.id] ? (
-                        <div className="flex items-center gap-2 rounded-md border border-teal/20 bg-teal/10 px-4 py-2.5 text-[12.5px] text-teal font-medium">
-                          <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-                          Sent via {executeDone[selected.id].channel} · {executeDone[selected.id].tone} tone
-                          <span className="ml-auto font-mono text-[10px] opacity-70">{executeDone[selected.id].mode}</span>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => executeAgentDecision(selected.id, result.decision!, selected.customerEmail)}
-                          disabled={executeLoading === selected.id}
-                          className="inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-[12.5px] font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-                        >
-                          {executeLoading === selected.id
-                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending…</>
-                            : <><Mail className="h-3.5 w-3.5" /> Send {result.decision.tone} {result.decision.channel === "email" || result.decision.channel === "formal_notice" ? "email" : result.decision.channel}</>}
-                        </button>
-                      )}
-                      {executeError[selected.id] && (
-                        <p className="mt-1.5 text-[11.5px] text-crimson">{executeError[selected.id]}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Timeline */}
-                  <AgentTimeline trail={selected.auditTrail} latestResult={result} />
-
-                  {selected.auditTrail.length === 0 && !result && (
-                    <div className="mt-6 rounded-md border border-border bg-surface p-4 text-[12.5px] text-steel">
-                      No agent actions yet. Click <strong className="text-foreground">Run Agent</strong> to begin automated recovery.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })()}
+          {/* Right: MainArea (Task 9.2) */}
+          {selected && (
+            <div className="lg:col-span-7">
+              <MainArea
+                selected={selected}
+                analysisLoading={analysisLoading}
+                analysisError={analysisError}
+                onRunAnalysis={runAnalysis}
+              />
+            </div>
+          )}
         </div>
+      )}
+
+      {/* AnalysisOverlay (Task 9.3) */}
+      {showOverlay && analysisResult && (
+        <AnalysisOverlay
+          result={analysisResult}
+          onClose={() => {
+            setShowOverlay(false)
+            setExecuteResult(null)
+          }}
+          onExecuteAction={executeAction}
+          onMarkReviewed={markReviewed}
+          executing={executing}
+          executeResult={executeResult}
+        />
       )}
     </div>
   )

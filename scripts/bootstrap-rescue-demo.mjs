@@ -69,7 +69,7 @@ async function probe(path, init) {
 
 async function main() {
   const args = new Set(process.argv.slice(2))
-  console.log("OpsPilot rescue-demo bootstrap")
+  console.log("Resq rescue-demo bootstrap")
   report(REQUIRED_VARS, "Required")
   report(OPTIONAL_VARS, "Optional")
 

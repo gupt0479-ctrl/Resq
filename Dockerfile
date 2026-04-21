@@ -23,7 +23,7 @@ COPY . .
 #   docker build \
 #     --build-arg NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co \
 #     --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi... \
-#     -t opspilot .
+#     -t resq .
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}

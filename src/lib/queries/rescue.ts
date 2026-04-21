@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export interface RescueInvoice {
   id: string
   invoiceNumber: string
+  customerId: string
   customerName: string
   customerEmail?: string
   amount: number
@@ -47,7 +48,7 @@ export async function getRescueQueue(
   const { data: invoices, error: invErr } = await client
     .from("invoices")
     .select(`
-      id, invoice_number, total_amount, due_at, status,
+      id, invoice_number, total_amount, due_at, status, customer_id,
       customers ( full_name, email )
     `)
     .eq("organization_id", organizationId)
@@ -96,6 +97,7 @@ export async function getRescueQueue(
     result.push({
       id: inv.id as string,
       invoiceNumber: (inv.invoice_number as string) ?? "—",
+      customerId: (inv.customer_id as string) ?? "",
       customerName: (customer?.full_name as string) ?? "Unknown",
       customerEmail: customer?.email as string | undefined,
       amount,

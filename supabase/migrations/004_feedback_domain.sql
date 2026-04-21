@@ -1,4 +1,4 @@
--- OpsPilot · Feedback domain + follow-up actions (additive after 003)
+-- Resq · Feedback domain + follow-up actions (additive after 003)
 -- Do not modify 0001_core_ledger.sql
 
 -- ─── Feedback ─────────────────────────────────────────────────────────────

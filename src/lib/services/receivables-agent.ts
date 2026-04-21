@@ -164,33 +164,35 @@ async function getCustomerProfile(customerId: string) {
   }
 }
 
-async function getAppointmentBehavior(
+async function getCollectionsBehavior(
   customerId: string,
   organizationId: string,
 ) {
-  const appts = await db
-    .select({ status: schema.appointments.status })
-    .from(schema.appointments)
+  const invoices = await db
+    .select({ status: schema.invoices.status })
+    .from(schema.invoices)
     .where(
       and(
-        eq(schema.appointments.customerId, customerId),
-        eq(schema.appointments.organizationId, organizationId),
+        eq(schema.invoices.customerId, customerId),
+        eq(schema.invoices.organizationId, organizationId),
       ),
     )
     .limit(20)
 
-  const total = appts.length
-  const completed = appts.filter((a) => a.status === "completed").length
-  const noShow = appts.filter((a) => a.status === "no_show").length
-  const cancelled = appts.filter((a) => a.status === "cancelled").length
+  const total = invoices.length
+  const paid = invoices.filter((invoice) => invoice.status === "paid").length
+  const overdue = invoices.filter((invoice) => invoice.status === "overdue").length
+  const unresolved = invoices.filter((invoice) =>
+    ["sent", "pending", "overdue"].includes(invoice.status),
+  ).length
 
   return {
-    totalBookings:   total,
-    completedCount:  completed,
-    noShowCount:     noShow,
-    cancelledCount:  cancelled,
-    completionRate:  total > 0 ? Math.round((completed / total) * 100) : null,
-    noShowRate:      total > 0 ? Math.round((noShow / total) * 100) : null,
+    totalInvoices: total,
+    paidCount: paid,
+    overdueCount: overdue,
+    unresolvedCount: unresolved,
+    collectionRate: total > 0 ? Math.round((paid / total) * 100) : null,
+    overdueRate: total > 0 ? Math.round((overdue / total) * 100) : null,
   }
 }
 
@@ -486,27 +488,28 @@ async function evaluateCreditReport(
         : `${totalOpen.toFixed(2)} open vs ${ltv.toFixed(2)} lifetime value (${utilizationPct.toFixed(0)}% utilization)`,
   })
 
-  // ── 5. Frequent recent address / contact changes ──────────────────────────
-  const events = await db
-    .select({ createdAt: schema.appointmentEvents.createdAt })
-    .from(schema.appointmentEvents)
+  // ── 5. High recent reminder churn ─────────────────────────────────────────
+  const reminderEscalations = await db
+    .select({ reminderCount: schema.invoices.reminderCount })
+    .from(schema.invoices)
     .where(
       and(
-        eq(schema.appointmentEvents.organizationId, organizationId),
-        eq(schema.appointmentEvents.eventType, "reservation.rescheduled"),
-        gte(schema.appointmentEvents.createdAt, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)),
+        eq(schema.invoices.customerId, customerId),
+        eq(schema.invoices.organizationId, organizationId),
+        gte(schema.invoices.updatedAt, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)),
       ),
     )
-
-  const recentReschedules = events.length
+  const highReminderCount = reminderEscalations.filter(
+    (invoice) => Number(invoice.reminderCount ?? 0) >= 2,
+  ).length
   flags.push({
     flag:     "address_changes",
-    label:    "Frequent Recent Changes",
-    severity: recentReschedules >= 3 ? "warning" : "none",
+    label:    "Frequent Recent Collection Escalations",
+    severity: highReminderCount >= 3 ? "warning" : "none",
     detail:
-      recentReschedules === 0
-        ? "No unusual pattern of changes detected"
-        : `${recentReschedules} booking reschedule(s) in the past 90 days`,
+      highReminderCount === 0
+        ? "No unusual collection churn detected"
+        : `${highReminderCount} invoice(s) required repeated reminder pressure in the past 90 days`,
   })
 
   const criticalCount = flags.filter((f) => f.severity === "critical").length
@@ -560,12 +563,12 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_customer_profile",
-    description: "Get the customer's profile: lifetime value, CRM risk status, feedback score, contact details, and last visit.",
+    description: "Get the customer's profile: lifetime value, CRM risk status, contact details, and recent payment activity.",
     input_schema: { type: "object", properties: {} },
   },
   {
-    name: "get_appointment_behavior",
-    description: "Get the customer's booking behavior: completion rate, no-show rate, and cancellation history.",
+    name: "get_collections_behavior",
+    description: "Get the customer's collections behavior: payment completion rate, overdue rate, and unresolved invoice load.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -612,7 +615,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for OpsPilot, an SMB cashflow recovery system.
+const SYSTEM_INSTRUCTION = `You are a receivables risk investigator for Resq, an SMB cashflow recovery system.
 
 REQUIRED: Call ALL NINE tools before writing any conclusions.
 
@@ -620,7 +623,7 @@ Call tools in this order:
 1. get_invoice_status — understand what is owed
 2. get_customer_profile — understand who the customer is
 3. get_payment_history — understand their payment track record
-4. get_appointment_behavior — understand their reliability
+4. get_collections_behavior — understand their receivables reliability
 5. get_all_open_invoices — understand total exposure
 6. run_verification_checks — generate the KYC checklist
 7. evaluate_credit_report — check for credit red flags (late payments, charge-offs, fraud signals)
@@ -669,8 +672,8 @@ export async function runReceivablesInvestigation(
       const res = await getCustomerProfile(input.customerId)
       profileData = res as Record<string, unknown>
       return res
-    } else if (name === "get_appointment_behavior") {
-      const res = await getAppointmentBehavior(input.customerId, input.organizationId)
+    } else if (name === "get_collections_behavior") {
+      const res = await getCollectionsBehavior(input.customerId, input.organizationId)
       behaviorData = res as Record<string, unknown>
       return res
     } else if (name === "get_all_open_invoices") {

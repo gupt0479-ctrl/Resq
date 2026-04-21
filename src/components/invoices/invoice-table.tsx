@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useEffect, useState } from "react"
 import {
   Table,
   TableBody,
@@ -29,7 +29,7 @@ export interface InvoiceCustomer {
 export interface Invoice {
   id: string
   number: string
-  guest: string
+  customerName: string
   amount: number
   status: "paid" | "overdue" | "pending" | "draft" | "sent"
   date: string
@@ -58,10 +58,10 @@ async function downloadPDF(inv: Invoice) {
   doc.setTextColor(255, 255, 255)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(16)
-  doc.text("EMBER TABLE", L, 36)
+  doc.text("RESQ", L, 36)
   doc.setFont("helvetica", "normal")
   doc.setFontSize(9)
-  doc.text("Minneapolis, MN · embertable.com", L, 48)
+  doc.text("resq.app · Billing workspace", L, 48)
 
   y = 84
   // Invoice meta
@@ -78,7 +78,7 @@ async function downloadPDF(inv: Invoice) {
   doc.text(`Date: ${inv.date}`, L, y)
 
   y += 28
-  // Guest block
+  // Customer block
   doc.setFillColor(248, 247, 245)
   doc.roundedRect(L, y, W, inv.customer ? 56 : 36, 4, 4, "F")
   y += 14
@@ -90,7 +90,7 @@ async function downloadPDF(inv: Invoice) {
   doc.setFont("helvetica", "normal")
   doc.setFontSize(10)
   doc.setTextColor(40, 40, 40)
-  doc.text(inv.customer?.name ?? inv.guest, L + 12, y)
+  doc.text(inv.customer?.name ?? inv.customerName, L + 12, y)
   if (inv.customer?.email) {
     y += 13
     doc.text(inv.customer.email, L + 12, y)
@@ -171,14 +171,14 @@ async function downloadPDF(inv: Invoice) {
   doc.setTextColor(255, 255, 255)
   doc.setFont("helvetica", "italic")
   doc.setFontSize(10)
-  doc.text("Thank you for dining at Ember Table.", 306, 765, { align: "center" })
+  doc.text("Generated with Resq billing workspace.", 306, 765, { align: "center" })
   doc.setFont("helvetica", "normal")
   doc.setFontSize(8)
   doc.setTextColor(180, 180, 180)
-  doc.text("Questions? hello@embertable.com", 306, 781, { align: "center" })
+  doc.text("Questions? billing@resq.app", 306, 781, { align: "center" })
 
-  const safeName = (inv.customer?.name ?? inv.guest).replace(/\s+/g, "_")
-  doc.save(`EmberTable-${inv.number}-${safeName}.pdf`)
+  const safeName = (inv.customer?.name ?? inv.customerName).replace(/\s+/g, "_")
+  doc.save(`Resq-${inv.number}-${safeName}.pdf`)
 }
 
 interface ReminderResult {
@@ -396,7 +396,7 @@ function FollowUpModal({
   )
 }
 
-// ── Guest Contact section ─────────────────────────────────────────────────────
+// ── Customer Contact section ──────────────────────────────────────────────────
 
 function GuestContact({ customer }: { customer: InvoiceCustomer }) {
   const [copiedEmail, setCopiedEmail] = useState(false)
@@ -411,7 +411,7 @@ function GuestContact({ customer }: { customer: InvoiceCustomer }) {
   return (
     <div className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-        Guest Contact
+        Customer Contact
       </p>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
         <div className="flex items-center gap-1.5 text-sm text-foreground">
@@ -459,10 +459,8 @@ function GuestContact({ customer }: { customer: InvoiceCustomer }) {
 
 // ── Expanded detail row ───────────────────────────────────────────────────────
 
-// Minneapolis combined sales tax: MN state 6.875% + Hennepin county 0.15% + Minneapolis city 0.5%
+// Default tax helper used for demo invoice editing.
 const MN_TAX_RATE = 0.07525
-
-type MenuItem = { id: string; name: string; category: string; price: number }
 
 function InvoiceDetail({
   inv,
@@ -473,15 +471,7 @@ function InvoiceDetail({
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<Invoice>(inv)
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [taxOverride, setTaxOverride] = useState<string>("")
-
-  useEffect(() => {
-    fetch("/api/menu-items")
-      .then(r => r.json())
-      .then(d => { if (d.data) setMenuItems(d.data) })
-      .catch(() => {})
-  }, [])
 
   function startEdit(e: React.MouseEvent) {
     e.stopPropagation()
@@ -577,20 +567,20 @@ function InvoiceDetail({
           </div>
         </div>
 
-        {/* Guest Contact */}
+        {/* Customer Contact */}
         {inv.customer && (
           <GuestContact customer={inv.customer} />
         )}
 
-        {/* Guest + status row when editing */}
+        {/* Customer + status row when editing */}
         {editing && (
           <div className="mb-4 grid grid-cols-3 gap-3" onClick={(e) => e.stopPropagation()}>
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Guest</p>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Customer</p>
               <input
                 className={inputCls}
-                value={draft.guest}
-                onChange={(e) => setDraft((d) => ({ ...d, guest: e.target.value }))}
+                value={draft.customerName}
+                onChange={(e) => setDraft((d) => ({ ...d, customerName: e.target.value }))}
               />
             </div>
             <div>
@@ -637,38 +627,12 @@ function InvoiceDetail({
                   <tr key={i} className="border-b border-border/40 last:border-0">
                     <td className="py-1.5">
                       {editing ? (
-                        <select
-                          className={`${inputCls} pr-6`}
+                        <input
+                          className={inputCls}
                           value={li.description}
-                          onChange={(e) => {
-                            const chosen = menuItems.find(m => m.name === e.target.value)
-                            if (chosen) {
-                              setDraft(d => ({
-                                ...d,
-                                lineItems: d.lineItems.map((l, idx) =>
-                                  idx === i
-                                    ? { ...l, description: chosen.name, amount: Math.round(chosen.price * l.qty * 100) / 100 }
-                                    : l
-                                ),
-                              }))
-                            } else {
-                              setLine(i, "description", e.target.value)
-                            }
-                          }}
-                        >
-                          <option value="">Select item…</option>
-                          {/* If existing description isn't in the menu list, show it as a selectable option */}
-                          {li.description && !menuItems.some(m => m.name === li.description) && (
-                            <option value={li.description}>{li.description}</option>
-                          )}
-                          {Array.from(new Set(menuItems.map(m => m.category))).map(cat => (
-                            <optgroup key={cat} label={cat}>
-                              {menuItems.filter(m => m.category === cat).map(m => (
-                                <option key={m.id} value={m.name}>{m.name} — ${m.price}</option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
+                          onChange={(e) => setLine(i, "description", e.target.value)}
+                          placeholder="Line item description"
+                        />
                       ) : (
                         <span className="text-foreground">{li.description}</span>
                       )}
@@ -817,7 +781,7 @@ function NewInvoiceModal({
   onClose: () => void
   onAdd: (inv: Invoice) => void
 }) {
-  const [guest, setGuest] = useState("")
+  const [customerName, setCustomerName] = useState("")
   const [dueDate, setDueDate] = useState("")
   const [status, setStatus] = useState<Invoice["status"]>("pending")
   const [taxOverride, setTaxOverride] = useState<string>("")
@@ -847,11 +811,11 @@ function NewInvoiceModal({
   }
 
   function submit() {
-    if (!guest.trim() || lines.every((l) => !l.description)) return
+    if (!customerName.trim() || lines.every((l) => !l.description)) return
     onAdd({
       id:            `inv-${Date.now()}`,
       number:        nextNumber,
-      guest:         guest.trim(),
+      customerName:  customerName.trim(),
       amount:        total,
       status,
       date:          new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -888,17 +852,17 @@ function NewInvoiceModal({
 
           <div className="flex-1 overflow-y-auto p-6">
             <div className="space-y-5">
-              {/* Guest / due / status */}
+              {/* Customer / due / status */}
               <div className="grid gap-3 md:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Guest *
+                    Customer *
                   </label>
                   <input
                     className={inputCls}
-                    placeholder="Guest name"
-                    value={guest}
-                    onChange={(e) => setGuest(e.target.value)}
+                    placeholder="Customer name"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
                   />
                 </div>
                 <div>
@@ -1059,7 +1023,7 @@ function NewInvoiceModal({
             </button>
             <button
               onClick={submit}
-              disabled={!guest.trim()}
+              disabled={!customerName.trim()}
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40"
             >
               <Plus className="h-3.5 w-3.5" /> Add Invoice
@@ -1133,7 +1097,7 @@ export function InvoiceTable({ invoices: initial }: { invoices: Invoice[] }) {
             total: inv.amount,
             due_at: inv.dueDate ?? inv.date,
             reminder_count: inv.reminderCount ?? 0,
-            customer: inv.customer ?? { name: inv.guest },
+            customer: inv.customer ?? { name: inv.customerName },
           },
         }),
       })
@@ -1180,7 +1144,7 @@ export function InvoiceTable({ invoices: initial }: { invoices: Invoice[] }) {
           <TableRow>
             <TableHead className="w-8" />
             <TableHead>Invoice</TableHead>
-            <TableHead>Guest</TableHead>
+            <TableHead>Customer</TableHead>
             <TableHead>Amount</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Date</TableHead>
@@ -1203,7 +1167,7 @@ export function InvoiceTable({ invoices: initial }: { invoices: Invoice[] }) {
 
                 <TableCell className="font-mono text-xs">{inv.number}</TableCell>
 
-                <TableCell className="font-medium">{inv.guest}</TableCell>
+                <TableCell className="font-medium">{inv.customerName}</TableCell>
 
                 <TableCell>${inv.amount.toFixed(2)}</TableCell>
 
@@ -1306,7 +1270,7 @@ export function InvoiceTable({ invoices: initial }: { invoices: Invoice[] }) {
                               <InvestigationPanel
                                 invoiceId={inv.id}
                                 invoiceNumber={inv.number}
-                                customerName={inv.guest}
+                                customerName={inv.customerName}
                                 balance={inv.amount}
                                 daysOverdue={
                                   inv.dueDate

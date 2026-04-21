@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import {
   generateAndPersistManagerSummary,
   getLatestManagerSummary,
@@ -8,7 +8,10 @@ import {
 /** GET — latest persisted manager summary (read-only). */
 export async function GET() {
   try {
-    const row = await getLatestManagerSummary(DEMO_ORG_ID)
+    const ctx = await getUserOrg()
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const row = await getLatestManagerSummary(ctx.organizationId)
     if (!row) {
       return NextResponse.json({ data: null })
     }
@@ -33,6 +36,7 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim()
+  let authorizedBySecret = false
 
   // Always require a secret in production; reject when none is configured.
   if (!secret && process.env.NODE_ENV === "production") {
@@ -47,10 +51,18 @@ export async function POST(request: NextRequest) {
     if (auth !== `Bearer ${secret}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    authorizedBySecret = true
   }
 
   try {
-    const out = await generateAndPersistManagerSummary(DEMO_ORG_ID)
+    const body = await request.json().catch(() => ({})) as { organizationId?: string }
+    const ctx = authorizedBySecret ? null : await getUserOrg()
+    const organizationId = body.organizationId ?? ctx?.organizationId
+    if (!organizationId) {
+      return NextResponse.json({ error: "organizationId is required" }, { status: 400 })
+    }
+
+    const out = await generateAndPersistManagerSummary(organizationId)
     return NextResponse.json({
       data: {
         headline: out.summary.headline,

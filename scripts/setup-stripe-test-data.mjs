@@ -4,7 +4,7 @@
  * Setup Stripe Test Data
  * 
  * This script creates test customers and invoices in Stripe and links them
- * to your OpsPilot database.
+ * to your Resq database.
  * 
  * Usage:
  *   node scripts/setup-stripe-test-data.mjs
@@ -106,7 +106,7 @@ async function setupTestData() {
           email: testCustomer.email,
           name: testCustomer.name,
           metadata: {
-            source: 'opspilot_test_script',
+            source: 'resq_test_script',
             demo_org_id: DEMO_ORG_ID
           }
         })

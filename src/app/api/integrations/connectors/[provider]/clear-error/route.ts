@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { clearConnectorError } from "@/lib/services/integrations"
 
 export async function POST(
@@ -13,7 +13,10 @@ export async function POST(
   }
 
   try {
-    const connector = await clearConnectorError(DEMO_ORG_ID, provider)
+    const ctx = await getUserOrg()
+    if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+    const connector = await clearConnectorError(ctx.organizationId, provider)
 
     return Response.json({
       data: {

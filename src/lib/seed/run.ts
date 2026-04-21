@@ -1,5 +1,5 @@
 /**
- * Ember Table seed script.
+ * Resq seed script.
  * Run after applying the migration:
  *   npx tsx src/lib/seed/run.ts
  *
@@ -32,7 +32,7 @@ async function main() {
     .map((s) => s.trim())
     .filter((s) => s.length > 0 && !s.startsWith("--"))
 
-  console.log(`🌱  Running ${statements.length} seed statements for Ember Table…`)
+  console.log(`🌱  Running ${statements.length} seed statements for Resq…`)
 
   let failed = 0
   for (const sql of statements) {

@@ -1,14 +1,17 @@
-import { type NextRequest } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { type NextRequest, NextResponse } from "next/server"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { markInvoicePaid } from "@/lib/services/invoices"
 import { MarkPaidBodySchema } from "@/lib/schemas/invoice"
 
 export async function POST(
   request: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
+  routeCtx: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   try {
-    const { id } = await ctx.params
+    const { id } = await routeCtx.params
 
     let body: unknown = {}
     try {
@@ -25,7 +28,7 @@ export async function POST(
       )
     }
 
-    await markInvoicePaid(id, DEMO_ORG_ID, {
+    await markInvoicePaid(id, ctx.organizationId, {
       paymentMethod: parsed.data.paymentMethod,
       amountPaid:    parsed.data.amountPaid,
       notes:         parsed.data.notes,

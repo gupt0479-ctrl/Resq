@@ -1,7 +1,7 @@
 import "server-only"
 import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
-import { eq, and, desc, count } from "drizzle-orm"
+import { eq, and, desc, count, inArray, lt } from "drizzle-orm"
 import Anthropic from "@anthropic-ai/sdk"
 import {
   FinanceSummaryFactsSchema,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/schemas/finance"
 import { ManagerSummarySchema, type ManagerSummary } from "@/lib/schemas/ai"
 import { getFinanceSummary } from "@/lib/services/finance"
-import { countUnhappyGuestsForDashboard } from "@/lib/queries/feedback"
+import { aiActions } from "@/lib/db/schema"
 
 export async function buildFinanceSummaryFacts(
   organizationId: string
@@ -40,22 +40,41 @@ export async function buildFinanceSummaryFacts(
     }
   })
 
-  let urgentFeedbackCount = 0
-  let flaggedFeedbackCount = 0
+  let criticalDelinquencyCount = 0
+  let activeRescueCaseCount = 0
   try {
-    urgentFeedbackCount = await countUnhappyGuestsForDashboard(organizationId)
-    const [flaggedResult] = await db
+    const delinquencyCutoff = new Date()
+    delinquencyCutoff.setDate(delinquencyCutoff.getDate() - 30)
+
+    const [criticalResult] = await db
       .select({ count: count() })
-      .from(schema.feedback)
+      .from(schema.invoices)
       .where(
         and(
-          eq(schema.feedback.organizationId, organizationId),
-          eq(schema.feedback.flagged, true),
+          eq(schema.invoices.organizationId, organizationId),
+          eq(schema.invoices.status, "overdue"),
+          lt(schema.invoices.dueAt, delinquencyCutoff),
         ),
       )
-    flaggedFeedbackCount = Number(flaggedResult?.count ?? 0)
+    criticalDelinquencyCount = Number(criticalResult?.count ?? 0)
+
+    const rescueRows = await db
+      .select({ entityId: aiActions.entityId })
+      .from(aiActions)
+      .where(
+        and(
+          eq(aiActions.organizationId, organizationId),
+          inArray(aiActions.actionType, [
+            "receivable_risk_detected",
+            "customer_followup_sent",
+            "financing_options_scouted",
+            "payment_plan_suggested",
+          ]),
+        ),
+      )
+    activeRescueCaseCount = new Set(rescueRows.map((row) => row.entityId)).size
   } catch {
-    /* feedback table may be absent until migration 004 */
+    /* summary falls back cleanly when rescue tables are absent */
   }
 
   return FinanceSummaryFactsSchema.parse({
@@ -66,15 +85,17 @@ export async function buildFinanceSummaryFacts(
     expensesThisWeek:      summary.expensesThisWeek,
     netCashFlowEstimate:     summary.netCashFlowEstimate,
     largestOverdueInvoices,
-    urgentFeedbackCount,
-    flaggedFeedbackCount,
+    criticalDelinquencyCount,
+    activeRescueCaseCount,
   })
 }
 
 export function buildFallbackManagerSummary(facts: FinanceSummaryFacts): ManagerSummary {
   const headline =
-    facts.urgentFeedbackCount > 0
-      ? `${facts.urgentFeedbackCount} guest issue(s) in the feedback queue — service recovery first`
+    facts.criticalDelinquencyCount > 0
+      ? `${facts.criticalDelinquencyCount} invoice(s) are 30+ days overdue — collections escalation required`
+      : facts.activeRescueCaseCount > 0
+        ? `${facts.activeRescueCaseCount} rescue case(s) active — keep collections pressure consistent`
       : facts.overdueInvoiceCount > 0
         ? `${facts.overdueInvoiceCount} overdue invoice(s) — collections focus`
         : "Cash and receivables look healthy this week"
@@ -84,7 +105,7 @@ export function buildFallbackManagerSummary(facts: FinanceSummaryFacts): Manager
     `Pending receivables: ${facts.pendingReceivables.toFixed(2)}.`,
     `Overdue receivables: ${facts.overdueReceivables.toFixed(2)}.`,
     `Net cash flow (week): ${facts.netCashFlowEstimate.toFixed(2)}.`,
-    `Open guest issues (urgent / flagged feedback): ${facts.urgentFeedbackCount} attention queue, ${facts.flaggedFeedbackCount} flagged.`,
+    `Collections pressure: ${facts.criticalDelinquencyCount} invoice(s) beyond 30 days overdue, ${facts.activeRescueCaseCount} active rescue case(s).`,
   ]
   if (facts.largestOverdueInvoices.length > 0) {
     const top = facts.largestOverdueInvoices[0]
@@ -95,8 +116,10 @@ export function buildFallbackManagerSummary(facts: FinanceSummaryFacts): Manager
     headline,
     bullets: bullets.slice(0, 5),
     riskNote:
-      facts.urgentFeedbackCount > 0
-        ? "Review urgent feedback rows in Postgres before collections; guest safety and reputation come first."
+      facts.criticalDelinquencyCount > 0
+        ? "Escalate the oldest balances first; severe delinquency now matters more than net-new reminders."
+        : facts.activeRescueCaseCount > 0
+          ? "Keep follow-up cadence tight across active rescue cases and avoid duplicate outreach."
         : facts.overdueInvoiceCount > 0
           ? "Prioritize outreach on overdue balances; amounts are read from Postgres, not inferred."
           : undefined,
@@ -124,7 +147,7 @@ export async function generateAndPersistManagerSummary(
         messages: [
           {
             role:    "user",
-            content: `You are summarizing operations KPIs for a restaurant GM. Use ONLY the numbers in the JSON facts (finance + feedback counts). Do not invent totals or payment states. Output ONLY valid JSON matching:
+            content: `You are summarizing cashflow and collections KPIs for a finance operator. Use ONLY the numbers in the JSON facts. Do not invent totals or payment states. Output ONLY valid JSON matching:
 {"headline": string, "bullets": string[], "riskNote"?: string}
 
 Facts JSON:\n${JSON.stringify(facts)}`,

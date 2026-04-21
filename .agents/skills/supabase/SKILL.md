@@ -8,10 +8,10 @@ metadata:
 
 # Supabase
 
-## Project overlay: OpsPilot Rescue
+## Project overlay: Resq
 
 In this repo, Supabase is the deterministic financial backbone for a hackathon
-build called OpsPilot Rescue. When using this skill here:
+build called Resq. When using this skill here:
 
 - preserve invoice and finance truth
 - prefer additive migrations or additive seeds

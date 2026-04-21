@@ -1,4 +1,4 @@
-# OpsPilot Rescue Canonical Agent Docs
+# Resq Canonical Agent Docs
 
 This folder is the **only canonical agent-facing source of truth** for the hackathon build.
 
@@ -42,7 +42,7 @@ Read these when the task touches local operations rather than product doctrine:
 
 ## Current winner story
 
-OpsPilot Rescue helps a small business survive cash pressure by:
+Resq helps a small business survive cash pressure by:
 
 1. exposing overdue receivables and rescue risk
 2. running a survival scan

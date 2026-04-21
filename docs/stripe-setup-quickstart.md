@@ -1,6 +1,6 @@
 # Stripe Setup Quickstart
 
-Complete guide to setting up Stripe for OpsPilot Rescue collections agent.
+Complete guide to setting up Stripe for Resq collections agent.
 
 ---
 
@@ -181,7 +181,7 @@ async function setupTestData() {
   const customer = await stripe.customers.create({
     email: 'test@example.com',
     name: 'Test Customer',
-    metadata: { source: 'opspilot_test' }
+    metadata: { source: 'resq_test' }
   })
   console.log('Created customer:', customer.id)
 
@@ -489,7 +489,7 @@ Use any future expiry date and any 3-digit CVC.
 
 ## Support
 
-For OpsPilot-specific questions:
+For Resq-specific questions:
 - See `docs/stripe-integration-guide.md` for detailed integration info
 - See `.claude/PRD.md` for product requirements
 - See `src/lib/services/recovery-agent.ts` for collections logic

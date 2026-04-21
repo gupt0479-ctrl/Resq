@@ -10,7 +10,7 @@ export async function GET(
 ): Promise<Response> {
   const { runId } = await ctx.params
 
-  if (!runId || typeof runId !== "string" || runId.trim() === "") {
+  if (typeof runId !== "string" || runId.trim().length === 0) {
     return Response.json({ error: "runId is required" }, { status: 400 })
   }
 

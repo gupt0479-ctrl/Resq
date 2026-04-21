@@ -1,4 +1,4 @@
--- OpsPilot · Recovery Agent schema additions
+-- Resq · Recovery Agent schema additions
 -- Migration: 005_recovery_agent
 -- Adds agent-owned recovery state alongside invoices without touching invoices.status
 

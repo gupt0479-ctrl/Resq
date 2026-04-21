@@ -1,7 +1,7 @@
 # Shared Kiro Hooks
 
-This folder contains the shared hook commands for the `opspilot-rescue` local
-agent in `.kiro/agents/opspilot-rescue.json`.
+This folder contains the shared hook commands for the `resq` local
+agent in `.kiro/agents/resq.json`.
 
 Why this layout:
 

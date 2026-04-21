@@ -1,8 +1,8 @@
-# Stripe Integration Guide for OpsPilot Rescue
+# Stripe Integration Guide for Resq
 
 ## Overview
 
-OpsPilot Rescue uses Stripe for automated collections and payment reminders. The system is designed to work in **two modes**:
+Resq uses Stripe for automated collections and payment reminders. The system is designed to work in **two modes**:
 
 1. **Mock Mode** (default) - Safe for demos and development, no real Stripe calls
 2. **Live Mode** - Real Stripe API integration for production use
@@ -265,7 +265,7 @@ Real Stripe API calls will be made.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ OpsPilot Database                                           │
+│ Resq Database                                           │
 ├─────────────────────────────────────────────────────────────┤
 │ invoices                                                    │
 │   - stripe_invoice_id (links to Stripe)                    │
@@ -479,7 +479,7 @@ if (!STRIPE_SECRET_KEY || !invoice.stripe_invoice_id) {
 const customer = await stripe.customers.create({
   email: "customer@example.com",
   name: "Customer Name",
-  metadata: { opspilot_customer_id: "..." }
+  metadata: { resq_customer_id: "..." }
 })
 
 await client
@@ -513,6 +513,6 @@ await client
 
 For Stripe API documentation: https://stripe.com/docs/api
 
-For OpsPilot-specific questions, see:
+For Resq-specific questions, see:
 - `.claude/PRD.md` - Product requirements
 - `.claude/context/current-state.md` - Current implementation status

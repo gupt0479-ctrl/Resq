@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { DEMO_ORG_ID } from "@/lib/env"
 import { markOverdueInvoices } from "@/lib/services/invoices"
 
 async function runJob(request: NextRequest) {

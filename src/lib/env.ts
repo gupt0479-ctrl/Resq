@@ -21,7 +21,7 @@ export function getServerEnv() {
 
 const DEFAULT_DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
 
-/** Ember Table demo org from seed; trim so blank .env lines do not override the default. */
+/** Default demo org from seed; trim so blank .env lines do not override the default. */
 export const DEMO_ORG_ID =
   process.env.DEMO_ORG_ID?.trim() || DEFAULT_DEMO_ORG_ID
 

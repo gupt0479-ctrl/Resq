@@ -7,15 +7,19 @@ const DATABASE_URL = process.env.DATABASE_URL
 
 // Keep module evaluation safe in build/CI even when env vars are absent.
 // Runtime requests will still fail clearly if real keys are not configured.
+// Rewrite the deprecated sslmode=require to sslmode=verify-full so that
+// pg-connection-string ≥2.7 / pg ≥8.13 stops emitting the security warning.
+// The actual TLS behaviour stays the same — the library already treated
+// "require" as "verify-full" — this just makes it explicit.
+const raw = DATABASE_URL || "postgresql://localhost:5432/resq"
+const connectionString = raw.replace(
+  /([?&])sslmode=require(?=&|$)/,
+  "$1sslmode=verify-full",
+)
+
 const pool = new Pool({
-  connectionString: DATABASE_URL || "postgresql://localhost:5432/opspilot",
+  connectionString,
   max: 20,
 })
 
 export const db = drizzle(pool, { schema })
-
-const DEFAULT_DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
-
-/** Ember Table demo org from seed; trim so blank .env lines do not override the default. */
-export const DEMO_ORG_ID =
-  process.env.DEMO_ORG_ID?.trim() || DEFAULT_DEMO_ORG_ID

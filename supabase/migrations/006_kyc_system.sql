@@ -1,4 +1,4 @@
--- OpsPilot · KYC (Know Your Client) system
+-- Resq · KYC (Know Your Client) system
 -- Migration: 006_kyc_system
 -- Adds identity verification, risk scoring, audit trail, and operator alerts
 

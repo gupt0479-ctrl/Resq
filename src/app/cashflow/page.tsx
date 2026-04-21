@@ -1,6 +1,11 @@
-import { CashflowClient } from "./CashflowClient"
+"use client"
 
-export const dynamic = "force-dynamic"
+import dynamic from "next/dynamic"
+
+const CashflowClient = dynamic(
+  () => import("./CashflowClient").then((mod) => mod.CashflowClient),
+  { ssr: false }
+)
 
 export default function CashflowPage() {
   return <CashflowClient />

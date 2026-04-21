@@ -1,4 +1,4 @@
-# OpsPilot Rescue Demo Runbook
+# Resq Demo Runbook
 
 This runbook is the operational source of truth for rehearsing and submitting
 the O1 Summit 2026 hackathon demo.

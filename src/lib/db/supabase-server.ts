@@ -1,6 +1,5 @@
 import "server-only"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import { DEMO_ORG_ID } from "@/lib/env"
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? ""
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? ""
@@ -22,4 +21,3 @@ export function createServerSupabaseClient(): SupabaseClient {
   })
 }
 
-export { DEMO_ORG_ID }

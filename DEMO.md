@@ -1,15 +1,15 @@
-# OpsPilot Rescue — 5-Minute Demo Script
+# Resq — 5-Minute Demo Script
 
 **Hackathon:** O1 Summit, Minneapolis, April 18-19, 2026  
 **Prize:** $10,000+  
-**Pitch:** "Cash is late. OpsPilot acts."
+**Pitch:** "Cash is late. Resq acts."
 
 ---
 
 ## The Story (30 seconds)
 
 > "Small business owners lose 14 days a month chasing late invoices. 60% of SMB failures are cash flow problems.
-> OpsPilot Rescue is an autonomous agent that detects overdue receivables, investigates the risk, drafts outreach,
+> Resq is an autonomous agent that detects overdue receivables, investigates the risk, drafts outreach,
 > surfaces financing options, and proposes payment plans — automatically. Here's a live demo."
 
 ---
@@ -17,7 +17,7 @@
 ## Demo Path
 
 ### Screen 1: Landing page (`/`)
-- Point to the hero: **"Cash is late. OpsPilot acts."**
+- Point to the hero: **"Cash is late. Resq acts."**
 - Show the 3 urgency stats (60% failure rate, 14 days manual work, $90K at risk)
 - Show the 4-step agent loop cards: Detect → Investigate → Act → Report
 - Show the TinyFish section: "The agent operates on the live web"
@@ -53,7 +53,7 @@
 ### Close
 > "Every step the agent takes is logged, auditable, and reversible.
 > The owner never has to touch a single spreadsheet.
-> Built with Claude AI and TinyFish. This is OpsPilot Rescue."
+> Built with Claude AI and TinyFish. This is Resq."
 
 ---
 

@@ -3,7 +3,8 @@ export const revalidate = 0
 
 import { InvoiceTable } from "@/components/invoices/invoice-table"
 import type { Invoice } from "@/components/invoices/invoice-table"
-import { db, DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
+import { db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { eq, desc } from "drizzle-orm"
 
@@ -12,13 +13,13 @@ function fmtDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
-async function fetchInvoices(): Promise<Invoice[]> {
+async function fetchInvoices(organizationId: string): Promise<Invoice[]> {
   try {
     const rows = await db
       .select()
       .from(schema.invoices)
       .leftJoin(schema.customers, eq(schema.invoices.customerId, schema.customers.id))
-      .where(eq(schema.invoices.organizationId, DEMO_ORG_ID))
+      .where(eq(schema.invoices.organizationId, organizationId))
       .orderBy(desc(schema.invoices.createdAt))
 
     // Fetch invoice items for all invoices
@@ -49,7 +50,7 @@ async function fetchInvoices(): Promise<Invoice[]> {
       return {
         id:            inv.id,
         number:        inv.invoiceNumber ?? "—",
-        guest:         customer?.fullName ?? "Guest",
+        customerName:  customer?.fullName ?? "Customer",
         amount:        Number(inv.totalAmount ?? 0),
         status,
         date:          fmtDate(inv.paidAt?.toISOString() ?? inv.createdAt?.toISOString()),
@@ -77,6 +78,7 @@ async function fetchInvoices(): Promise<Invoice[]> {
 }
 
 export default async function InvoicesPage() {
-  const invoices = await fetchInvoices()
+  const ctx = await getUserOrg()
+  const invoices = ctx ? await fetchInvoices(ctx.organizationId) : []
   return <InvoiceTable invoices={invoices} />
 }

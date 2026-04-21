@@ -1,9 +1,12 @@
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { listConnectors } from "@/lib/services/integrations"
 
 export async function GET() {
   try {
-    const connectors = await listConnectors(DEMO_ORG_ID)
+    const ctx = await getUserOrg()
+    if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+    const connectors = await listConnectors(ctx.organizationId)
 
     const data = connectors.map((c) => ({
       id:          c.id,

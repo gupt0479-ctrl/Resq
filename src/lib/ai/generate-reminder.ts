@@ -48,15 +48,15 @@ export async function generateReminder(
   const totalStr = facts.totalDue.toFixed(2)
 
   if (followUpType === "paid") {
-    const prompt = `You are the manager of Ember Table, an upscale restaurant in Minneapolis.
-Guest: ${name}
+    const prompt = `You are writing a warm payment receipt follow-up for a small business using Resq.
+Customer: ${name}
 Invoice: $${totalStr} - just paid.
 
-Write a warm, personal thank-you follow-up email. Include:
-- Genuine thanks for their visit and prompt payment
-- A subtle invitation to return or mention an upcoming seasonal menu if relevant
-- A gentle ask for feedback (Google review or direct reply)
-Keep it to 3-4 sentences. Friendly, not salesy.
+Write a short, professional thank-you email. Include:
+- Genuine thanks for the prompt payment
+- Confirmation that the payment was received
+- An invitation to reply with any billing questions
+Keep it to 3-4 sentences. Friendly and professional, not salesy.
 
 Return ONLY valid JSON, no other text:
 {
@@ -80,8 +80,8 @@ Return ONLY valid JSON, no other text:
     }
 
     return {
-      subject: `Thank you for dining with us, ${name}!`,
-      message: `Dear ${name}, thank you so much for your recent visit to Ember Table and for settling your invoice promptly - it means a great deal to us. We hope you enjoyed every bite and that we will have the pleasure of welcoming you back soon. If you have a moment, we'd love to hear your thoughts - a quick note or Google review goes a long way for our small team.`,
+      subject: `Thank you for your payment, ${name}`,
+      message: `Dear ${name}, thank you for settling your invoice promptly. We have recorded your payment successfully, and we appreciate the fast turnaround. If you need a copy of the invoice or have any billing questions, just reply to this email.`,
       reminder_number: reminderNumber,
     }
   }
@@ -95,9 +95,9 @@ Return ONLY valid JSON, no other text:
     reminderNumber === 2 ? "polite but firm" :
     "direct and urgent"
 
-  const prompt = `You are the manager of Ember Table restaurant sending a payment reminder.
+  const prompt = `You are a finance operator sending a payment reminder for a small business.
 Tone: ${tone}
-Guest: ${name}
+Customer: ${name}
 Amount due: $${totalStr}
 Days overdue: ${daysOverdue}
 Reminder number: ${reminderNumber}
@@ -124,11 +124,11 @@ Return ONLY valid JSON, no other text:
   }
 
   return {
-    subject: "Payment reminder - Ember Table",
+    subject: "Payment reminder",
     message:
       `Dear ${name}, this is a reminder that invoice ${facts.invoiceNumber} for $${totalStr} is` +
       (daysOverdue > 0 ? ` overdue by ${daysOverdue} days` : " coming due") +
-      ". Please arrange payment at your earliest convenience. Thank you for dining with us at Ember Table.",
+      ". Please arrange payment at your earliest convenience. Reply if you need a copy of the invoice or help resolving the balance.",
     reminder_number: reminderNumber,
   }
 }

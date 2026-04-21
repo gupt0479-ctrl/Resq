@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { generateReminder, type InvoiceReminderFacts } from "@/lib/ai/generate-reminder"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { getInvoiceDetail, recordInvoiceReminderSent } from "@/lib/services/invoices"
 import Anthropic from "@anthropic-ai/sdk"
 
@@ -15,8 +15,8 @@ async function generateThankYou(
   visitCount: number
 ): Promise<{ subject: string; message: string }> {
   const fallback = {
-    subject: `Thank you for dining with us, ${customerName}!`,
-    message: `Dear ${customerName}, thank you so much for dining at Ember Table and for settling your invoice. It was a genuine pleasure having you with us${visitCount >= 3 ? " — as always" : ""}. We look forward to welcoming you back soon!`,
+    subject: `Thank you for your payment, ${customerName}`,
+    message: `Dear ${customerName}, thank you for settling your invoice. We have recorded your payment and appreciate the prompt response${visitCount >= 3 ? " — as always" : ""}. If you need any billing support or a receipt copy, just reply to this message.`,
   }
 
   try {
@@ -25,14 +25,13 @@ async function generateThankYou(
       max_tokens: 256,
       messages: [{
         role: "user",
-        content: `You are the manager of Ember Table, an upscale neighbourhood restaurant in Minneapolis.
-Write a warm, personal thank-you email to a guest after they paid their invoice.
-Guest: ${customerName}
+        content: `You are writing a warm, professional thank-you email after an invoice payment.
+Customer: ${customerName}
 Total paid: $${total.toFixed(2)}
-${visitCount >= 3 ? `Loyal regular — ${visitCount} visits total. Thank them warmly.` : visitCount === 1 ? "First visit — express genuine hope to see them again." : `Returning guest — ${visitCount} visits total.`}
+${visitCount >= 3 ? `Repeat customer — ${visitCount} paid invoices total. Thank them warmly.` : visitCount === 1 ? "First completed payment — keep the note clear and reassuring." : `Returning customer — ${visitCount} prior invoice cycles.`}
 
 Return ONLY valid JSON, no markdown:
-{"subject": "<email subject line>", "message": "<3-4 warm, personal sentences>"}`,
+{"subject": "<email subject line>", "message": "<3-4 warm, professional sentences>"}`,
       }],
     })
     const text = (response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "").trim()
@@ -63,6 +62,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   const { id } = await params
 
   // Parse optional body — frontend sends followUpType and invoiceFallback for mock data
@@ -83,7 +85,7 @@ export async function POST(
   }
 
   // Try DB first; fall back to the client-provided invoice data for mock IDs
-  const dbInvoice = await getInvoiceDetail(id, DEMO_ORG_ID).catch(() => null)
+  const dbInvoice = await getInvoiceDetail(id, ctx.organizationId).catch(() => null)
   if (!dbInvoice && !body.invoiceFallback) {
     return NextResponse.json({ error: "Invoice not found." }, { status: 404 })
   }
@@ -129,7 +131,7 @@ export async function POST(
 
   const reminder = await generateReminder(reminderFacts)
   const persistedReminderCount = dbInvoice
-    ? await recordInvoiceReminderSent(id, DEMO_ORG_ID)
+    ? await recordInvoiceReminderSent(id, ctx.organizationId)
     : null
 
   return NextResponse.json({

@@ -1,10 +1,13 @@
-import { type NextRequest } from "next/server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { type NextRequest, NextResponse } from "next/server"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { listInvoicesQuery } from "@/lib/queries/invoices"
 import { INVOICE_STATUS } from "@/lib/constants/enums"
 import type { InvoiceStatus } from "@/lib/constants/enums"
 
 export async function GET(request: NextRequest) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   try {
     const { searchParams } = request.nextUrl
     const rawStatus = searchParams.get("status")
@@ -16,7 +19,7 @@ export async function GET(request: NextRequest) {
         ? (rawStatus as InvoiceStatus)
         : undefined
 
-    const invoices = await listInvoicesQuery(DEMO_ORG_ID, { status, limit, offset })
+    const invoices = await listInvoicesQuery(ctx.organizationId, { status, limit, offset })
 
     return Response.json({ data: invoices, count: invoices.length })
   } catch (err) {

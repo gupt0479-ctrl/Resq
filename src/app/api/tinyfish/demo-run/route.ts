@@ -1,5 +1,6 @@
 import { z } from "zod"
-import { DEMO_ORG_ID, isDemoMode, isDatabaseConfigured } from "@/lib/env"
+import { isDemoMode, isDatabaseConfigured } from "@/lib/env"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { recordAiAction } from "@/lib/services/ai-actions"
 import { runAgent, TinyFishError } from "@/lib/tinyfish/client"
 import { TinyFishScenarioSchema } from "@/lib/tinyfish/schemas"
@@ -44,6 +45,9 @@ const SCENARIO_TASK: Record<z.infer<typeof TinyFishScenarioSchema>, string> = {
 }
 
 export async function POST(request: Request) {
+  const ctx = await getUserOrg()
+  if (!ctx) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
   let rawBody: unknown
   try {
     const text = await request.text()
@@ -66,7 +70,7 @@ export async function POST(request: Request) {
   }
 
   const { scenario, invoiceId, customerName, dryRun } = parsedBody.data
-  const organizationId = parsedBody.data.organizationId ?? DEMO_ORG_ID
+  const organizationId = parsedBody.data.organizationId ?? ctx.organizationId
 
   if (!UuidSchema.safeParse(organizationId).success) {
     return Response.json(

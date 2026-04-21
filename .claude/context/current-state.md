@@ -4,7 +4,7 @@ Updated: 2026-04-18
 
 ## Submission posture
 
-The repo is already in the right product shell for **OpsPilot Rescue**, an
+The repo is already in the right product shell for **Resq**, an
 autonomous SMB survival agent. The main work is no longer inventing the
 product; it is tightening the hero flow, stabilizing TinyFish financing output,
 and removing agent-doc noise.

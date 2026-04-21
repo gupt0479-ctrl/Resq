@@ -2,28 +2,6 @@
 // DB enums (text + CHECK constraints) and Zod enums in src/lib/schemas/ are the truth;
 // this file provides display labels and helper maps for the frontend.
 
-export const APPOINTMENT_STATUS = [
-  "scheduled",
-  "confirmed",
-  "in_progress",
-  "completed",
-  "rescheduled",
-  "cancelled",
-  "no_show",
-] as const
-
-export type AppointmentStatus = (typeof APPOINTMENT_STATUS)[number]
-
-export const APPOINTMENT_STATUS_LABEL: Record<AppointmentStatus, string> = {
-  scheduled:   "Scheduled",
-  confirmed:   "Confirmed",
-  in_progress: "In Progress",
-  completed:   "Completed",
-  rescheduled: "Rescheduled",
-  cancelled:   "Cancelled",
-  no_show:     "No-show",
-}
-
 export const INVOICE_STATUS = [
   "draft",
   "sent",
@@ -73,9 +51,6 @@ export const AI_ACTION_STATUS = ["pending", "executed", "failed"] as const
 export type AiActionStatus = (typeof AI_ACTION_STATUS)[number]
 
 export const AI_ACTION_TYPE = [
-  // ── existing ──────────────────────────────────────────────────────────────
-  "customer_service.analyze_review",
-  // ── cashflow recovery ─────────────────────────────────────────────────────
   "receivable_risk_detected",
   "customer_followup_sent",
   "customer_followup_drafted",
@@ -107,46 +82,14 @@ export const CONNECTOR_STATUS_LABEL: Record<ConnectorStatus, string> = {
 export const PROCESSING_STATUS = ["pending", "processed", "failed", "skipped"] as const
 export type ProcessingStatus = (typeof PROCESSING_STATUS)[number]
 
-// ─── Domain event strings — canonical names per restaurant-core-demo.md ───
-
-export const FEEDBACK_SOURCE = ["internal", "google", "yelp", "opentable", "manual"] as const
-export type FeedbackSource = (typeof FEEDBACK_SOURCE)[number]
-
-export const FEEDBACK_FOLLOW_UP_STATUS = [
-  "none",
-  "thankyou_sent",
-  "callback_needed",
-  "resolved",
-] as const
-export type FeedbackFollowUpStatus = (typeof FEEDBACK_FOLLOW_UP_STATUS)[number]
-
-export const FEEDBACK_TOPIC = [
-  "food_quality",
-  "service_speed",
-  "staff_attitude",
-  "noise_level",
-  "wait_time",
-  "allergy_safety",
-  "value",
-  "ambiance",
-  "cleanliness",
-] as const
-export type FeedbackTopic = (typeof FEEDBACK_TOPIC)[number]
-
-export const FOLLOW_UP_ACTION_STATUS = ["pending", "approved", "sent", "dismissed"] as const
-export type FollowUpActionStatus = (typeof FOLLOW_UP_ACTION_STATUS)[number]
+// ─── Domain events (Resq-relevant only) ──────────────────────────────────
 
 export const DOMAIN_EVENT = {
-  RESERVATION_CREATED:    "reservation.created",
-  RESERVATION_CONFIRMED:  "reservation.confirmed",
-  RESERVATION_COMPLETED:  "reservation.completed",
   INVOICE_GENERATED:      "invoice.generated",
   INVOICE_SENT:           "invoice.sent",
   INVOICE_PAID:           "invoice.paid",
   INVOICE_REMINDER_SENT:  "invoice.reminder_sent",
   INVOICE_OVERDUE:        "invoice.overdue",
-  FEEDBACK_RECEIVED:      "feedback.received",
-  FEEDBACK_FLAGGED:       "feedback.flagged",
   SUMMARY_REFRESH:        "summary.refresh_requested",
 } as const
 

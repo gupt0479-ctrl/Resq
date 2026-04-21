@@ -1,6 +1,6 @@
 ---
 name: smb-survival-agent
-description: Build and operate the OpsPilot Rescue hackathon product: an autonomous SMB survival agent focused on collections, financing scout, and vendor or insurance optimization.
+description: Build and operate the Resq product: an autonomous SMB survival agent focused on collections, financing scout, and vendor or insurance optimization.
 ---
 
 # SMB Survival Agent Skill
@@ -9,7 +9,7 @@ description: Build and operate the OpsPilot Rescue hackathon product: an autonom
 
 Ship and improve a single focused product:
 
-**OpsPilot Rescue**
+**Resq**
 
 an autonomous SMB survival agent for the fintech hackathon track.
 

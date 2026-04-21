@@ -1,6 +1,6 @@
 import "server-only"
 import { createServerSupabaseClient } from "@/lib/db/supabase-server"
-import { DEMO_ORG_ID } from "@/lib/db"
+import { DEMO_ORG_ID } from "@/lib/env"
 import { createHash } from "crypto"
 import {
   getObligations,

@@ -8,9 +8,9 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
   ReferenceLine,
 } from "recharts"
+import { SafeResponsiveContainer as ResponsiveContainer } from "@/components/cashflow/SafeResponsiveContainer"
 
 export interface WaterfallPoint {
   week: string
@@ -103,7 +103,7 @@ function CustomLegend() {
 
 export function WaterfallChart({ data }: { data: WaterfallPoint[] }) {
   return (
-    <div className="w-full">
+    <div className="w-full min-w-0">
       <div className="h-[420px]">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 16, right: 24, left: 8, bottom: 0 }}>

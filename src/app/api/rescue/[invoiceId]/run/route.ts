@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, DEMO_ORG_ID } from "@/lib/db/supabase-server"
+import { createUserSupabaseServerClient } from "@/lib/auth/create-user-supabase-server-client"
+import { getUserOrg } from "@/lib/auth/get-user-org"
 import { recordAiAction } from "@/lib/services/ai-actions"
 import { runCollectionsDecision } from "@/lib/services/collections-decision-agent"
 import type { AiActionType } from "@/lib/constants/enums"
@@ -15,12 +16,15 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ invoiceId: string }> }
 ) {
+  const ctx = await getUserOrg()
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   const { invoiceId } = await params
-  const client = createServerSupabaseClient()
+  const client = await createUserSupabaseServerClient()
 
   let decision
   try {
-    decision = await runCollectionsDecision(client, invoiceId, DEMO_ORG_ID)
+    decision = await runCollectionsDecision(client, invoiceId, ctx.organizationId)
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
@@ -31,7 +35,7 @@ export async function POST(
   const summary = `[${decision.classification.replace("_", " ")} · ${decision.confidence}% confidence] ${decision.outreachDraft.slice(0, 120)}`
 
   const actionId = await recordAiAction({
-    organizationId: DEMO_ORG_ID,
+    organizationId: ctx.organizationId,
     entityType:     "invoice",
     entityId:       invoiceId,
     triggerType:    "manual_rescue",
