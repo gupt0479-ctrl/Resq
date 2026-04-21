@@ -13,7 +13,7 @@ export function NavigationWatcher() {
     return () => {
       stopLoading()
     }
-  }, [pathname])
+  }, [pathname, startLoading, stopLoading])
 
   return null
 }

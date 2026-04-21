@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useRef, useState } from "react"
+import { createContext, useEffect, useRef, useState } from "react"
 import { CATCHPHRASES } from "@/lib/catchphrases"
 import { LoadingOverlay } from "./loading-overlay"
 import { NavigationWatcher } from "./navigation-watcher"
@@ -54,6 +54,7 @@ export const LoadingContext = createContext<LoadingContextValue | null>(null)
 export function LoadingProvider({ children }: { children: React.ReactNode }) {
   const countRef = useRef<number>(0)
   const startTimeRef = useRef<number>(0)
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isVisible, setIsVisible] = useState(false)
   const [catchphraseState, setCatchphraseState] = useState(() => {
     const queue = buildShuffledQueue()
@@ -67,7 +68,13 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
   function startLoading() {
     const wasIdle = countRef.current === 0
     countRef.current += 1
-    startTimeRef.current = Date.now()
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current)
+      hideTimeoutRef.current = null
+    }
+    if (wasIdle) {
+      startTimeRef.current = Date.now()
+    }
     setIsVisible(true)
 
     if (wasIdle) {
@@ -81,9 +88,20 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
     if (countRef.current === 0) {
       const elapsed = Date.now() - startTimeRef.current
       const delay = Math.max(0, 600 - elapsed)
-      setTimeout(() => setIsVisible(false), delay)
+      hideTimeoutRef.current = setTimeout(() => {
+        hideTimeoutRef.current = null
+        setIsVisible(false)
+      }, delay)
     }
   }
+
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current)
+      }
+    }
+  }, [])
 
   return (
     <LoadingContext.Provider value={{ isLoading: isVisible, startLoading, stopLoading }}>

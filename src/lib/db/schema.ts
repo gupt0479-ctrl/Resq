@@ -12,6 +12,7 @@ import {
   index,
   pgEnum,
 } from "drizzle-orm/pg-core"
+import { sql } from "drizzle-orm"
 
 // ─── Enums ─────────────────────────────────────────────────────────────────
 
@@ -47,13 +48,16 @@ export const organizationMemberships = pgTable(
     organizationId: uuid("organization_id").notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
     role: text("role").notNull().default("owner"),
-    isDefault: boolean("is_default").notNull().default(true),
+    isDefault: boolean("is_default").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("idx_org_memberships_user").on(table.userId),
     index("idx_org_memberships_org").on(table.organizationId),
     uniqueIndex("org_memberships_user_org").on(table.userId, table.organizationId),
+    uniqueIndex("org_memberships_one_default_per_user")
+      .on(table.userId)
+      .where(sql`${table.isDefault} = true`),
   ],
 )
 

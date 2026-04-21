@@ -4,7 +4,7 @@ import { getSessionUser } from "./get-session-user"
 import { createUserSupabaseServerClient } from "./create-user-supabase-server-client"
 
 const DEMO_ORG_ID = process.env.DEMO_ORG_ID?.trim() || "00000000-0000-0000-0000-000000000001"
-const isDemoMode = process.env.DEMO_MODE?.trim().toLowerCase() !== "false"
+const isDemoMode = process.env.NODE_ENV !== "production" && process.env.DEMO_MODE?.trim().toLowerCase() === "true"
 
 export async function getUserOrg() {
   // In demo mode, skip auth and return the demo org

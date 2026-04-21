@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await request.json()
-  const orgId = body.organizationId ?? ctx.organizationId
+  const orgId = ctx.organizationId
   const clientId = body.clientId
 
   if (!clientId) {

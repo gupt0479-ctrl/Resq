@@ -11,7 +11,8 @@ export async function GET(request: Request) {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
-  const orgId = searchParams.get("organizationId") ?? ctx.organizationId
+  const orgId = ctx.organizationId
+  const persistSnapshot = searchParams.get("persistSnapshot") === "true"
 
   try {
     // Generate all 3 scenarios in parallel
@@ -24,18 +25,20 @@ export async function GET(request: Request) {
     // Detect breakpoint on base scenario for snapshot
     const breakpoint = await detect(base)
 
-    // Save snapshot to cash_forecast_snapshots
-    try {
-      await db.insert(cashForecastSnapshots).values({
-        organizationId: orgId,
-        forecastJson: { base, stress, upside },
-        breakpointWeek: breakpoint.weekNumber,
-        breakpointAmount: breakpoint.shortfallAmount?.toString() ?? null,
-        thresholdUsed: breakpoint.thresholdUsed.toString(),
-        scenarioType: "base",
-      })
-    } catch (err) {
-      console.error("[cash/forecast] Failed to save snapshot:", err)
+    // Persist snapshot only when explicitly requested
+    if (persistSnapshot) {
+      try {
+        await db.insert(cashForecastSnapshots).values({
+          organizationId: orgId,
+          forecastJson: { base, stress, upside },
+          breakpointWeek: breakpoint.weekNumber,
+          breakpointAmount: breakpoint.shortfallAmount?.toString() ?? null,
+          thresholdUsed: breakpoint.thresholdUsed.toString(),
+          scenarioType: "base",
+        })
+      } catch (err) {
+        console.error("[cash/forecast] Failed to save snapshot:", err)
+      }
     }
 
     const response: ForecastResponse = {
@@ -50,7 +53,7 @@ export async function GET(request: Request) {
   } catch (err) {
     console.error("[cash/forecast] Error:", err)
     return NextResponse.json(
-      { error: "Forecast generation failed", detail: String(err) },
+      { error: "Forecast generation failed" },
       { status: 500 },
     )
   }

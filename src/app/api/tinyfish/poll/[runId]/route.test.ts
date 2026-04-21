@@ -69,6 +69,13 @@ describe("poll handler — missing runId", () => {
     const body = await res.json()
     expect(body.error).toBe("runId is required")
   })
+
+  it("returns HTTP 400 when runId is whitespace-only", async () => {
+    const res = await GET(dummyRequest, makeCtx("   "))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toBe("runId is required")
+  })
 })
 
 // ─── Property tests ──────────────────────────────────────────────────────────
@@ -77,8 +84,8 @@ describe("Property 3: Poll response always echoes runId", () => {
   // Feature: tinyfish-sse-async-harness, Property 3: Poll response always echoes runId
   it("response.runId === runId for every input", async () => {
     await fc.assert(
-      fc.asyncProperty(
-        fc.string({ minLength: 1 }),
+        fc.asyncProperty(
+        fc.string({ minLength: 1 }).filter((runId) => runId.trim().length > 0),
         fc.constantFrom("mock" as const, "misconfigured" as const),
         async (runId, mode) => {
           vi.mocked(getTinyFishMode).mockReturnValue(mode)
@@ -114,8 +121,8 @@ describe("Property 6: Misconfigured mode always returns non-empty error (poll)",
   // Feature: tinyfish-sse-async-harness, Property 6: Misconfigured mode always returns non-empty error
   it("error field is always a non-empty string in misconfigured mode", async () => {
     await fc.assert(
-      fc.asyncProperty(
-        fc.string({ minLength: 1 }),
+        fc.asyncProperty(
+        fc.string({ minLength: 1 }).filter((runId) => runId.trim().length > 0),
         async (runId) => {
           vi.mocked(getTinyFishMode).mockReturnValue("misconfigured")
           const res = await GET(dummyRequest, makeCtx(runId))
