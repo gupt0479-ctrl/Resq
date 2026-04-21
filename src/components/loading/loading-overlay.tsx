@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useReducedMotion } from "@/hooks/use-reduced-motion"
 
 interface LoadingOverlayProps {
@@ -17,19 +16,6 @@ interface LoadingOverlayProps {
  */
 export function LoadingOverlay({ isVisible, catchphrase }: LoadingOverlayProps) {
   const reducedMotion = useReducedMotion()
-  const [displayedText, setDisplayedText] = useState(catchphrase)
-  const [textFading, setTextFading] = useState(false)
-
-  // Animate text swap with a quick fade
-  useEffect(() => {
-    if (catchphrase === displayedText) return
-    setTextFading(true)
-    const id = setTimeout(() => {
-      setDisplayedText(catchphrase)
-      setTextFading(false)
-    }, 250)
-    return () => clearTimeout(id)
-  }, [catchphrase, displayedText])
 
   return (
     <div
@@ -64,13 +50,13 @@ export function LoadingOverlay({ isVisible, catchphrase }: LoadingOverlayProps) 
 
         {/* ── Catchphrase with fade transition ── */}
         <p
+          key={catchphrase}
           className={[
             "text-center text-base font-medium text-foreground/80 max-w-xs font-[Inter]",
-            "transition-opacity duration-250",
-            textFading ? "opacity-0" : "opacity-100",
+            "animate-catchphrase-fade",
           ].join(" ")}
         >
-          {displayedText}
+          {catchphrase}
         </p>
 
         {/* ── Square progress bar (game-style) ── */}
@@ -124,6 +110,14 @@ export function LoadingOverlay({ isVisible, catchphrase }: LoadingOverlayProps) 
           0%   { transform: translateX(-150%); }
           50%  { transform: translateX(250%); }
           100% { transform: translateX(-150%); }
+        }
+
+        .animate-catchphrase-fade {
+          animation: catchphrase-fade 250ms ease-in-out;
+        }
+        @keyframes catchphrase-fade {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
         }
       `}</style>
     </div>

@@ -2,6 +2,11 @@
 
 import { cloneElement, useRef, useState, useEffect, type ReactElement } from "react"
 
+type ChartElementProps = {
+  width?: number
+  height?: number
+}
+
 /**
  * Drop-in replacement for Recharts' ResponsiveContainer.
  *
@@ -12,7 +17,7 @@ import { cloneElement, useRef, useState, useEffect, type ReactElement } from "re
 export function SafeResponsiveContainer({
   children,
 }: {
-  children: ReactElement
+  children: ReactElement<ChartElementProps>
   width?: string | number
   height?: string | number
   minWidth?: number
