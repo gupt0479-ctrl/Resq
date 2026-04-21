@@ -1,46 +1,17 @@
 "use client"
 
-import { createContext, useEffect, useRef, useState } from "react"
+import { createContext, useCallback, useEffect, useRef, useState } from "react"
 import { CATCHPHRASES } from "@/lib/catchphrases"
 import { LoadingOverlay } from "./loading-overlay"
 import { NavigationWatcher } from "./navigation-watcher"
 
-function fisherYatesShuffle(arr: string[]): string[] {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[arr[i], arr[j]] = [arr[j], arr[i]]
-  }
-  return arr
-}
-
-function buildShuffledQueue(): string[] {
-  return fisherYatesShuffle([...CATCHPHRASES])
-}
-
-function getNextCatchphrase(state: {
-  queue: string[]
-  index: number
-  catchphrase: string
-}) {
-  let nextQueue = state.queue
-  let nextIndex = state.index + 1
-
-  if (nextIndex >= nextQueue.length) {
-    nextQueue = buildShuffledQueue()
-    nextIndex = 0
-  }
-
-  if (nextQueue[nextIndex] === state.catchphrase && nextQueue.length > 1) {
-    nextQueue = [...nextQueue]
-    const swapIndex = (nextIndex + 1) % nextQueue.length
-    ;[nextQueue[nextIndex], nextQueue[swapIndex]] = [nextQueue[swapIndex], nextQueue[nextIndex]]
-  }
-
-  return {
-    queue: nextQueue,
-    index: nextIndex,
-    catchphrase: nextQueue[nextIndex] ?? state.catchphrase,
-  }
+function pickRandom(current: string): string {
+  if (CATCHPHRASES.length <= 1) return CATCHPHRASES[0]
+  let next: string
+  do {
+    next = CATCHPHRASES[Math.floor(Math.random() * CATCHPHRASES.length)]
+  } while (next === current)
+  return next
 }
 
 export interface LoadingContextValue {
@@ -51,62 +22,62 @@ export interface LoadingContextValue {
 
 export const LoadingContext = createContext<LoadingContextValue | null>(null)
 
-export function LoadingProvider({ children }: { children: React.ReactNode }) {
-  const countRef = useRef<number>(0)
-  const startTimeRef = useRef<number>(0)
-  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [isVisible, setIsVisible] = useState(false)
-  const [catchphraseState, setCatchphraseState] = useState(() => {
-    const queue = buildShuffledQueue()
-    return {
-      queue,
-      index: 0,
-      catchphrase: queue[0] ?? CATCHPHRASES[0],
-    }
-  })
+/** How often the catchphrase rotates while loading (ms) */
+const ROTATE_INTERVAL = 3000
+/** Safety: auto-dismiss the overlay if stopLoading is never called (ms) */
+const MAX_LOADING_MS = 12000
 
-  function startLoading() {
+export function LoadingProvider({ children }: { children: React.ReactNode }) {
+  const countRef = useRef(0)
+  const [isVisible, setIsVisible] = useState(false)
+  const [catchphrase, setCatchphrase] = useState(CATCHPHRASES[0])
+  const safetyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Rotate catchphrase while visible
+  useEffect(() => {
+    if (!isVisible) return
+    const id = setInterval(() => {
+      setCatchphrase((prev) => pickRandom(prev))
+    }, ROTATE_INTERVAL)
+    return () => clearInterval(id)
+  }, [isVisible])
+
+  const dismiss = useCallback(() => {
+    setIsVisible(false)
+    if (safetyTimer.current) {
+      clearTimeout(safetyTimer.current)
+      safetyTimer.current = null
+    }
+  }, [])
+
+  const startLoading = useCallback(() => {
     const wasIdle = countRef.current === 0
     countRef.current += 1
-    if (hideTimeoutRef.current) {
-      clearTimeout(hideTimeoutRef.current)
-      hideTimeoutRef.current = null
-    }
-    if (wasIdle) {
-      startTimeRef.current = Date.now()
-    }
-    setIsVisible(true)
 
     if (wasIdle) {
-      setCatchphraseState((prev) => getNextCatchphrase(prev))
-    }
-  }
+      setCatchphrase((prev) => pickRandom(prev))
+      setIsVisible(true)
 
-  function stopLoading() {
+      // Safety net — never leave the overlay stuck forever
+      safetyTimer.current = setTimeout(() => {
+        countRef.current = 0
+        dismiss()
+      }, MAX_LOADING_MS)
+    }
+  }, [dismiss])
+
+  const stopLoading = useCallback(() => {
     if (countRef.current === 0) return
     countRef.current -= 1
     if (countRef.current === 0) {
-      const elapsed = Date.now() - startTimeRef.current
-      const delay = Math.max(0, 600 - elapsed)
-      hideTimeoutRef.current = setTimeout(() => {
-        hideTimeoutRef.current = null
-        setIsVisible(false)
-      }, delay)
+      dismiss()
     }
-  }
-
-  useEffect(() => {
-    return () => {
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current)
-      }
-    }
-  }, [])
+  }, [dismiss])
 
   return (
     <LoadingContext.Provider value={{ isLoading: isVisible, startLoading, stopLoading }}>
       {children}
-      <LoadingOverlay isVisible={isVisible} catchphrase={catchphraseState.catchphrase} />
+      <LoadingOverlay isVisible={isVisible} catchphrase={catchphrase} />
       <NavigationWatcher />
     </LoadingContext.Provider>
   )

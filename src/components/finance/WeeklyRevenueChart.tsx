@@ -7,8 +7,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
 } from "recharts"
+import { SafeResponsiveContainer as ResponsiveContainer } from "@/components/cashflow/SafeResponsiveContainer"
 
 export type WeeklyDataPoint = {
   day: string

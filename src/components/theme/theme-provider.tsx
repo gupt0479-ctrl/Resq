@@ -24,7 +24,9 @@ const ThemeContext = createContext<ThemeContextValue | null>(null)
 function applyTheme(theme: Theme) {
   const root = document.documentElement
   root.classList.toggle("dark", theme === "dark")
-  root.style.colorScheme = theme
+  // Don't set style.colorScheme here — it causes a hydration mismatch because
+  // the server-rendered <html> doesn't have it. The inline init script in
+  // layout.tsx already handles the class toggle before React hydrates.
 }
 
 function getInitialTheme(): Theme {

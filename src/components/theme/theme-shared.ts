@@ -15,10 +15,8 @@ export function getThemeInitScript() {
         var theme = rawTheme === "dark" ? "dark" : "light";
         var root = document.documentElement;
         root.classList.toggle("dark", theme === "dark");
-        root.style.colorScheme = theme;
       } catch (error) {
         document.documentElement.classList.remove("dark");
-        document.documentElement.style.colorScheme = "light";
       }
     })();
   `

@@ -1,6 +1,7 @@
 "use client"
 
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts"
+import { PieChart, Pie, Cell, Tooltip } from "recharts"
+import { SafeResponsiveContainer as ResponsiveContainer } from "@/components/cashflow/SafeResponsiveContainer"
 
 export type ExpenseSlice = {
   name: string

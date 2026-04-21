@@ -5,14 +5,16 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   Zap,
+  LayoutDashboard,
   DollarSign,
   FileText,
 } from "lucide-react"
 
 const navItems = [
-  { href: "/rescue",       label: "Rescue Queue", icon: Zap          },
-  { href: "/cashflow",     label: "Cashflow",     icon: DollarSign   },
-  { href: "/invoices",     label: "Receivables",  icon: FileText     },
+  { href: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/rescue",       label: "Rescue Queue", icon: Zap            },
+  { href: "/cashflow",     label: "Cashflow",     icon: DollarSign     },
+  { href: "/invoices",     label: "Receivables",  icon: FileText       },
 ]
 
 const systemHealth = [

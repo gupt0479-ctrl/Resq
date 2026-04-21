@@ -4,9 +4,11 @@ import { useState, useEffect } from "react"
 import {
   AreaChart,
   Area,
-  ResponsiveContainer,
+  XAxis,
+  YAxis,
   Tooltip,
 } from "recharts"
+import { SafeResponsiveContainer as ResponsiveContainer } from "@/components/cashflow/SafeResponsiveContainer"
 import { WaterfallChart } from "@/components/cashflow/WaterfallChart"
 import { IncomeGauge } from "@/components/cashflow/IncomeGauge"
 import { InvoiceTable, type Invoice } from "@/components/invoices/invoice-table"
@@ -88,8 +90,8 @@ const MOCK: CashflowData = {
 
 function fmt(n: number, full = false) {
   if (full) return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
-  if (Math.abs(n) >= 1000) return `$${(n / 1000).toFixed(0)}k`
-  return `$${n}`
+  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(0)}k`
+  return `${n}`
 }
 
 // ── KPI strip ─────────────────────────────────────────────────────────────────
@@ -147,7 +149,7 @@ function MiniAreaChart({
   id: string
 }) {
   return (
-    <div className="h-[110px] w-full">
+    <div className="h-[110px] w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
           <defs>
@@ -199,7 +201,6 @@ function FlowCard({
   const isNeg = net < 0
   return (
     <div className="rounded-2xl border border-stone-100 bg-white p-5 shadow-sm flex flex-col">
-      {/* Header row */}
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 whitespace-nowrap">{title}</p>
@@ -219,8 +220,6 @@ function FlowCard({
           </span>
         </div>
       </div>
-
-      {/* In / Out row */}
       <div className="flex items-center gap-5 mb-4">
         <div>
           <span className="text-[10.5px] text-stone-400">In </span>
@@ -231,16 +230,12 @@ function FlowCard({
           <span className="text-[13px] font-semibold" style={{ color: "#c0522a" }}>{fmt(totalOut, true)}</span>
         </div>
       </div>
-
-      {/* Chart fills remaining space */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-[110px]">
         <MiniAreaChart data={chartData} id={badge} />
       </div>
     </div>
   )
 }
-
-// ── Top Drivers ───────────────────────────────────────────────────────────────
 
 function TopDriversList({ drivers }: { drivers: CashflowData["topDrivers"] }) {
   return (
@@ -282,8 +277,6 @@ function TopDriversList({ drivers }: { drivers: CashflowData["topDrivers"] }) {
   )
 }
 
-// ── Action Queue ──────────────────────────────────────────────────────────────
-
 const URGENCY: Record<string, { dot: string; row: string }> = {
   high:   { dot: "#ef4444", row: "bg-red-50/50"   },
   medium: { dot: "#f59e0b", row: "bg-amber-50/40" },
@@ -317,8 +310,6 @@ function ActionQueue({ items }: { items: CashflowData["actionQueue"] }) {
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
 export function CashflowClient() {
   const d = MOCK
   const delta = d.projectedEndCash - d.currentCash
@@ -341,8 +332,6 @@ export function CashflowClient() {
   return (
     <div className="min-h-screen p-6" style={{ background: "#faf9f7" }}>
       <div className="max-w-[1320px] mx-auto space-y-5">
-
-        {/* Header */}
         <div className="flex items-end justify-between">
           <div>
             <h1 className="text-[20px] font-bold text-stone-800 tracking-tight">Cash Flow</h1>
@@ -355,93 +344,34 @@ export function CashflowClient() {
             </div>
           )}
         </div>
-
-        {/* Row 1 — KPI strip */}
         <div className="rounded-2xl border border-stone-100 bg-white shadow-sm grid grid-cols-4 divide-x divide-stone-100">
-          <KpiCard
-            label="Current Cash"
-            value={<span style={{ color: cashColor }}>{fmt(d.currentCash, true)}</span>}
-            sub="Available balance today"
-          />
-          <KpiCard
-            label="Breakpoint Week"
-            value={
-              d.breakpointWeek
-                ? <span style={{ color: "#f59e0b" }}>Week {d.breakpointWeek}</span>
-                : <span style={{ color: "#2d9b8a" }}>Safe · 90d</span>
-            }
-            sub={d.breakpointWeek ? "Projected cash zero" : "No crunch in sight"}
-          />
-          <KpiCard
-            label="Projected · 90 Days"
-            value={<span style={{ color: delta >= 0 ? "#2d9b8a" : "#c0522a" }}>{fmt(d.projectedEndCash, true)}</span>}
-            sub={
-              <span
-                className="flex items-center gap-1"
-                style={{ color: delta >= 0 ? "#2d9b8a" : "#c0522a" }}
-              >
-                {delta >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {delta >= 0 ? "+" : ""}{fmt(delta)} vs today
-              </span>
-            }
-          />
-          <KpiCard
-            label="Largest Driver"
-            value={<span className="text-stone-800">{d.topDriver.label}</span>}
-            sub={
-              <span style={{ color: d.topDriver.direction === "out" ? "#c0522a" : "#2d9b8a" }}>
-                {fmt(d.topDriver.amount, true)} {d.topDriver.direction === "out" ? "outflow" : "inflow"}
-              </span>
-            }
-          />
+          <KpiCard label="Current Cash" value={<span style={{ color: cashColor }}>{fmt(d.currentCash, true)}</span>} sub="Available balance today" />
+          <KpiCard label="Breakpoint Week" value={d.breakpointWeek ? <span style={{ color: "#f59e0b" }}>Week {d.breakpointWeek}</span> : <span style={{ color: "#2d9b8a" }}>Safe · 90d</span>} sub={d.breakpointWeek ? "Projected cash zero" : "No crunch in sight"} />
+          <KpiCard label="Projected · 90 Days" value={<span style={{ color: delta >= 0 ? "#2d9b8a" : "#c0522a" }}>{fmt(d.projectedEndCash, true)}</span>} sub={<span className="flex items-center gap-1" style={{ color: delta >= 0 ? "#2d9b8a" : "#c0522a" }}>{delta >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}{delta >= 0 ? "+" : ""}{fmt(delta)} vs today</span>} />
+          <KpiCard label="Largest Driver" value={<span className="text-stone-800">{d.topDriver.label}</span>} sub={<span style={{ color: d.topDriver.direction === "out" ? "#c0522a" : "#2d9b8a" }}>{fmt(d.topDriver.amount, true)} {d.topDriver.direction === "out" ? "outflow" : "inflow"}</span>} />
         </div>
-
-        {/* Row 1.5 — Transaction Stats strip */}
         <TransactionStats stats={d.transactionStats} />
-
-        {/* Row 2 — 90-day cards + income gauge */}
         <div className="grid grid-cols-3 gap-4">
-          <FlowCard
-            title="Last 90 Days"
-            badge="Actual"
-            totalIn={d.last90.totalIn}
-            totalOut={d.last90.totalOut}
-            chartData={historicalWeeks}
-          />
-          <FlowCard
-            title="Next 90 Days"
-            badge="Forecast"
-            totalIn={d.next90.totalIn}
-            totalOut={d.next90.totalOut}
-            chartData={forecastWeeks}
-          />
+          <FlowCard title="Last 90 Days" badge="Actual" totalIn={d.last90.totalIn} totalOut={d.last90.totalOut} chartData={historicalWeeks} />
+          <FlowCard title="Next 90 Days" badge="Forecast" totalIn={d.next90.totalIn} totalOut={d.next90.totalOut} chartData={forecastWeeks} />
           <IncomeGauge />
         </div>
-
-        {/* Row 3 — Main chart */}
         <div className="rounded-2xl border border-stone-100 bg-white p-6 shadow-sm">
           <div className="mb-5">
             <p className="text-[14px] font-semibold text-stone-800">Cash Flow Insights</p>
-            <p className="text-[11.5px] text-stone-400 mt-0.5">
-              Solid = actual &nbsp;·&nbsp; faded = forecast &nbsp;·&nbsp; dashed line = running balance
-            </p>
+            <p className="text-[11.5px] text-stone-400 mt-0.5">Solid = actual &nbsp;·&nbsp; faded = forecast &nbsp;·&nbsp; dashed line = running balance</p>
           </div>
           <WaterfallChart data={d.waterfall} />
         </div>
-
-        {/* Row 4 — Drivers + Queue */}
         <div className="grid grid-cols-2 gap-4">
           <TopDriversList drivers={d.topDrivers} />
-          <ActionQueue    items={d.actionQueue} />
+          <ActionQueue items={d.actionQueue} />
         </div>
-
-        {/* Row 5 — Invoices */}
         {invoices.length > 0 && (
           <div className="rounded-2xl border border-stone-100 bg-white shadow-sm overflow-hidden">
             <InvoiceTable invoices={invoices} />
           </div>
         )}
-
       </div>
     </div>
   )

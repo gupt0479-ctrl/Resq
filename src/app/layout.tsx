@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import "./globals.css"
 import { ConditionalShell } from "@/components/layout/conditional-shell"
+import { getThemeInitScript } from "@/components/theme/theme-shared"
 
 export const metadata: Metadata = {
   title: "Resq",
@@ -9,8 +10,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full scroll-smooth antialiased" suppressHydrationWarning>
+    <html lang="en" className="h-full scroll-smooth antialiased" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
+        {/* Inline theme init to prevent flash of wrong theme */}
+        <script dangerouslySetInnerHTML={{ __html: getThemeInitScript() }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
