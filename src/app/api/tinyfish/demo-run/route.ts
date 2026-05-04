@@ -8,12 +8,12 @@ import { TinyFishScenarioSchema } from "@/lib/tinyfish/schemas"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const UuidSchema = z.string().uuid()
+const UuidSchema = z.guid()
 
 const BodySchema = z.object({
   scenario:       TinyFishScenarioSchema,
-  organizationId: z.string().uuid().optional(),
-  invoiceId:      z.string().uuid().optional(),
+  organizationId: z.guid().optional(),
+  invoiceId:      z.guid().optional(),
   customerName:   z.string().min(1).max(200).optional(),
   dryRun:         z.boolean().optional(),
 })
