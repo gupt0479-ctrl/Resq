@@ -48,7 +48,9 @@ Production deployment checklist for the Resq fintech CFO survival workspace.
 
 ### Vercel
 
-- [ ] Create Vercel project linked to `gupt0479-ctrl/Resq`
+- [ ] Rename the existing Vercel project to `resq` or the cleanest available `resq-*` slug
+- [ ] Confirm the project is linked to `gupt0479-ctrl/Resq`
+- [ ] Set the production domain to the clean Resq Vercel domain and remove the old demo domain after verification
 - [ ] Set all environment variables above in Vercel project settings
 - [ ] Confirm production branch is `main`
 - [ ] Verify build succeeds with `npm run build`

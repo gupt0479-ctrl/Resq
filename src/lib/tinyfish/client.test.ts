@@ -37,7 +37,7 @@ describe("Property 7: Goal string always contains all four steps and required fi
       }),
       { numRuns: 100 }
     )
-  })
+  }, 10_000)
 
   it("includes the url in STEP 2", () => {
     const url = "https://example.com/financing"

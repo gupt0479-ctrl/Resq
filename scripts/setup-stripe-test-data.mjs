@@ -132,7 +132,7 @@ async function setupTestData() {
         days_until_due: 30,
         auto_advance: false, // Don't auto-finalize
         metadata: {
-          opspilot_test: 'true',
+          resq_test: 'true',
           days_overdue: testCustomer.daysOverdue.toString()
         }
       })
